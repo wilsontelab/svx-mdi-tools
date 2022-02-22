@@ -1,0 +1,57 @@
+---
+#----------------------------------------------------------------------
+# app name is shown at the top of the dashboard menu
+# description is used when needing to query the user for the desired target app
+# semantic version is of form v0.0.0: https://semver.org/
+# external modules will come from latest suite versions unless listed in suiteVersions
+#----------------------------------------------------------------------
+name: Example
+description: "Example of descriptive text"
+# version: v0.0.0 # OPTIONAL
+# suiteVersions:
+#     suiteName: v0.0.0
+
+#----------------------------------------------------------------------
+# project data file type(s) associated with this app
+#   - the keys in uploadTypes are matched to key uploadType in incoming package.yml
+#   - required files lead to rejection of a project file if missing
+#----------------------------------------------------------------------
+uploadTypes:
+    example-type: 
+        contentFileTypes: # anything not listed will not be available to the app
+            example:  
+                required: true
+
+#----------------------------------------------------------------------
+# labels and definitions for all sequential analysis steps shown in sidebar
+#----------------------------------------------------------------------
+# module = the appSteps module used for a sequential step
+#    the keyed name of a step becomes its namespace in the 'app' object
+# shortLabel = as shown on dashboard menu (required if not provided as module default)
+# shortDescription = as shown on the Overview page (required if not provided as module default)
+# options = passed to both <module>UI and <module>Server functions
+#    longLabel = the title for the appStep tabbed page
+#    alwaysVisible = declares that step is NOT sequential and thus always available
+#    other options are module specific; see module definitions
+#----------------------------------------------------------------------
+appSteps:
+    upload: # nearly always the 1st step of every app
+        module: sourceFileUpload
+    assign: # usually the 2nd step of every app
+        module: assignSamples        
+        options:
+            categories:
+                example1: # category1
+                    singular: Example
+                    plural: Examples
+                    nLevels: 1:10
+                example2: # category2
+                    singular: Example
+                    plural: Examples
+                    nLevels: 1:10
+    analyze:
+        module: runAnalyses
+        options:
+            analysisTypes:
+                example:
+                    - example

@@ -1,0 +1,48 @@
+#------------------------------------------------------------------------------
+# These definition file sections should be completed if your tool suite
+# offers a suite-level Singularity container, otherwise this file may be ignored.
+#------------------------------------------------------------------------------
+# A suite-level container may deliver all pipelines, all apps, or both. If different 
+# containers are required for different tools, they must be in different suites,
+# or delivered without support for suite-level containers, e.g., with pipeline containers.
+#------------------------------------------------------------------------------
+# https://sylabs.io/guides/latest/user-guide/definition_files.html
+#------------------------------------------------------------------------------
+
+#------------------------------------------------------------------------------
+# initialize the container base
+# choose one of the patterns below depending on whether your container will offer Stage 2 Apps
+# (generally, you do not want R installed in the system base unless you are running apps) 
+#------------------------------------------------------------------------------
+# uncomment and modify if container:stages:apps=false, i.e., this container offers pipelines only
+Bootstrap: docker
+From: ubuntu:20.04
+Stage: build
+#------------------------------------------------------------------------------
+# uncomment and modify if container:stages:apps=true, i.e., this container will run R-based Shiny apps
+# you may choose to install the entire R library yourself, or use mdi-singularity-base to speed the build
+# Bootstrap: docker
+# From: r-base:4.1.2
+# Bootstrap: oras
+# From: ghcr.io/MiDataInt/mdi-singularity-base:v4.1
+# Stage: build
+#------------------------------------------------------------------------------
+
+#------------------------------------------------------------------------------
+# install system-level requirements such as libraries and common system utilities
+# do not install specialized programs here (use conda definitions in pipeline.yml)
+#------------------------------------------------------------------------------
+%post
+    # apt-get update && apt-get install -y \
+    #     PACKAGE_NAME
+#------------------------------------------------------------------------------
+
+# if desired, you may include additional definition file sections below, but be aware
+# that common required definition sections will be appended by the pipelines framework
+# usually, only the sections above need to be provided in this file
+
+# avoid placing files into system-defined bind paths within the container,
+# they will likely be overridden in a running container
+#   https://sylabs.io/guides/latest/user-guide/bind_paths_and_mounts.html#system-defined-bind-paths
+#   https://sylabs.io/guides/latest/user-guide/definition_files.html?highlight=best%20practices#best-practices-for-build-recipes
+# instead, add files to a system path such as /opt, /usr, /srv etc.

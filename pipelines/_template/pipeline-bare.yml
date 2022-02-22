@@ -1,0 +1,65 @@
+---
+# this bare-bones pipeline.yml template is for experienced users
+pipeline:
+    name: pipelineName
+    description: "description"
+    # version: v0.0.1
+# suiteVersions:
+#     suiteName: v0.0.0 # use this version of a suite invoked as 'suite//module', etc. [latest]
+actions: 
+    _global:
+        environment: envName
+        condaFamilies:
+            - base-0.1
+            - xxxx       
+        optionFamilies:
+            - xxxx
+    do:
+        order: 1
+        thread: do
+        condaFamilies:
+            - xxxx-1.0        
+        optionFamilies:
+            - xxxx
+        resources:
+            required:
+                total-ram: 2G
+            recommended: 
+                n-cpu: 1
+                ram-per-cpu: 2G
+        job-manager:
+            recommended:
+                time-limit: 1:00:00
+        description: "description"      
+condaFamilies:
+    xxxx:
+        dependencies:
+            - xxxx=1.2.3        
+optionFamilies:     
+    xxxx:
+        options:
+            xxxx-xxxx: 
+                order: 1
+                short: x
+                type: string
+                required: true
+                default: null
+                directory:
+                    must-exist: true
+                description: "description"   
+package:
+    uploadType: xxxx  # a signal to the Stage 2 framework regarding the package contents
+    packageAction: do # the pipeline action after which the package should assembled
+    files:
+        xxxx: # a contentFileType of any name you choose; 'manifestFile' has special meaning
+            type: xxxx # additional information as to the file type
+            file: $DATA_FILE_PREFIX.xxxx
+        manifestFile: # a sample manifest
+            type: manifest-file
+            manifestType: xxxx
+            file: $XXXX.xxxx
+container:
+    supported: false    
+    registry:  ghcr.io  # domain name of your OCI-compatible, oras-accessible, container registry [ghcr.io]
+    owner:     xxxxxxxx # REQUIRED: the name of the owner, e.g., user or organization, at 'registry'
+    installer: apt-get  # the installer program used by the container OS, typically apt-get or yum [apt-get]

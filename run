@@ -1,0 +1,57 @@
+#!/bin/bash
+
+#--------------------------------------------------------------------
+# the 'run' script supports direct calls to an MDI tools suite
+# it is a surrogate to the 'mdi' utility specific to this suite installation
+#--------------------------------------------------------------------
+# this script can be renamed to anything you'd like, e.g., a short suite name
+#--------------------------------------------------------------------
+MDI_CENTRIC="mdi-centric"
+SUITE_CENTRIC="suite-centric"
+
+#----------------------------------------------------------------------
+# base directory of this tool suite, after user cloned it from GitHub
+#----------------------------------------------------------------------
+export SUITE_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
+export SUITE_NAME=`basename $SUITE_DIR`
+export SUITE_TARGET_NAME=`basename ${BASH_SOURCE[0]}`
+
+#----------------------------------------------------------------------
+# discover whether this suite is in an mdi-centric or suite-centric installation
+# if it is contained in a parent mdi/suites/* folder, then it is always mdi-centric
+#----------------------------------------------------------------------
+export SUITE_MODE=$MDI_CENTRIC
+export MDI_DIR=$SUITE_DIR/../../..
+export MDI_TARGET=$MDI_DIR/mdi
+if [[ ! -d  "$MDI_DIR/frameworks" || ! -d  "$MDI_DIR/suites" || ! -f  "$MDI_TARGET" ]]; then
+    export SUITE_MODE="$SUITE_CENTRIC"
+    export MDI_DIR="$SUITE_DIR/mdi"
+    export MDI_TARGET="$MDI_DIR/mdi"
+fi
+IS_READLINK=`which readlink 2>/dev/null`
+if [ "$IS_READLINK" != "" ]; then export MDI_DIR=`readlink -f $MDI_DIR` ; fi
+
+#----------------------------------------------------------------------
+# if mdi-centric, exit with a helpful message and no action taken
+#----------------------------------------------------------------------
+if [ "$SUITE_MODE" = "$MDI_CENTRIC" ]; then
+    echo -e "\nNothing to do.\n"
+    echo -e "This copy of '$SUITE_NAME' is part of an MDI installation in directory:\n    $MDI_DIR\n"
+    echo -e "Use it by calling the 'mdi' command line utility in that directory.\n"
+    exit 1
+fi
+
+#----------------------------------------------------------------------
+# if suite-centric, ensure that the mdi was previously installed
+#----------------------------------------------------------------------
+if [ ! -f  "$MDI_TARGET" ]; then
+    echo -e "\nPlease install '$SUITE_NAME' first using command './install.sh'.\n"
+    exit 1
+fi
+
+#----------------------------------------------------------------------
+# pass the call to the nested MDI installation, providing customization metadata
+#----------------------------------------------------------------------   
+export JOB_MANAGER_NAME_FULL=$SUITE_NAME:$SUITE_TARGET_NAME
+export JOB_MANAGER_NAME=$SUITE_TARGET_NAME
+exec $MDI_TARGET $@

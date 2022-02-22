@@ -1,0 +1,23 @@
+envvars:
+    "INPUT_DIR",
+    "ACTION_DIR"
+    
+# list files in a directory
+rule ls:
+    message: "listing files in a directory..."
+    params:
+        INPUT_DIR = os.environ["INPUT_DIR"]
+    output:
+        "{DATA_NAME}.directoryContents.txt"
+    shell:
+        "ls -l {params.INPUT_DIR} > {output}"
+
+# make a plot and print a table
+rule R:
+    message: "executing R script..."
+    params:
+        ACTION_DIR = os.environ["ACTION_DIR"]
+    output:
+        "{DATA_NAME}.mtcars.csv"
+    shell:
+        "Rscript {params.ACTION_DIR}/../do/R/my-script.R"

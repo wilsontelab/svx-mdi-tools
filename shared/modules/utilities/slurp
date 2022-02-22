@@ -1,0 +1,87 @@
+#!/usr/bin/perl
+use strict;
+use warnings;
+
+# slurp is a helper utility to buffer IO of large files in a stream
+# e.g.
+#   slurp big.file | do work | slurp -o big.output.file
+
+# help and version feedback
+if($ARGV[0] and $ARGV[0] eq '--help'){
+    print 
+        "usage: \n",
+        "   slurp [-s bufferSize] [-m outputMode] [-o outFile] [inFile [...] | inPipe]\n",
+        "action:\n",
+        "   buffers a stream from input to output to reduce system IO calls\n",
+        "options:\n",
+        "   -s int     buffer size as number of bytes, 0=entire input (default=500M)\n", 
+        "   -m str     file output mode, either '>' (overwrite) or '>>' (append) (default='>')\n",
+        "   -o str     file to which the output is written (default=stdout)\n",        
+        "arguments:\n",
+        "   inFile(s)  file(s) from which the input is read (stdin if absent)\n",
+        "              note: multiple files are read in series\n",
+        "   inPipe     a command and its arguments (stdin if absent)\n",
+        "examples:\n",
+        "   sort -m <(slurp file1) <(slurp file2) | slurp -o file3\n",
+        "   slurp samtools view inBam chr21 | ... | sort -o >(slurp -o file)\n";  
+    exit;
+} elsif($ARGV[0] and $ARGV[0] eq '--version'){
+    use File::Basename qw();
+    my ($name, $path, $suffix) = File::Basename::fileparse($0);
+    print qx|head -n1 $path/VERSION|;
+    exit;  
+}
+
+# detect options
+my %validOptions = (s=>1, m=>1, o=>1);
+my %options = (s=>'500M', m=>'>');
+my $option;
+while ($option = shift @ARGV){
+    ($option and $option =~ m/^\-(.)(.*)/) or last;
+    my $optionType = $1;
+    $validOptions{$optionType} or die "slurp command line error: unrecognized option -$optionType\n";
+    my $optionValue = $2 ? $2 : shift @ARGV;
+    defined $optionValue or die "slurp command line error: no value found for option -$optionType\n";
+    $options{$optionType} = $optionValue;
+}
+my @inputs;
+$option and @inputs = ($option, @ARGV);
+if($options{s}){
+    $options{s} =~ m/(\d+)K/ and $options{s} = $1 * 1E3;
+    $options{s} =~ m/(\d+)M/ and $options{s} = $1 * 1E6;
+    $options{s} =~ m/(\d+)G/ and $options{s} = $1 * 1E9; 
+}
+
+# open any needed file handles
+my ($inH, $outH) = (*STDIN, *STDOUT);
+if(@inputs){
+    if(-e $inputs[0]){  # input is a file list
+        if($inputs[1]){  # list has multiple files
+            my $cat = join(" ", 'cat', @inputs);
+            open $inH, "-|", $cat or die "slurp could not open input files cat for reading: $!\n"; 
+        } else {  # list has a single file
+            open $inH, "<", $inputs[0] or die "slurp could not open $inputs[0] for reading: $!\n"; 
+        }
+    } elsif( !system("bash", "-c", "which $inputs[0] &> /dev/null") ){  # input is a pipe
+        my $inPipe = join(" ", @inputs);
+        open $inH, "-|", $inPipe or die "slurp could not open inPipe for reading: $!\n";   
+    } else {
+        die "slurp could not resolve input string: file not found or invalid command\n";
+    }    
+}
+if($options{o}){
+    open $outH, $options{m}, $options{o} or die "slurp could not open $options{o} for writing: $!\n";
+}
+
+# buffer and print
+if($options{s}){ 
+    while( read($inH, my $buffer, $options{s}) ){ 
+        print $outH $buffer;
+    }
+} else { 
+    local $/;  # could use File::Slurp but have avoided since not present in all Perl installations 
+    my $buffer = <$inH>; 
+    print $outH $buffer;
+}
+close $inH;
+close $outH;

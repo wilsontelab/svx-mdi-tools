@@ -1,0 +1,25 @@
+---
+#--------------------------------------------------------------------
+# options that are passed to snakemake calls made within pipeline steps
+# assuming that the pipeline author adds them, e.g.:
+#     # Workflow.sh
+#     if [ "$SN_FORCEALL" != "" ]; then rm -rf .../.snakemake; fi
+#     snakemake $SN_DRY_RUN $SN_FORCEALL ...
+#--------------------------------------------------------------------
+optionFamilies:
+    snakemake:
+        options:
+            sn-dry-run:
+                order: 5
+                short: n
+                type: boolean
+                required: false
+                default: false
+                description: "set snakemake option '--dry-run' to pre-check pipeline actions"
+            sn-forceall:
+                order: 6
+                short: F
+                type: boolean
+                required: false
+                default: false
+                description: "force execution of target and all rules it depends on regardless of output existence"                 

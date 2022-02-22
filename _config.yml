@@ -1,0 +1,49 @@
+# edit the following title and description to match your suite repository
+title: "Tool Suite Template"
+description: "Repository template to create a tools suite for the Michigan Data Interface"
+
+# edit the following for the upper-right navigation link on the documentation page
+aux_links:
+  "Go To Repo on GitHub":
+    - "https://github.com/MiDataInt/mdi-suite-template"
+
+# OPTIONAL: uncomment to list any external tool suite dependencies
+# suite_dependencies:
+#   - GIT_USER/REPOSITORY_NAME
+
+# OPTIONAL: declare support for suite-level singularity containers
+container:
+  supported:  false    # set to true if you maintain a container registry for this tool suite [false]
+  registry:   ghcr.io  # domain name of your OCI-compatible, oras-accessible, container registry [ghcr.io]
+  owner:      xxxxx    # REQUIRED: the name of the owner, e.g., user or organization, at 'registry'
+  installer:  apt-get  # the installer program used by the container OS, typically apt-get or yum [apt-get]
+  stages:
+    pipelines: true    # set to true to install pipeline conda environments in the suite container [true]
+    apps:      false   # set to true to install apps R packages in the suite container [false]
+
+#------------------------------------------------------------------------------
+# please do not edit any lines below this line
+#------------------------------------------------------------------------------
+
+# theme information
+remote_theme: MiDataInt/just-the-docs-mdi
+logo: "/assets/images/mdi-logo-text-200.png"
+
+# footer content
+back_to_top: true
+back_to_top_text: "Top of page"
+footer_content: " "
+
+# web tracking
+# ga_tracking: UA-1234567-89 # Google Analytics
+plugins:
+  - jekyll-seo-tag
+
+# page defaults
+defaults:
+  -
+    scope:
+      path: "" # an empty string here means all files in the project
+      type: docs
+    values:
+      layout: "default"
