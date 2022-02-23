@@ -1,0 +1,270 @@
+---
+pipeline:
+    name: scan
+    description: "Discover and characterize structural variant junctions for Precision KLIPP Therapy"
+    version: v0.0.0
+actions: 
+    _global:   
+        environment: klipp-scan
+        condaFamilies: # use a single, named environment for all actions
+            - system
+            - genome
+            - align
+            - find
+            - r-essentials-4.1
+        optionFamilies: # these options apply to all actions
+            - genome
+            - format
+    align:
+        order: 1
+        thread: do
+        optionFamilies:
+            - fastq-input
+            - trim-reads
+            - align
+        resources:
+            required:
+                total-ram: 16G
+            recommended: 
+                n-cpu: 16
+                ram-per-cpu: 4G
+        job-manager:
+            recommended:
+                time-limit: 48:00:00
+        description: "clean reads and align to reference genome; output name-sorted bam/cram"   
+    find:
+        order: 2
+        thread: do
+        optionFamilies:
+            - library
+            - fixed-width-bins
+            - filtering      
+        resources:
+            required:
+                total-ram: 32G
+            recommended: 
+                n-cpu: 8
+                ram-per-cpu: 4G
+        job-manager:
+            recommended:
+                time-limit: 24:00:00
+        description: "find SV molecule groups and create coverage depth map"   
+condaFamilies:
+    system:
+        channels:
+            - conda-forge
+            - bioconda
+            - defaults
+        dependencies:
+            - pigz=2.6
+            - R
+    genome:
+        dependencies:
+            - bedtools=2.30.0
+    align:
+        dependencies:
+            - sra-tools=2.11.0
+            - fastp=0.23.2
+            - bwa=0.7.17
+            - samtools=1.14
+    find:
+        dependencies:
+            - manta=1.6.0
+optionFamilies: 
+    genome:
+        options:
+            genomes-dir:
+                order: 1
+                short: G
+                type: string
+                required: false
+                default: $MDI_DIR/resources/genomes
+                directory:
+                    must-exist: TRUE
+                description: "directory with reference genome files, with sub-directories iGenomes, UCSC, etc."
+            genome: 
+                order: 2
+                short: g
+                type: string
+                required: false
+                default: hg38
+                description: "name of the UCSC-format reference genome to use (e.g., hg38)"
+    format:
+        options:
+            use-cram:
+                order: 1
+                short: C
+                type: boolean
+                required: false
+                default: false
+                description: "set this flag to read and write alignments as CRAM format files instead of BAM"
+#------------------------------------------------------------------------------
+    fastq-input:
+        options:
+            input-dir: 
+                order: 1
+                short: i
+                type: string
+                required: true
+                default: null
+                directory:
+                    must-exist: true
+                description: "expects to find <input-dir>/<input-name>/*.fastq.gz OR .../*.sra"
+            input-name:
+                order: 2
+                short: I
+                type: string
+                required: false
+                default: null
+                description: "see --input-dir for details; defaults to --data-name if null" 
+    trim-reads:
+        options:
+            adapter-sequence:
+                order: 1
+                short: A
+                type: string
+                required: false
+                default: null
+                description: "3' adapter sequence to trim, same as fastp -a option"          
+            min-insert-size:
+                order: 2
+                short: Z
+                type: integer
+                required: false
+                default: 25
+                description: "discard read pairs with fewer than Z untrimmed bases"
+    align:
+        options:
+            force-alignment:
+                order: 1
+                short: F
+                type: boolean
+                required: false
+                default: false
+                description: "set this flag to force read alignment, even if bam/cram already exists"
+#------------------------------------------------------------------------------
+    library:
+        options:
+            library-type:
+                order: 1
+                short: L
+                type: string
+                required: false
+                default: TruSeq
+                description: "construction type of source library (TruSeq | Nextera)"
+    fixed-width-bins:
+        options:
+            bin-size: 
+                order: 1
+                short: z
+                type: integer
+                required: false
+                default: 100
+                description: "initial (smallest possible) bin size in bp, before any later bin merging"
+            kmer-length: 
+                order: 2
+                short: k
+                type: integer
+                required: false
+                default: 100
+                description: "kmer (i.e., read) length used to calculate bin mappability"
+            n-errors: 
+                order: 3
+                short: e
+                type: integer
+                required: false
+                default: 1
+                description: "number of errors (i.e., read mismatches) used to calculate bin mappability"       
+    filtering:
+        options:
+            min-mapq:
+                order: 1
+                short: Q
+                type: integer
+                required: false
+                default: 20
+                description: "minimum read MAPQ to be used in further processing"
+            min-mapq-one: 
+                order: 99
+                short: j
+                type: integer
+                required: false
+                default: 30
+                description: "one alignment flanking an SV junction must have at least this MAPQ"  
+            min-mapq-both: 
+                order: 99
+                short: J
+                type: integer
+                required: false
+                default: 20
+                description: "both alignments flanking an SV junction must have at least this MAPQ"  
+            min-clip: 
+                order: 2
+                short: c
+                type: integer
+                required: false
+                default: 5
+                description: "read clips shorter than --min-clip are not accepted as SV evidence"      
+            min-sv-size: 
+                order: 99
+                short: y
+                type: integer
+                required: false
+                default: 1000
+                description: "SVs smaller than this predicted size will not be processed"   
+            sv-size-factor: 
+                order: 99
+                short: Y
+                type: integer
+                required: false
+                default: 0
+                description: "if >0, override --min-sv-size to be --sv-size-factor * maxTLen"   
+            purge-distance: 
+                order: 99
+                short: P
+                type: integer
+                required: false
+                default: 5
+                description: "presume molecule duplicate when OUT_POS euclidean distance < --purge-distance"  
+            split-allowance: 
+                order: 99
+                short: W
+                type: integer
+                required: false
+                default: 5
+                description: "No. of bases by which INN_POS can vary and still be the same junction"  
+            min-merge-overlap: 
+                order: 99
+                short: v
+                type: integer
+                required: false
+                default: 5
+                description: "No. of bases that must overlap between read ends for alignment-guided merging"       
+            min-merge-density: 
+                order: 99
+                short: m
+                type: double
+                required: false
+                default: 0.8
+                description: "fraction of matching overlap bases to accept an alignment-guided merge"  
+# package:
+#     uploadType: _template # a signal to the Stage 2 framework regarding the package contents
+#     packageAction: do     # the pipeline action after which the data package should assembled
+#     files:
+#         directoryContents:  # a contentFileType of any name you choose; 'manifestFile' has special meaning
+#             type: file-list # additional information as to the file type
+#             file: $DATA_FILE_PREFIX.directoryContents.txt
+#         dataFrame:
+#             type: sample-value-matrix
+#             header: true
+#             separator: comma
+#             file: $DATA_FILE_PREFIX.mtcars.csv
+#         # manifestFile: # a sample manifest
+#         #     type: manifest-file
+#         #     manifestType: xxxx
+#         #     file: $XXXX.xxxx
+container:
+    supported: false    # set to true if you maintain a container registry for this pipeline [false]
+    registry:  ghcr.io  # domain name of your OCI-compatible, oras-accessible, container registry [ghcr.io]
+    owner:     KLIPP-Tx # REQUIRED: the name of the owner, e.g., user or organization, at 'registry'
+    installer: apt-get  # the installer program used by the container OS, typically apt-get or yum [apt-get]
