@@ -1,11 +1,11 @@
 ---
 pipeline:
-    name: svWGS
-    description: "Characterize structural variant junctions in whole-genomic, short-read, paired-end NGS data"
+    name: svCapture
+    description: "Characterize structural variant junctions in short-read, paired-end capture library(s)"
     version: v0.0.0
 actions: 
     _global:   
-        environment: svWGS
+        environment: svCapture
         condaFamilies: # use a single, named environment for all actions
             - system
             - genome
@@ -18,24 +18,24 @@ actions:
     align:
         order: 1
         thread: do
-        module: genomex-mdi-tools/align/dna-paired-end  
-    find:
-        order: 2
-        thread: do
-        optionFamilies:
-            - library
-            - fixed-width-bins
-            - filtering      
-        resources:
-            required:
-                total-ram: 32G
-            recommended: 
-                n-cpu: 8
-                ram-per-cpu: 4G
-        job-manager:
-            recommended:
-                time-limit: 24:00:00
-        description: "find SV molecule groups and create coverage depth map"   
+        module: genomex-mdi-tools/align/dna-paired-end
+    # find:
+    #     order: 2
+    #     thread: do
+    #     optionFamilies:
+    #         - library
+    #         - fixed-width-bins
+    #         - filtering      
+    #     resources:
+    #         required:
+    #             total-ram: 32G
+    #         recommended: 
+    #             n-cpu: 8
+    #             ram-per-cpu: 4G
+    #     job-manager:
+    #         recommended:
+    #             time-limit: 24:00:00
+    #     description: "find SV molecule groups and create coverage depth map"   
 condaFamilies:
     system:
         channels:

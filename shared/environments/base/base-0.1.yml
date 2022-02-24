@@ -3,11 +3,6 @@ channels:
     - conda-forge
     - bioconda
     - defaults
-
 dependencies:
-    
-    # workflow management
     - snakemake=6.10.0
-    
-    # general parallelization tools
     - pigz=2.6
