@@ -1,8 +1,0 @@
----
-channels:
-    - conda-forge
-    - bioconda
-    - defaults
-dependencies:
-    - snakemake=6.10.0
-    - pigz=2.6

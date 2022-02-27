@@ -1,0 +1,10 @@
+---
+
+# Although uncommon, sometimes you might not wish to install any
+# program dependencies in the conda environment. In such cases, 
+# use 'condaFamilies: empty'.
+
+channels:
+    - conda-forge
+    - bioconda
+    - defaults

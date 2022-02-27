@@ -1,5 +1,0 @@
----
-# current program versions as of November 2021
-dependencies:
-    - r-base=4.1.1
-    - r-essentials=4.1

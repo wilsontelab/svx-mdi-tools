@@ -1,0 +1,52 @@
+---
+# options used during SV finding algorithms
+options:
+    min-mapq-one: 
+        order: 99
+        short: j
+        type: integer
+        required: false
+        default: 30
+        description: "at least one alignment flanking an SV junction must have at least this MAPQ"  
+    min-mapq-both: 
+        order: 99
+        short: J
+        type: integer
+        required: false
+        default: 20
+        description: "both alignments flanking an SV junction must have at least this MAPQ"  
+    min-clip: 
+        order: 2
+        short: c
+        type: integer
+        required: false
+        default: 5
+        description: "read clips shorter than --min-clip are not accepted as SV evidence"      
+    min-sv-size: 
+        order: 99
+        short: y
+        type: integer
+        required: false
+        default: 1000
+        description: "SVs smaller than this predicted size will not be processed"   
+    sv-size-factor: 
+        order: 99
+        short: Y
+        type: integer
+        required: false
+        default: 0
+        description: "if >0, override --min-sv-size to be --sv-size-factor * maxTLen"   
+    purge-distance: 
+        order: 99
+        short: P
+        type: integer
+        required: false
+        default: 5
+        description: "presume molecule duplicate when OUT_POS euclidean distance < --purge-distance"  
+    split-allowance: 
+        order: 99
+        short: W
+        type: integer
+        required: false
+        default: 5
+        description: "No. of bases by which INN_POS can vary and still be the same junction" 

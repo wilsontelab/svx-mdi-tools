@@ -1,15 +1,15 @@
 # edit the following title and description to match your suite repository
-title: "Tool Suite Template"
-description: "Repository template to create a tools suite for the Michigan Data Interface"
+title: "Structural Variant Tools"
+description: "Pipelines and apps for genome structural variant analysis by different library strategies"
 
 # edit the following for the upper-right navigation link on the documentation page
 aux_links:
   "Go To Repo on GitHub":
-    - "https://github.com/MiDataInt/mdi-suite-template"
+    - "https://github.com/wilsontelab/svx-mdi-tools"
 
 # OPTIONAL: uncomment to list any external tool suite dependencies
-# suite_dependencies:
-#   - GIT_USER/REPOSITORY_NAME
+suite_dependencies:
+  - wilsontelab/genomex-mdi-tools
 
 # OPTIONAL: declare support for suite-level singularity containers
 container:
