@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # set derivative environment variables
-GENOMEX_MODULES_DIR=$SUITES_DIR/genomex-mdi-tools/shared/modules
+export GENOMEX_MODULES_DIR=$SUITES_DIR/genomex-mdi-tools/shared/modules
 source $GENOMEX_MODULES_DIR/genome/set_genome_vars.sh
 source $GENOMEX_MODULES_DIR/align/set_alignment_vars.sh
 source $MODULES_DIR/library/set_library_vars.sh

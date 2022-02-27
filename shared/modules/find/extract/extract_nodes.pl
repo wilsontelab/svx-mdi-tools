@@ -11,11 +11,14 @@ my ($nInputAlns, $nReadPairs,
     $nThreadPairs, $nExcluded, $nFailedQuality) = (0) x 20;
 
 # load dependencies
-my $perlUtilDir = "$ENV{MODULES_DIR}/utilities/perl";
-map { require "$perlUtilDir/$_.pl" } qw(workflow numeric sequence genome exclude);
+my $perlUtilDir = "$ENV{GENOMEX_MODULES_DIR}/utilities/perl";
+map { require "$perlUtilDir/$_.pl" } qw(workflow numeric);
+map { require "$perlUtilDir/genome/$_.pl" } qw(chroms exclude);
+map { require "$perlUtilDir/sequence/$_.pl" } qw(general);
 resetCountFile();
 
 # environment variables
+fillEnvVar(\my $IS_USER_BAM,     'IS_USER_BAM');
 fillEnvVar(\my $EXTRACT_PREFIX,  'EXTRACT_PREFIX');
 fillEnvVar(\my $ACTION_DIR,      'ACTION_DIR');
 fillEnvVar(\my $N_CPU,           'N_CPU');
@@ -24,14 +27,15 @@ fillEnvVar(\our $LIBRARY_TYPE,   'LIBRARY_TYPE');
 fillEnvVar(\our $MIN_CLIP,       'MIN_CLIP');
 fillEnvVar(\our $MAX_TLEN,       'MAX_TLEN');
 fillEnvVar(\our $READ_LEN,       'READ_LEN');
-use vars qw(%chromIndex);
+fillEnvVar(\our $BAD_REGIONS_FILE, 'BAD_REGIONS_FILE');
 
 # load additional dependencies
 require "$ACTION_DIR/extract/parse_nodes.pl";
 
 # initialize the genome
+use vars qw(%chromIndex);
 setCanonicalChroms();
-initializeExclude($ENV{BAD_REGIONS_FILE}, $READ_LEN);
+initializeExclude($BAD_REGIONS_FILE, $READ_LEN);
 
 # constants
 use constant {
@@ -79,7 +83,7 @@ use constant {
 };
 
 # process data by molecule over multiple parallel threads
-launchChildThreads(\&parseReadPairs);
+launchChildThreads(\&parseReadPair);
 use vars qw(@readH @writeH);
 my $writeH = $writeH[1];
 my ($threadName);
@@ -102,10 +106,13 @@ finishChildThreads();
 printCount($nInputAlns, 'nInputAlns', 'input aligned segments over all read pairs');
 printCount($nReadPairs, 'nReadPairs', 'input read pairs');
 
-# child process to parse BWA remap output
-sub parseReadPairs {
+# child process to parse bam read pairs
+sub parseReadPair {
     my ($childN) = @_;
     
+    # auto-flush output to prevent buffering and ensure proper feed to sort
+    $| = 1;
+
     # working variables
     our ($excludeMol, $minMapQ, $alnN, $jxnN, @alns, @mol) = (0, 1e9, 1, 0);
 

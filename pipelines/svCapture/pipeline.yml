@@ -19,6 +19,7 @@ actions:
             # - r-4.1
         optionFamilies: # these options apply to all actions
             - genomex-mdi-tools//genome
+            - genomex-mdi-tools//name-bam-file            
             - genomex-mdi-tools//bam-format
             - genomex-mdi-tools//illumina-type
             - genomex-mdi-tools//read-filtering
@@ -38,6 +39,7 @@ actions:
         order: 3
         thread: do
         module: find  
+
 # package:
 #     uploadType: _template # a signal to the Stage 2 framework regarding the package contents
 #     packageAction: do     # the pipeline action after which the data package should assembled

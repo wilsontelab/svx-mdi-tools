@@ -1,27 +1,29 @@
 # action:
 #     extract SV nodes and molecule spans from name-sorted bam
 # expects:
-#     source $MODULES_DIR/scan/set_genome_vars.sh
-#     source $MODULES_DIR/scan/set_alignment_vars.sh
+#     source $GENOMEX_MODULES_DIR/genome/set_genome_vars.sh
+#     source $GENOMEX_MODULES_DIR/align/set_alignment_vars.sh
 #     source $MODULES_DIR/utilities/shell/create_temp_dir.sh
 #     $EXTRACT_PREFIX
 # input:
-#     $NAME_BAM_FILE
+#     $NAME_BAM_FILE (possibly overridden by $BAM_FILE)
 # outputs:
 #     $COORDINATE_BAM_FILE
 #     node and span files from extract_nodes.pl
 
-# extract SV info from name sorted bam and send all reads to coordinate sort
-
+# log file feedback
 echo "extracting SV data from name-sorted bam"
+source $GENOMEX_MODULES_DIR/source/check_name_bam_file.sh
 echo $NAME_BAM_FILE
-slurp -s 500M $NAME_BAM_FILE |
+
+# extract SV info from name sorted bam and send all reads to coordinate sort
+slurp -s 250M $NAME_BAM_FILE |
 tee >( 
     samtools view - |
     perl $ACTION_DIR/extract/extract_nodes.pl
 ) |
 samtools sort $CRAM_OUTPUT_OPTIONS --threads $N_CPU -m $SORT_RAM_PER_CPU_INT -T $TMP_FILE_PREFIX.samtools.sort - |
-slurp -s 500M -o $COORDINATE_BAM_FILE
+slurp -s 250M -o $COORDINATE_BAM_FILE
 checkPipe
 
 # clean up

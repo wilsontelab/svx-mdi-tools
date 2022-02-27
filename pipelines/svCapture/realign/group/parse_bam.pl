@@ -5,31 +5,32 @@ use warnings;
 # when possible merge additional read pairs with alignment guidance
 # output is one line per read pair, suitable for subsequent sorting and grouping
 
-
-
-# WORKING HERE:
-# port to MDI
-# major question - is it reasonable to maintain them as FR, instead of FF transformation?
-
-
-
 # initialize reporting
-our $script  = "parse_read_pairs";
-our $error   = "$script error";
-my ($nInputAlns, $nInputReadPairs, $nQualityPairs) = (0) x 20;
+our $script = "parse_bam";
+my ($nInputAlns, $nReadPairs, $nQualityPairs) = (0) x 20;
 
 # load dependencies
-use File::Basename;
-my $scriptDir = dirname(__FILE__);
-require "$scriptDir/../_workflow/workflow.pl";
-require "$scriptDir/../common/utilities.pl";
-map { require $_ } glob("$scriptDir/../_sequence/*.pl");
-map { require $_ } glob("$scriptDir/../_numeric/*.pl");
+my $perlUtilDir = "$ENV{GENOMEX_MODULES_DIR}/utilities/perl";
+map { require "$perlUtilDir/$_.pl" } qw(workflow numeric);
+map { require "$perlUtilDir/sequence/$_.pl" } qw(general IUPAC smith_waterman);
+
 resetCountFile();
+
+# environment variables
+fillEnvVar(\my $IS_USER_BAM,  'IS_USER_BAM');
+fillEnvVar(\my $N_CPU,        'N_CPU');
+fillEnvVar(\my $MIN_MAPQ,     'MIN_MAPQ');
+fillEnvVar(\my $LIBRARY_TYPE, 'LIBRARY_TYPE');
+fillEnvVar(\my $MIN_CLIP,     'MIN_CLIP');
+fillEnvVar(\my $MIN_MERGE_OVERLAP, 'MIN_MERGE_OVERLAP');
+fillEnvVar(\my $MIN_MERGE_DENSITY, 'MIN_MERGE_DENSITY');
+
+# working variables
+my $collapseStrands = ($LIBRARY_TYPE eq 'TruSeq'); # otherwise, Nextera, where same signatures on opposite strands are unique source molecules
 
 # constants
 use constant {
-    END_READ_PAIR => 'END_READ_PAIR',
+    END_READ_PAIR => '_ERP_',
     #-------------
     QNAME => 0, # sam fields
     FLAG => 1,
@@ -43,7 +44,7 @@ use constant {
     SEQ => 9,
     QUAL => 10,
     #-------------
-    REV => 11,  # additional fields to take working values
+    REVERSE => 11,  # additional fields to take working values
     STRAND => 12,    
     CLIP1 => 13, # here, 1/2 suffix refers to the read number the alignment is "acting as"
     CLIP2 => 14,
@@ -54,27 +55,21 @@ use constant {
     #-------------
     ALIGN_SPLIT => 12,
     #-------------
-    _REV => 16, # SAM FLAG bits
-    _SECOND => 128,
+    _IS_PAIRED => 1,
+    _REVERSE => 16, # SAM FLAG bits
+    _SECOND_IN_PAIR => 128,
     #-------------
-    SHIFT_REV => 4, # how far to shift those bits to yield binary values
+    SHIFT_REVERSE => 4, # how far to shift those bits to yield binary values
     SHIFT_SECOND => 7,
     #-------------
     READ1 => 0,
     READ2 => 1,
 };
 
-# operating parameters
-my $minMapQ = $ENV{MIN_MAPQ} || 5;
-my $isTruSeq = ($ENV{LIBRARY_TYPE} eq 'TruSeq'); # otherwise, Nextera
-my $minClip = $ENV{MIN_CLIP} || 5; # clips shorter than this are not used as SV evidence or for attempted SV read merging
-my $minMergeOverlap = $ENV{MIN_MERGE_OVERLAP} || 5;# the number of bases that must overlap between read ends for them to be merged
-my $minMergeDensity = $ENV{MIN_MERGE_DENSITY} || 0.8; # at least this fraction of overlap bases must be matches to accept a _guided_ merge
-
 # regular expressions for UMI and clip handling
 my $leftClip_  = qr/^(\d+)S/;
 my $rightClip_ = qr/(\d+)S$/;
-my %actingIs = (CLIP0 => CLIP1, # so e.g. "CLIP".READ1 => "CLIP1"
+my %actingIs = (CLIP0 => CLIP1, # so, e.g., "CLIP".READ1 => "CLIP1"
                 CLIP1 => CLIP2,
                 GROUP_POS0 => GROUP_POS1,
                 GROUP_POS1 => GROUP_POS2,
@@ -82,14 +77,14 @@ my %actingIs = (CLIP0 => CLIP1, # so e.g. "CLIP".READ1 => "CLIP1"
                 SIDE1 => SIDE2);
 
 # working variables
-our $maxShift = 3;
+our $maxShift = 3; # for Smith-Waterman
 my $nullSymbol = '*';
 my @topStrandIs = (READ1, READ2, GROUP_POS1, GROUP_POS2, CLIP1, CLIP2, SIDE1, SIDE2);
 my @botStrandIs = (READ2, READ1, GROUP_POS2, GROUP_POS1, CLIP2, CLIP1, SIDE2, SIDE1);
 my (@alns, @umis, @refAlns, @end1Alns) = ();
 
 # process data by read pair over multiple parallel threads
-launchChildThreads(\&parse_BWA);
+launchChildThreads(\&parseReadPair);
 use vars qw(@readH @writeH);
 my $writeH = $writeH[1];
 my ($threadName);
@@ -97,38 +92,43 @@ while(my $line = <STDIN>){
     $nInputAlns++;
     my ($qName) = split("\t", $line, 2);     
     if($threadName and $qName ne $threadName){
+        $nReadPairs++;        
         print $writeH END_READ_PAIR, "\n";
-        $nInputReadPairs++;
-        $writeH = $writeH[$nInputReadPairs % $ENV{N_CPU} + 1];
+        $writeH = $writeH[$nReadPairs % $N_CPU + 1];
     }    
     print $writeH $line; # commit to worker thread
     $threadName = $qName;
 }
+$nReadPairs++;
 print $writeH END_READ_PAIR, "\n"; # finish last read pair
-$nInputReadPairs++;
 finishChildThreads();
 
 # print summary information
-printCount($nInputReadPairs, 'nInputReadPairs', 'input read pairs');
-printCount($nInputAlns,      'nInputAlns',      'aligned segments over all input read pairs');
+printCount($nInputAlns, 'nInputAlns', 'input aligned segments over all read pairs');
+printCount($nReadPairs, 'nReadPairs', 'input read pairs');
 
-# child process to parse BWA map output
-sub parse_BWA {
+# child process to parse bam read pairs
+sub parseReadPair {
     my ($childN) = @_;
     
     # auto-flush output to prevent buffering and ensure proper feed to sort
     $| = 1;
 
-    # run BWA input one alignment at a time
+    # run aligner output one alignment at a time
     my $readH = $readH[$childN];
+    my ($umi1, $umi2, $isMerged);
     while(my $line = <$readH>){
         chomp $line;
         if($line eq END_READ_PAIR){
             
             # extract information on the source read pair
-            my ($readPairId, $umi1, $umi2, $isMerged) =
-                $alns[READ1] ? split(":", $alns[READ1][0][QNAME]) : ();
-                
+            if($IS_USER_BAM){ # user-supplied bam file cannot support UMIs, get merge status from FLAG
+                $isMerged = !($alns[READ1] ? $alns[READ1][0][FLAG] & _IS_PAIRED : 1);
+                $umi1 = $umi2 = 1;
+            } else { # reads were aligned by genomex-mdi-tools align
+                ($isMerged, $umi2, $umi1) = $alns[READ1] ? reverse(split(":", $alns[READ1][0][QNAME])) : ();
+            }
+ 
             # discard orphan reads since cannot associate UMIs with endpoints
             # process others according to current merge state
             if($isMerged or ($alns[READ1] and $alns[READ2])){
@@ -141,12 +141,12 @@ sub parse_BWA {
             
         } else { # add new alignment to growing read pair
             my @aln = (split("\t", $line, ALIGN_SPLIT))[QNAME..QUAL];
-            push @{$alns[($aln[FLAG] & _SECOND) >> SHIFT_SECOND]}, \@aln; # 0=read1, 1=read2
+            push @{$alns[($aln[FLAG] & _SECOND_IN_PAIR) >> SHIFT_SECOND]}, \@aln; # 0=read1, 1=read2
         }
     }
     
     # print quality pairs for this thread
-    printCount($nQualityPairs, "nQualityPairs_$childN", "read pairs passed MAPQ $minMapQ in thread $childN");
+    printCount($nQualityPairs, "nQualityPairs_$childN", "read pairs passed MAPQ $MIN_MAPQ in thread $childN");
 }
 
 #---------------------------------------------------------------------
@@ -157,8 +157,8 @@ sub processPremerged {
     
     # calculate clip lengths for all alignments
     map {
-        my $clip1  = ($$_[FLAG] & _REV) ? $rightClip_ : $leftClip_;
-        my $clip2  = ($$_[FLAG] & _REV) ? $leftClip_ : $rightClip_;
+        my $clip1  = ($$_[FLAG] & _REVERSE) ? $rightClip_ : $leftClip_;
+        my $clip2  = ($$_[FLAG] & _REVERSE) ? $leftClip_ : $rightClip_;
         $$_[CLIP1] = $$_[CIGAR] =~ m/$clip1/ ? $1 : 0;
         $$_[CLIP2] = $$_[CIGAR] =~ m/$clip2/ ? $1 : 0;
     } @{$alns[READ1]};    
@@ -174,15 +174,15 @@ sub processPremerged {
         
         # but reject low MAPQ outermost alignments as reference alignments                       
         my $i = 0;
-        while($sorted[$i][MAPQ] < $minMapQ and $i < $#sorted){ $i++ }
+        while($sorted[$i][MAPQ] < $MIN_MAPQ and $i < $#sorted){ $i++ }
         $refAlns[READ1] = $sorted[$i];        
         $i = $#sorted;
-        while($sorted[$i][MAPQ] < $minMapQ and $i > 0){ $i-- }
+        while($sorted[$i][MAPQ] < $MIN_MAPQ and $i > 0){ $i-- }
         $refAlns[READ2] = $sorted[$i];  
     }
     
     # if no alignments were of sufficient MAPQ, reject the merged read
-    $refAlns[READ1][MAPQ] >= $minMapQ or return;
+    $refAlns[READ1][MAPQ] >= $MIN_MAPQ or return;
     $nQualityPairs++;
 
     # set strandedness information
@@ -196,7 +196,7 @@ sub processPremerged {
     my ($read1, $read2, $groupPos1, $groupPos2, $clip1, $clip2, $side1, $side2) = sortReferenceAlignments();
 
     # determine which alignment yields the reference genome sequence OUTSIDE of inverted segments
-    # remember that BWA has already RC'ed REVERSE alignments
+    # remember that aligner has already RC'ed REVERSE alignments
     my $seqRead = (
         $refAlns[$read1][STRAND] == $refAlns[$read2][STRAND] or
         ($read1 == READ1 and !$refAlns[READ1][STRAND]) or
@@ -218,8 +218,8 @@ sub setMergedGroupPos {
     my $groupPosI = $actingIs{"GROUP_POS".$actingRead};
     my $clipI     = $actingIs{"CLIP".$actingRead};
     my $sideI     = $actingIs{"SIDE".$actingRead};
-    if(($actingRead == READ1 and !$$aln[REV]) or
-       ($actingRead == READ2 and  $$aln[REV])){
+    if(($actingRead == READ1 and !$$aln[REVERSE]) or
+       ($actingRead == READ2 and  $$aln[REVERSE])){
         $$aln[$groupPosI] = $$aln[POS] - $$aln[$clipI];
         $$aln[$sideI] = "R";
     } else {
@@ -242,7 +242,7 @@ sub processUnmerged {
         # use to sort alignment and to determine grouping position
         my $clipI = $actingIs{"CLIP".$read};          
         map {
-            my $clip = ($$_[FLAG] & _REV) ? $rightClip_ : $leftClip_;
+            my $clip = ($$_[FLAG] & _REVERSE) ? $rightClip_ : $leftClip_;
             $$_[$clipI] = $$_[CIGAR] =~ m/$clip/ ? $1 : 0;
         } @{$alns[$read]};
 
@@ -261,16 +261,16 @@ sub processUnmerged {
             # low MAPQ alignments are more likely to be placed differently by aligner
             # even when they are longer (e.g. randomly choosing between genome repeat units)                        
             my $i = 0;
-            while($sorted[$i][MAPQ] < $minMapQ and $i < $#sorted){ $i++ }
+            while($sorted[$i][MAPQ] < $MIN_MAPQ and $i < $#sorted){ $i++ }
             push @refAlns, $sorted[$i];
         } 
     }
     
     # if either alignment was not of sufficient MAPQ, reject the read pair
-    ($refAlns[READ1][MAPQ] >= $minMapQ and $refAlns[READ2][MAPQ] >= $minMapQ) or return;
+    ($refAlns[READ1][MAPQ] >= $MIN_MAPQ and $refAlns[READ2][MAPQ] >= $MIN_MAPQ) or return;
     $nQualityPairs++;
     
-    # set strandedness information; REV as aligned, STRAND corrected to source molecule
+    # set strandedness information; REVERSE as aligned, STRAND corrected to source molecule
     setAlignmentStrands();
     $refAlns[READ2][STRAND] = ($refAlns[READ2][STRAND] + 1) % 2;
 
@@ -289,7 +289,7 @@ sub setUnmergedGroupPos {
     my $groupPosI = $actingIs{"GROUP_POS".$actingRead};
     my $clipI     = $actingIs{"CLIP".$actingRead};
     my $sideI     = $actingIs{"SIDE".$actingRead};
-    if(!$$aln[REV]){ # i.e. a forward read
+    if(!$$aln[REVERSE]){ # i.e. a forward read
         $$aln[$groupPosI] = $$aln[POS] - $$aln[$clipI];
         $$aln[$sideI] = "R";
     } else {
@@ -299,14 +299,14 @@ sub setUnmergedGroupPos {
 }
 
 # get the alignment position difference between two alignments on the same side of a source molecule
-# applicable to paired, i.e. unmerged reads when they have sufficient overlap to generate a proper pair at one end
+# applicable to paired, i.e., unmerged reads when they have sufficient overlap to generate a proper pair at one end
 sub getEnd1Offset { 
     my ($outerAln1, $innerAln2) = @_;
     if($$outerAln1[RNAME] ne $$innerAln2[RNAME]){ # translocation
         return; # not proper at same end of molecule, presumably reads do not overlap sufficiently
     } else{
-        my $rev1 = $$outerAln1[FLAG] & _REV; # REV not necessarily set on both alns yet
-        my $rev2 = $$innerAln2[FLAG] & _REV;
+        my $rev1 = $$outerAln1[FLAG] & _REVERSE; # REV not necessarily set on both alns yet
+        my $rev2 = $$innerAln2[FLAG] & _REVERSE;
         if($rev1 == $rev2){ # inversion
             return; # again, presume insufficient overlap, no merge guidance
         } else {
@@ -334,10 +334,10 @@ sub mergeWithGuidance {
     # check for sufficient potential overlap
     my $readLen = length($end1Alns[READ1][SEQ]);  # not necessarily READ_LEN if adapters were trimmed
     my $overlapLen = $readLen - abs($end1Offset); # integer > 0
-    $overlapLen >= $minMergeOverlap or return commitUnmerged();    
+    $overlapLen >= $MIN_MERGE_OVERLAP or return commitUnmerged();    
     
     # extract the potential overlap sequences and qualities
-    my ($refRead, $qryRead) = $end1Alns[READ1][REV] ? (READ2, READ1) : (READ1, READ2);
+    my ($refRead, $qryRead) = $end1Alns[READ1][REVERSE] ? (READ2, READ1) : (READ1, READ2);
     my ($refSeq, $qrySeq, $refQual, $qryQual);
     if($end1Offset == 0){
         $refSeq  = $end1Alns[$refRead][SEQ];
@@ -425,12 +425,12 @@ sub mergeWithGuidance {
         }
         
         # check for sufficient merge quality
-        ($nMatches >= $minMergeOverlap and
-         $nMatches / $overlapLen >= $minMergeDensity) or return commitUnmerged();      
+        ($nMatches >= $MIN_MERGE_OVERLAP and
+         $nMatches / $overlapLen >= $MIN_MERGE_DENSITY) or return commitUnmerged();      
     }
 
     # assemble the merged read SEQ and QUAL
-    # RC not needed since both reads are on the same strand and BWA already RC'ed them
+    # RC not needed since both reads are on the same strand and aligner already RC'ed them
     my ($mergeSeq, $mergeQual);
     if($end1Offset > 0){ # read pairs not also overrunning on right will fail merging and not get here
         $mergeSeq  = substr($end1Alns[$refRead][SEQ], 0, $end1Offset)
@@ -460,14 +460,14 @@ sub mergeWithGuidance {
 }
 
 # reads could not be merged even with alignment guidance
-# most likely non-overlapping, i.e. large source molecules
+# most likely non-overlapping, i.e., large source molecules
 sub commitUnmerged {
 
     # order duplex endpoints to set molecule strand
     my ($read1, $read2, $groupPos1, $groupPos2, $clip1, $clip2, $side1, $side2) = sortReferenceAlignments();    
 
     # set sequences to yield the reference genome sequence OUTSIDE of inverted segments
-    # remember that BWA has already RC'ed REVERSE alignments
+    # remember that aligner has already RC'ed REVERSE alignments
     # two read SEQs exit on same strand of source molecule (not of the genome reference)
     if($refAlns[$read1][STRAND] != $refAlns[$read2][STRAND]){
         if($read1 == READ1){
@@ -508,12 +508,12 @@ sub commitUnmerged {
 sub setAlignmentStrands {
 
     # extract just the REVERSE bit from the SAM FLAG for each read
-    $refAlns[READ1][REV] = ($refAlns[READ1][FLAG] & _REV) >> SHIFT_REV;  # 0=forward, 1=reverse
-    $refAlns[READ2][REV] = ($refAlns[READ2][FLAG] & _REV) >> SHIFT_REV;
+    $refAlns[READ1][REVERSE] = ($refAlns[READ1][FLAG] & _REVERSE) >> SHIFT_REVERSE;  # 0=forward, 1=reverse
+    $refAlns[READ2][REVERSE] = ($refAlns[READ2][FLAG] & _REVERSE) >> SHIFT_REVERSE;
     
     # use the REVERSE bit to label the reference STRAND (may modify later)
-    $refAlns[READ1][STRAND] = $refAlns[READ1][REV]; 
-    $refAlns[READ2][STRAND] = $refAlns[READ2][REV]; # may be changed later when unmerged
+    $refAlns[READ1][STRAND] = $refAlns[READ1][REVERSE]; 
+    $refAlns[READ2][STRAND] = $refAlns[READ2][REVERSE]; # may be changed later when unmerged
 }
 
 # sort reads so top and bottom strands of source duplex molecule have matching signatures for grouping
@@ -535,19 +535,18 @@ sub getMoleculeKey {
 
     # include a flag whether a refAln pos was clipped, i.e. should be stratified as an SV position
     # this prevents an SV outer clip from grouping with a proper fragment with the same groupPos
-    my $isSVClip1 = $refAlns[$read1][$clip1] >= $minClip ? 1 : 0;
-    my $isSVClip2 = $refAlns[$read2][$clip2] >= $minClip ? 1 : 0;    
+    my $isSVClip1 = $refAlns[$read1][$clip1] >= $MIN_CLIP ? 1 : 0;
+    my $isSVClip2 = $refAlns[$read2][$clip2] >= $MIN_CLIP ? 1 : 0;    
     
     # for Nextera libraries (or any without Y-adapter-like source strand discrimination)
     # include inferred source strand as part of the molecule key
     # since identical endpoints with opposite read1/2 orientation are independent molecules
-    my $nexteraStrand = $isTruSeq ? '0' : $read1; # does NOT break molecule group if TruSeq
+    my $strand = $collapseStrands ? '0' : $read1; # does NOT break molecule group if TruSeq
 
     # return the key, consistent across merged and unmerged read pairs
     join(",", 
         $umis[$read1], @{$refAlns[$read1]}[RNAME, $side1], $isSVClip1,
         $umis[$read2], @{$refAlns[$read2]}[RNAME, $side2], $isSVClip2,
-        $nexteraStrand
+        $strand
     );
 }
-

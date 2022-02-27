@@ -5,17 +5,17 @@ use warnings;
 # when requested, use fuzzy logic on positions to allow for indels in outer clipped bases
 
 # initialize reporting
-our $script  = "group_reads";
-our $error   = "$script error";
+our $script = "group_reads";
+our $error  = "$script error";
 my ($nInputReadPairs, $nOutputGroups, $nOutputReadPairs) = (0) x 20;
 
 # load dependencies
-use File::Basename;
-my $scriptDir = dirname(__FILE__);
-require "$scriptDir/../_workflow/workflow.pl";
-require "$scriptDir/../common/utilities.pl";
-map { require $_ } glob("$scriptDir/../_sequence/*.pl");
+my $perlUtilDir = "$ENV{MODULES_DIR}/utilities/perl";
+map { require "$perlUtilDir/$_.pl" } qw(workflow numeric);
 resetCountFile();
+
+# environment variables
+fillEnvVar(\my $ADJACENCY_LIMIT,  'ADJACENCY_LIMIT');
 
 # constants
 use constant {
@@ -45,14 +45,11 @@ use constant {
     NEXTERA_STRAND => 8
 };
 
-# operating parameters
-my $adjacencyLimit = defined $ENV{ADJACENCY_LIMIT} ? $ENV{ADJACENCY_LIMIT} : 1;
-
 # working variables
 my ($prevKey, $prevPos1, @pos1Group);
-#my $nullSymbol = '*';
 
 # run the read pairs
+# TODO: REVISIT MULTI_THREADING: COULD USE __NEWLINE__ TEMPORARY DELIMITER
 # NB: cannot multi-thread since multiple output lines for a molecule group must stay together
 # also, not a particularly slow step in overall pipeline
 while(my $line = <STDIN>){ # expects input sorted by MOL_KEY+GROUP_POS1 (will sort for GROUP_POS2 etc. below)
@@ -63,7 +60,7 @@ while(my $line = <STDIN>){ # expects input sorted by MOL_KEY+GROUP_POS1 (will so
     # split the molecule key groups by GROUP_POS1
     if($prevKey and
        ($prevKey ne $pos1Pair[MOL_KEY] or
-        $prevPos1 < $pos1Pair[GROUP_POS1] - $adjacencyLimit)){
+        $prevPos1 < $pos1Pair[GROUP_POS1] - $ADJACENCY_LIMIT)){
         processPos1Group();
         @pos1Group = (); # prepare for next MOL_KEY+GROUP_POS1 group
     }
@@ -76,7 +73,6 @@ while(my $line = <STDIN>){ # expects input sorted by MOL_KEY+GROUP_POS1 (will so
 processPos1Group(); # finish last data
 
 # print summary information
-printCount($adjacencyLimit,   'adjacencyLimit',   'adjacency limit in use');
 printCount($nInputReadPairs,  'nInputReadPairs',  'input read pairs (one per line)');
 printCount($nOutputGroups,    'nOutputGroups',    'output molecule groups');
 printCount($nOutputReadPairs, 'nOutputReadPairs', 'read pairs in the output molecule groups');
@@ -91,7 +87,7 @@ sub processPos1Group {
     # split the GROUP_POS1 group by GROUP_POS2
     my ($prevPos2, @pos2Group, @strandCount);
     foreach my $pos2Pair(@pos1Group){
-        if($prevPos2 and $prevPos2 < $$pos2Pair[GROUP_POS2] - $adjacencyLimit){
+        if($prevPos2 and $prevPos2 < $$pos2Pair[GROUP_POS2] - $ADJACENCY_LIMIT){
             processPos2Group($prevPos2, \@pos2Group, \@strandCount);
             @pos2Group = (); # prepare for next GROUP_POS2 group
             @strandCount = ();
@@ -106,7 +102,7 @@ sub processPos1Group {
 }
 
 # process a group of readPairs with the same umis,chroms,strands and nearby GROUP_POS1+GROUP_POS2
-# in other words, an inferred source DNA molecule
+# i.e., an inferred source DNA molecule
 sub processPos2Group {
     my ($prevPos2, $pos2Group, $strandCount) = @_;
 
@@ -141,4 +137,3 @@ sub processPos2Group {
         @molKey[UMI1, UMI2] # used after re-mapping during endpoint uniqueness assessment (could be 1,1 if no UMIs)
     ), "\n";
 }
-
