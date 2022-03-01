@@ -16,7 +16,3 @@ echo "READ_LEN = $READ_LEN"
 echo "extracting MAX_TLEN"
 export MAX_TLEN=`samtools view $NAME_BAM_FILE | head -n 100000 | perl $MODULES_DIR/library/get_max_TLEN.pl`
 echo "MAX_TLEN = $MAX_TLEN"
-
-# #########################
-# export READ_LEN=151
-# export MAX_TLEN=862

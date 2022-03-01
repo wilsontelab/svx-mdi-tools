@@ -18,15 +18,16 @@ map { require "$perlUtilDir/sequence/$_.pl" } qw(general);
 resetCountFile();
 
 # environment variables
-fillEnvVar(\my $IS_USER_BAM,     'IS_USER_BAM');
-fillEnvVar(\my $EXTRACT_PREFIX,  'EXTRACT_PREFIX');
-fillEnvVar(\my $ACTION_DIR,      'ACTION_DIR');
-fillEnvVar(\my $N_CPU,           'N_CPU');
-fillEnvVar(\my $MIN_MAPQ,        'MIN_MAPQ');
-fillEnvVar(\our $LIBRARY_TYPE,   'LIBRARY_TYPE');
-fillEnvVar(\our $MIN_CLIP,       'MIN_CLIP');
-fillEnvVar(\our $MAX_TLEN,       'MAX_TLEN');
-fillEnvVar(\our $READ_LEN,       'READ_LEN');
+fillEnvVar(\my $IS_SV_CAPTURE,     'IS_SV_CAPTURE', 1, 0);
+fillEnvVar(\my $IS_USER_BAM,       'IS_USER_BAM');
+fillEnvVar(\my $EXTRACT_PREFIX,    'EXTRACT_PREFIX');
+fillEnvVar(\my $ACTION_DIR,        'ACTION_DIR');
+fillEnvVar(\my $N_CPU,             'N_CPU');
+fillEnvVar(\my $MIN_MAPQ,          'MIN_MAPQ');
+fillEnvVar(\our $LIBRARY_TYPE,     'LIBRARY_TYPE');
+fillEnvVar(\our $MIN_CLIP,         'MIN_CLIP');
+fillEnvVar(\our $MAX_TLEN,         'MAX_TLEN');
+fillEnvVar(\our $READ_LEN,         'READ_LEN');
 fillEnvVar(\our $BAD_REGIONS_FILE, 'BAD_REGIONS_FILE');
 
 # load additional dependencies
@@ -61,11 +62,21 @@ use constant {
     _SECOND_IN_PAIR => 128,
     _SUPPLEMENTARY => 2048,
     #-------------
-    MOL_ID => 0, # integer read-pair index
-    MOL_CLASS => 1,
-    MOL_STRAND => 2,
-    IS_OUTER_CLIP1 => 3,
-    IS_OUTER_CLIP2 => 4,
+    MOL_ID => 0, # molecule-level data
+    IS_DUPLEX => 1, # appended to QNAME by svCapture make_consensus.pl (but not genomex-mdi-tools align)
+    STRAND_COUNT1 => 2,
+    STRAND_COUNT2 => 3,
+    UMI1 => 4, # appended to QNAME by genomex-mdi-tools align / svCapture make_consensus.pl
+    UMI2 => 5,
+    IS_MERGED => 6, # (this will be added by extract_nodes if not already known)
+    MOL_CLASS => 7, # values added by extract_nodes regardless of pipeline or bam source
+    MOL_STRAND => 8,
+    IS_OUTER_CLIP1 => 9,
+    IS_OUTER_CLIP2 => 10,
+    IS_ORPHAN => 11,   # is this needed???
+    INSERT_SIZE => 12, # is this needed???
+    TARGET_CLASS => 13, # values added (or initialized) for svCapture
+    SHARED_PROPER => 14, 
     #-------------
     READ1 => 0, # for code readability
     READ2 => 1,
@@ -75,7 +86,7 @@ use constant {
     RIGHT => 1,   
     #-------------
     IS_PROPER => 'P', # proper and anomalous molecule codes
-    IS_SV => 'V',
+    IS_SV     => 'V',
     #-------------
     GAP        => 0, # SV evidence type codes, i.e. node classes
     SPLIT      => 1,
@@ -121,6 +132,14 @@ sub parseReadPair {
     open our $spansH, "|-", "gzip -c > $spansFile" or die "$error: could not open $spansFile: $!\n";
     my $nodesFile = "$EXTRACT_PREFIX.nodes.$childN.gz";
     open our $nodesH, "|-", "gzip -c > $nodesFile" or die "$error: could not open $nodesFile: $!\n";
+
+    # # output file handles
+    # my $endpointFile = "$ENV{EXTRACT_PREFIX}.endpoints.$childN.gz";
+    # open our $endpointH, "|-", "gzip -c > $endpointFile" or die "$error: could not open $endpointFile: $!\n";
+    # my $tLenFile = "$ENV{EXTRACT_PREFIX}.insertSizes.$childN.gz";
+    # open our $tLenH, "|-", "gzip -c > $tLenFile" or die "$error: could not open $tLenFile: $!\n";
+    # my $nodeFile = "$ENV{EXTRACT_PREFIX}.nodes.$childN.gz";
+    # open our $nodeH, "|-", "gzip -c > $nodeFile" or die "$error: could not open $nodeFile: $!\n";
   
     # run aligner output one alignment at a time
     my $readH = $readH[$childN];
@@ -135,7 +154,44 @@ sub parseReadPair {
             # proceed if ALL alignment segments were of sufficient MAPQ
             # skip the entire molecule if ANY alignment segments were in an excluded region
             if(!$excludeMol and $minMapQ >= $MIN_MAPQ){
-                $mol[MOL_ID] = $aln[1];
+
+                # initialize molecule-level data based on bam source type
+                if($IS_SV_CAPTURE){
+                    @mol = (split(":", $alns[0][QNAME]), (0) x 8);
+                    # $mol[MOL_STRAND] = $isTruSeq ? 0 : ($mol[STRAND_COUNT1] ? 0 : 1);
+                } elsif($IS_USER_BAM){
+                    @mol = ($aln[1], (0) x 3, (1) x 2, ($alns[0][FLAG] & _IS_PAIRED) ^ _IS_PAIRED, (0) x 8); 
+                } else { # genomex-mdi-tools align
+                    my @qname = split(":", $alns[0][QNAME]);
+                    @mol = ($aln[1], (0) x 3, @qname[$#qname - 2, $#qname], (0) x 8); 
+                }
+
+                # identify pairs as proper or SV-containing and act accordingly
+
+                # if($mol[IS_MERGED]){ # merged reads, expect just one alignment; any supplemental = SV
+                #     if(@alns == 1 and !($alns[0][FLAG] & _UNMAPPED)){ # unmapped v. rare since remapping; dicard them
+                #         parseMergedProper();
+                #     } elsif(@alns > 1){
+                #         parseMergedSplit();
+                #     }                
+                # } else { # unmerged reads, expect 2 alignments flagged as proper
+                #     if(@alns == 2 and ($alns[0][FLAG] & _PROPER)){
+                #         parseUnmergedProper();                    
+                #     } elsif(@alns == 2 and
+                #             !($alns[0][FLAG] & _UNMAPPED) and !($alns[1][FLAG] & _UNMAPPED)) {
+                #         if($alns[0][FLAG] & _SUPPLEMENTARY or $alns[1][FLAG] & _SUPPLEMENTARY){
+                #             $mol[IS_ORPHAN] = 1;
+                #             parseMergedSplit();
+                #         } else {
+                #             parseUnmergedHiddenJunction();
+                #         }
+                #     } elsif(@alns >= 2) {
+                #         parseUnmergedSplit();   
+                #     } elsif(@alns == 1){ # one read of a pair failed consensus; treat remaining alignment as a single merged read
+                #         $mol[IS_ORPHAN] = 1;
+                #         parseMergedProper();
+                #     }
+                # }   
 
                 # identify pairs as proper or SV-containing and act accordingly
                 if($alns[0][FLAG] & _IS_PAIRED){ # unmerged reads, expect 2 alignments flagged as proper

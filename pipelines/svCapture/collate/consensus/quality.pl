@@ -17,7 +17,7 @@ use warnings;
 # but it does not yet reflect the potential for pre-cluster errors
 
 # it makes sense to not downgrade yet based on coverage, since it would confuse
-# the BWA aligner in the remap step to see bases with low apparent _sequencing_ quality
+# the aligner in the remap step to see bases with low apparent _sequencing_ quality
 # given that our SV pipeline maintains all read pairs regardless of coverage
 
 # instead, at this stage we simply give a small quality _bump_ when the output
@@ -64,4 +64,3 @@ sub getConsensusQual_40 {
 }
 
 1;
-

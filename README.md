@@ -25,7 +25,8 @@ at the University of Michigan.
 In suite-centric mode, you will:
 - clone this tool suite repository
 - call its 'install.sh' script to create a suite-specific MDI installation
-- call its 'svx' utility to use its tools
+- OPTIONAL: call 'alias.pl' to create an alias to the suite's 'run' utility
+- call its 'run' utility to use its tools
 
 ### Install this tool suite
 
@@ -35,13 +36,18 @@ cd svx-mdi-tools
 ./install.sh
 ```
 
-### Execute a Stage 1 pipeline from the command line
-
-For help, call the 'svx' utility with no arguments - 
-add the suite directory to PATH to run the tool suite from any directory.
+### Create an alias to the suite's 'run' utility
 
 ```bash
-./svx
+perl alias.pl svx # you can use a different alias name if you'd like
+```
+
+### Execute a Stage 1 pipeline from the command line
+
+For help, call the 'run' utility with no arguments.
+
+```bash
+svx # assuming you created an alias as described above
 ```
 
 ### Launch the Stage 2 web server
@@ -50,8 +56,8 @@ Launch the apps server as follows - in a few seconds a web browser
 will open and you will be ready to load your data and run an associated app.
 
 ```bash
-./svx server --help
-./svx server
+svx server --help
+svx server
 ```
 
 ---
@@ -103,7 +109,7 @@ the second time. Alternatively, you can install this suite from within the
 Stage 2 web server, or run the following from the command line:
 
 ```bash
-mdi add -p -s wilsontelab/svx-mdi-tools
+svx add -p -s wilsontelab/svx-mdi-tools
 ```
 
 ### Execute a Stage 1 pipeline from the command line
@@ -111,7 +117,7 @@ mdi add -p -s wilsontelab/svx-mdi-tools
 For help, call the 'svx' utility with no arguments.
 
 ```bash
-svx
+svx # assuming you created an alias as described above
 ```
 
 ### Launch the Stage 2 web server

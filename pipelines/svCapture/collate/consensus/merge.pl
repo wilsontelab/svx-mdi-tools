@@ -75,4 +75,3 @@ sub parseMergeLevels {
 }
 
 1;
-

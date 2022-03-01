@@ -13,7 +13,6 @@ my ($nInputAlns, $nReadPairs, $nQualityPairs) = (0) x 20;
 my $perlUtilDir = "$ENV{GENOMEX_MODULES_DIR}/utilities/perl";
 map { require "$perlUtilDir/$_.pl" } qw(workflow numeric);
 map { require "$perlUtilDir/sequence/$_.pl" } qw(general IUPAC smith_waterman);
-
 resetCountFile();
 
 # environment variables
@@ -67,8 +66,7 @@ use constant {
 };
 
 # regular expressions for UMI and clip handling
-my $leftClip_  = qr/^(\d+)S/;
-my $rightClip_ = qr/(\d+)S$/;
+use vars qw($leftClip_ $rightClip_);
 my %actingIs = (CLIP0 => CLIP1, # so, e.g., "CLIP".READ1 => "CLIP1"
                 CLIP1 => CLIP2,
                 GROUP_POS0 => GROUP_POS1,
@@ -289,7 +287,7 @@ sub setUnmergedGroupPos {
     my $groupPosI = $actingIs{"GROUP_POS".$actingRead};
     my $clipI     = $actingIs{"CLIP".$actingRead};
     my $sideI     = $actingIs{"SIDE".$actingRead};
-    if(!$$aln[REVERSE]){ # i.e. a forward read
+    if(!$$aln[REVERSE]){ # i.e., a forward read
         $$aln[$groupPosI] = $$aln[POS] - $$aln[$clipI];
         $$aln[$sideI] = "R";
     } else {
@@ -533,7 +531,7 @@ sub sortReferenceAlignments {
 sub getMoleculeKey {
     my ($read1, $read2, $clip1, $clip2, $side1, $side2) = @_;
 
-    # include a flag whether a refAln pos was clipped, i.e. should be stratified as an SV position
+    # include a flag whether a refAln pos was clipped, i.e., should be stratified as an SV position
     # this prevents an SV outer clip from grouping with a proper fragment with the same groupPos
     my $isSVClip1 = $refAlns[$read1][$clip1] >= $MIN_CLIP ? 1 : 0;
     my $isSVClip2 = $refAlns[$read2][$clip2] >= $MIN_CLIP ? 1 : 0;    
@@ -541,12 +539,12 @@ sub getMoleculeKey {
     # for Nextera libraries (or any without Y-adapter-like source strand discrimination)
     # include inferred source strand as part of the molecule key
     # since identical endpoints with opposite read1/2 orientation are independent molecules
-    my $strand = $collapseStrands ? '0' : $read1; # does NOT break molecule group if TruSeq
+    my $groupingStrand = $collapseStrands ? '0' : $read1; # does NOT break molecule group if TruSeq
 
     # return the key, consistent across merged and unmerged read pairs
     join(",", 
         $umis[$read1], @{$refAlns[$read1]}[RNAME, $side1], $isSVClip1,
         $umis[$read2], @{$refAlns[$read2]}[RNAME, $side2], $isSVClip2,
-        $strand
+        $groupingStrand
     );
 }

@@ -8,22 +8,22 @@ actions:
         order: 1
         thread: do
         module: genomex-mdi-tools//align/dna-paired-end  
-    realign:
+    collate:
         order: 2
         thread: do
-
-        # environment: svCapture-realign
         condaFamilies:
             - genomex-mdi-tools//base
-            - genomex-mdi-tools//genome
-            # - r-4.1
+            - genomex-mdi-tools//bwa
         optionFamilies: # these options apply to all actions
             - genomex-mdi-tools//genome
-            - genomex-mdi-tools//name-bam-file            
+            - genomex-mdi-tools//name-bam-file
             - genomex-mdi-tools//bam-format
             - genomex-mdi-tools//illumina-type
             - genomex-mdi-tools//read-filtering
-            - genomex-mdi-tools//read-merging                      
+            - genomex-mdi-tools//read-merging
+            - grouping
+            - consensus
+            - genomex-mdi-tools//target-region
         resources:
             required:
                 total-ram: 32G
@@ -33,12 +33,13 @@ actions:
         job-manager:
             recommended:
                 time-limit: 24:00:00
-        description: "group reads, make consensuses, and re-align to genome"
+        description: "collate read groups, make consensuses, and re-align to genome"
 
-    find:
-        order: 3
-        thread: do
-        module: find  
+    # find:
+    #     order: 3
+    #     thread: do
+    #     module: find  
+
 
 # package:
 #     uploadType: _template # a signal to the Stage 2 framework regarding the package contents

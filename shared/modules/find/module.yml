@@ -23,4 +23,4 @@ action: # required
     job-manager:
         recommended:
             time-limit: 24:00:00
-    description: "collate SV molecule evidence"
+    description: "scan name-sorted reads for anomalous molecules and make SV calls"

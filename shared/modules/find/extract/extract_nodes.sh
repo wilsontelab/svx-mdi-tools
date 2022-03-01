@@ -26,6 +26,8 @@ samtools sort $CRAM_OUTPUT_OPTIONS --threads $N_CPU -m $SORT_RAM_PER_CPU_INT -T 
 slurp -s 250M -o $COORDINATE_BAM_FILE
 checkPipe
 
+# TODO: index coordinate bam
+
 # clean up
 rm -rf $TMP_DIR_WRK/*
 

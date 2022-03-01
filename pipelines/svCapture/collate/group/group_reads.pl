@@ -6,11 +6,10 @@ use warnings;
 
 # initialize reporting
 our $script = "group_reads";
-our $error  = "$script error";
 my ($nInputReadPairs, $nOutputGroups, $nOutputReadPairs) = (0) x 20;
 
 # load dependencies
-my $perlUtilDir = "$ENV{MODULES_DIR}/utilities/perl";
+my $perlUtilDir = "$ENV{GENOMEX_MODULES_DIR}/utilities/perl";
 map { require "$perlUtilDir/$_.pl" } qw(workflow numeric);
 resetCountFile();
 
@@ -42,16 +41,15 @@ use constant {
     RNAME2 => 5,
     SIDE2 => 6,
     IS_SV_CLIP2 => 7,
-    NEXTERA_STRAND => 8
+    GROUPING_STRAND => 8
 };
 
 # working variables
 my ($prevKey, $prevPos1, @pos1Group);
 
 # run the read pairs
-# TODO: REVISIT MULTI_THREADING: COULD USE __NEWLINE__ TEMPORARY DELIMITER
-# NB: cannot multi-thread since multiple output lines for a molecule group must stay together
-# also, not a particularly slow step in overall pipeline
+# NB: cannot multi-thread when using multiple output lines for a molecule group, which must stay together
+# not worth changing as this is not a particularly slow step in the overall pipeline
 while(my $line = <STDIN>){ # expects input sorted by MOL_KEY+GROUP_POS1 (will sort for GROUP_POS2 etc. below)
     $nInputReadPairs++;
     chomp $line;

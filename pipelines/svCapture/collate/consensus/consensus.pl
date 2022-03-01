@@ -4,7 +4,7 @@ use warnings;
 # STEP 3 - make a single-strand consensus for each read, or merged read, of each source strand
 # STEP 4 - make a duplex consensus from the single-strand consensuses when available
 
-# constants (must match other scripts since not using perl package)
+# constants
 use constant {
     READ_PAIR_ID => 0, # columns in read-pair lines
     MOL_STRAND => 1,
@@ -36,8 +36,7 @@ use constant {
 };
 
 # operating parameters
-my $minScoreFactor  = $ENV{MIN_SCORE_FACTOR} || 0.7; # e.g. 100 length * 0.7 factor = minimum acceptable _score_ of 70 to accept a consensus alignment
-my $consensusFactor = $ENV{CONSENSUS_FACTOR} || 2/3; # the fraction of reads/bases that must have a common value to be called a consensus
+use vars qw($MIN_SW_SCORE_FACTOR $CONSENSUS_FACTOR);
 
 # working variables
 use vars qw(@readPairs @downsample @consensus %mOperations);
@@ -111,7 +110,7 @@ sub makeConsensusMulti {
         my @sortedSeq = sort { @{$$seqs{$b}} <=> @{$$seqs{$a}} } keys %$seqs;        
 
         # source molecule+strand+read/merged had one predominant sequence (would win any base consensus counting)
-        if(@{$$seqs{$sortedSeq[0]}} >= $nSeqVals * $consensusFactor){
+        if(@{$$seqs{$sortedSeq[0]}} >= $nSeqVals * $CONSENSUS_FACTOR){
             $consensus[$strand][$read][SEQ]  = $sortedSeq[0];    
 
         # complex sequence pattern requires base-by-base pattern evaluation
@@ -150,11 +149,11 @@ sub maskTwoSequences {
 
     # run fast Smith-Waterman on the sequence pair
     my ($qryOnRef, $score, $startQry, $endQry, $startRef) = smith_waterman($qry, $ref, 1);
-    $score >= length($ref) * $minScoreFactor or return; # sequences did not match as well as required
+    $score >= length($ref) * $MIN_SW_SCORE_FACTOR or return; # sequences did not match as well as required
 
     # M operations replace base conflicts with IUPAC codes for the pair of base values
     # D or I operations relative to reference are masked to N    
-    # overruns of one sequence past another would be N bases and are not reported, i.e. are trimmed away
+    # overruns of one sequence past another would be N bases and are not reported, i.e., are trimmed away
     foreach my $i(0..$#$qryOnRef){ 
         my $refBase = substr($ref, $i + $startRef, 1);
         $$qryOnRef[$i] ne $refBase and $$qryOnRef[$i] = $mOperations{$$qryOnRef[$i].$refBase} || 'N'; 
@@ -167,7 +166,7 @@ sub maskTwoSequences {
 sub getSWConsensus {
     my ($seqs, $quals, $nReadPairs) = @_;
     my $refLen = length($$seqs[0]);
-    my $minScore = $refLen * $minScoreFactor;
+    my $minScore = $refLen * $MIN_SW_SCORE_FACTOR;
     my $endRefExp = $refLen - 1;
 
     # run Smith-Waterman on all lesser-count sequences against the highest-count sequence
@@ -188,7 +187,7 @@ sub getSWConsensus {
             $baseCounts{$sw[$seqI][$posI]} += @{$$quals{$$seqs[$seqI]}}; # account for all reads that had this same sequence
         }
         my @sortedBases = sort {$baseCounts{$b} <=> $baseCounts{$a}} keys %baseCounts;
-        $consensus .= $baseCounts{$sortedBases[0]} >= $nReadPairs * $consensusFactor ?
+        $consensus .= $baseCounts{$sortedBases[0]} >= $nReadPairs * $CONSENSUS_FACTOR ?
             $sortedBases[0] :
             ($mOperations{join("", @sortedBases)} || 'N');  
     }
@@ -197,4 +196,3 @@ sub getSWConsensus {
 }
 
 1;
-

@@ -1,0 +1,17 @@
+---
+# options used during read grouping to identify source molecules
+options:
+    min-clip: 
+        order: 1
+        short: c
+        type: integer
+        required: false
+        default: 5
+        description: "read clips greater than --min-clip are grouped as possible SV molecules"
+    adjacency-limit: 
+        order: 2
+        short: a
+        type: integer
+        required: false
+        default: 1
+        description: "end positions within --adjacency-limit bases will be grouped together"

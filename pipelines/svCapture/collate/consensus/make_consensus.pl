@@ -16,23 +16,27 @@ use warnings;
     
 # initialize reporting
 our $script  = "make_consensus";
-our $error   = "$script error";
 our ($nReadPairs, $nMolecules,
      $nThreadMolecules, $nThreadMerged, $nThreadDuplex) = (0) x 100;
 
 # load dependencies
-use File::Basename;
-my $scriptDir = dirname(__FILE__);
-require "$scriptDir/../_workflow/workflow.pl";
-require "$scriptDir/../common/utilities.pl";
-map { require $_ } glob("$scriptDir/../_sequence/*.pl");
-map { require $_ } glob("$scriptDir/../_numeric/*.pl");
+my $perlUtilDir = "$ENV{GENOMEX_MODULES_DIR}/utilities/perl";
+map { require "$perlUtilDir/$_.pl" } qw(workflow numeric);
+map { require "$perlUtilDir/sequence/$_.pl" } qw(general IUPAC smith_waterman);
 resetCountFile();
-require "$scriptDir/merge.pl";
-require "$scriptDir/consensus.pl";
-require "$scriptDir/quality.pl";
 
-# constants (must match other scripts since not using perl package)
+# environment variables
+fillEnvVar(\my $N_CPU,                'N_CPU');
+fillEnvVar(\my $ACTION_DIR,           'ACTION_DIR');
+fillEnvVar(\my $CONSENSUS_PREFIX,     'CONSENSUS_PREFIX');
+fillEnvVar(\my $DOWNSAMPLE_N,         'DOWNSAMPLE_N');
+fillEnvVar(\our $MIN_SW_SCORE_FACTOR, 'MIN_SW_SCORE_FACTOR');
+fillEnvVar(\our $CONSENSUS_FACTOR,    'CONSENSUS_FACTOR');
+
+# load additional dependencies
+map { require "$ACTION_DIR/$_.pl" } qw(merge consensus quality);
+
+# constants
 use constant {
     READ_PAIR_ID => 0, # columns in read-pair lines
     MOL_STRAND => 1,
@@ -63,19 +67,16 @@ use constant {
     QUAL => 1,
 };
 
-# operating parameters
-my $maxNReadPairs = $ENV{DOWNSAMPLE_N} || 11; # downsample to this many read pairs for jackpots of molecule+strand
-
 # loop the input, breaking into chunks corresponding to individual source molecules
 # process data by molecule over multiple parallel threads
 launchChildThreads(\&makeConsensuses);
 use vars qw(@readH @writeH);
-my $writeH = $writeH[$nMolecules % $ENV{N_CPU} + 1];
+my $writeH = $writeH[$nMolecules % $N_CPU + 1];
 while(my $line = <STDIN>){
     print $writeH $line;
     if($line =~ m/^\@M/){
         $nMolecules++;
-        $writeH = $writeH[$nMolecules % $ENV{N_CPU} + 1];
+        $writeH = $writeH[$nMolecules % $N_CPU + 1];
     } else {
         $nReadPairs++;
     }
@@ -95,9 +96,9 @@ sub makeConsensuses {
     our (@readPairs, $mol, @strands, @downsample, @consensus) = ();
     
     # output file handles
-    my $fqFile = "$ENV{CONSENSUS_PREFIX}.$childN.fq.gz";
+    my $fqFile = "$CONSENSUS_PREFIX.$childN.fq.gz";
     open my $fqH, "|-", "gzip -c > $fqFile" or die "could not open $fqFile: $!\n";
-    my $nameMapFile = "$ENV{CONSENSUS_PREFIX}.$childN.name_map.gz";
+    my $nameMapFile = "$CONSENSUS_PREFIX.$childN.name_map.gz";
     open my $nameMapH, "|-", "gzip -c > $nameMapFile" or die "could not open $nameMapFile: $!\n";
 
     # run the read pairs
@@ -121,15 +122,15 @@ sub makeConsensuses {
             $$mol[IS_DUPLEX] = @strands - 1;
             $$mol[IS_DUPLEX] and $nThreadDuplex++;
             my $molName = join(":",
-                @$mol[MOL_ID, UMI1, UMI2,
-                      IS_DUPLEX, STRAND_COUNT1, STRAND_COUNT2,
-                      IS_MERGED],
+                @$mol[MOL_ID,
+                      IS_DUPLEX, STRAND_COUNT1, STRAND_COUNT2, 
+                      UMI1, UMI2, IS_MERGED],
             );            
 
             # STEP 2 - if needed, downsample read pairs per molecule+strand to a managable but informative number
             foreach my $strand(@strands){              
-                @{$downsample[$strand]} = @{$readPairs[$strand]} > $maxNReadPairs ?
-                    0..($maxNReadPairs-1) : # group_reads.pl randomized read pairs within the molecule group
+                @{$downsample[$strand]} = @{$readPairs[$strand]} > $DOWNSAMPLE_N ?
+                    0..($DOWNSAMPLE_N - 1) : # group_reads.pl randomized read pairs within the molecule group
                     0..$#{$readPairs[$strand]};
             }
   
@@ -186,8 +187,7 @@ sub makeConsensuses {
     close $nameMapH;
     
     # print molecule counts
-    printCount($nThreadMolecules, "nThreadMolecules_$childN", "total molecules processed in thread $childN");
-    printCount($nThreadMerged, "nThreadMerged_$childN", "molecules were merged in thread $childN");
-    #printCount($nThreadDuplex, "nThreadDuplex_$childN", "molecules were duplex in thread $childN");
+    printCount($nThreadMolecules, "nThreadMolecules-$childN", "total molecules processed in thread $childN");
+    printCount($nThreadMerged,    "nThreadMerged-$childN",    "molecules were merged in thread $childN");
+    printCount($nThreadDuplex,    "nThreadDuplex-$childN",    "molecules were duplex in thread $childN");
 }
-

@@ -1,0 +1,24 @@
+---
+# options used during read grouping and SV finding algorithms
+options:
+    downsample-n: 
+        order: 1
+        short: D
+        type: integer
+        required: false
+        default: 11
+        description: "use at most this many read pairs during consensus making"
+    min-sw-score-factor: 
+        order: 2
+        short: w
+        type: double
+        required: false
+        default: 0.7
+        description: "--min-sw-score-factor * length = minimum accepted Smith-Waterman score"
+    consensus-factor: 
+        order: 3
+        short: C
+        type: double
+        required: false
+        default: 0.667
+        description: "fraction of bases that must have a common value to be a consensus"
