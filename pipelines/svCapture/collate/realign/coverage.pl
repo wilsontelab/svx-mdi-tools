@@ -37,15 +37,13 @@ use constant {
     _SECOND_IN_PAIR => 128,
     _SUPPLEMENTARY => 2048,
     #-------------
-    MOL_ID => 0, # @mol fields, most carried here in QNAME
-    IS_DUPLEX => 1,
-    STRAND_COUNT1 => 2,
-    STRAND_COUNT2 => 3,
-    UMI1 => 4,
-    UMI2 => 5,
-    IS_MERGED => 6,
-    TARGET_CLASS => 7, # two new molecule specs based on outermost alignment positions    
-    MOL_CLASS => 8, 
+    MOL_ID => 0, # @mol fields, carried here in QNAME
+    UMI1 => 1,
+    UMI2 => 2,
+    IS_MERGED => 3,
+    IS_DUPLEX => 4,
+    STRAND_COUNT1 => 5,
+    STRAND_COUNT2 => 6,
     #-------------
     ON_TARGET   => 'T',
     NEAR_TARGET => 'A', # A for adjacent

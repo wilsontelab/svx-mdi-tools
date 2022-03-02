@@ -25,11 +25,21 @@ use constant {
     #-------------
     _SHIFT_REVERSE => 4, # how far to shift those bits to yield binary values
     #-------------
-    MOL_ID => 0, # integer read-pair index
-    MOL_CLASS => 1,
-    MOL_STRAND => 2,
-    IS_OUTER_CLIP1 => 3,
-    IS_OUTER_CLIP2 => 4,
+    MOL_ID => 0,    # molecule-level data, carried here in QNAME
+    UMI1 => 1,      # appended to QNAME by genomex-mdi-tools align / svCapture make_consensus.pl
+    UMI2 => 2,      #     will be added by extract_nodes if user-bam was prepared elsewhere
+    IS_MERGED => 3,
+    IS_DUPLEX => 4, # appended to QNAME by svCapture make_consensus.pl (but not genomex-mdi-tools align)
+    STRAND_COUNT1 => 5,
+    STRAND_COUNT2 => 6,
+    MOL_CLASS => 7, # values added by extract_nodes regardless of pipeline or bam source
+    MOL_STRAND => 8,
+    IS_OUTER_CLIP1 => 9,
+    IS_OUTER_CLIP2 => 10,
+    IS_ORPHAN => 11,   # is this needed???
+    INSERT_SIZE => 12, # is this needed???
+    TARGET_CLASS => 13, # values added (or initialized) for svCapture
+    SHARED_PROPER => 14, 
     #-------------
     _CLIP => 0, # outData and innData fields
     _POS  => 1,
@@ -42,7 +52,7 @@ use constant {
     MERGED_READ => 0,
     #-------------
     LEFT  => 0, # clip recovery direction for code readability
-    RIGHT => 1,    
+    RIGHT => 1,   
     #-------------
     LEFTWARD  => "L", # orientation of aligned source molecule relative to a mapped endpoint
     RIGHTWARD => "R",

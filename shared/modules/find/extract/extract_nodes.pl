@@ -25,6 +25,7 @@ fillEnvVar(\my $ACTION_DIR,        'ACTION_DIR');
 fillEnvVar(\my $N_CPU,             'N_CPU');
 fillEnvVar(\my $MIN_MAPQ,          'MIN_MAPQ');
 fillEnvVar(\our $LIBRARY_TYPE,     'LIBRARY_TYPE');
+fillEnvVar(\our $LIBRARY_ORIENTATION, 'LIBRARY_ORIENTATION', 1, "FR");
 fillEnvVar(\our $MIN_CLIP,         'MIN_CLIP');
 fillEnvVar(\our $MAX_TLEN,         'MAX_TLEN');
 fillEnvVar(\our $READ_LEN,         'READ_LEN');
@@ -54,21 +55,21 @@ use constant {
     SEQ => 9,
     QUAL => 10,
     #-------------
-    _IS_PAIRED => 1,
-    _PROPER => 2, # SAM FLAG bits
+    _IS_PAIRED => 1, # SAM FLAG bits
+    _PROPER => 2,
     _UNMAPPED => 4,
     _REVERSE => 16,
     _FIRST_IN_PAIR => 64,
     _SECOND_IN_PAIR => 128,
     _SUPPLEMENTARY => 2048,
     #-------------
-    MOL_ID => 0, # molecule-level data
-    IS_DUPLEX => 1, # appended to QNAME by svCapture make_consensus.pl (but not genomex-mdi-tools align)
-    STRAND_COUNT1 => 2,
-    STRAND_COUNT2 => 3,
-    UMI1 => 4, # appended to QNAME by genomex-mdi-tools align / svCapture make_consensus.pl
-    UMI2 => 5,
-    IS_MERGED => 6, # (this will be added by extract_nodes if not already known)
+    MOL_ID => 0,    # molecule-level data, carried here in QNAME
+    UMI1 => 1,      # appended to QNAME by genomex-mdi-tools align / svCapture make_consensus.pl
+    UMI2 => 2,      #     will be added by extract_nodes if user-bam was prepared elsewhere
+    IS_MERGED => 3,
+    IS_DUPLEX => 4, # appended to QNAME by svCapture make_consensus.pl (but not genomex-mdi-tools align)
+    STRAND_COUNT1 => 5,
+    STRAND_COUNT2 => 6,
     MOL_CLASS => 7, # values added by extract_nodes regardless of pipeline or bam source
     MOL_STRAND => 8,
     IS_OUTER_CLIP1 => 9,
@@ -84,14 +85,10 @@ use constant {
     #-------------
     LEFT  => 0, # clip recovery direction for code readability
     RIGHT => 1,   
-    #-------------
-    IS_PROPER => 'P', # proper and anomalous molecule codes
-    IS_SV     => 'V',
-    #-------------
-    GAP        => 0, # SV evidence type codes, i.e. node classes
-    SPLIT      => 1,
-    OUTER_CLIP => 2,
 };
+
+# working variables
+my $isFF = ($LIBRARY_ORIENTATION eq "FF"); # else FR paired-end read orientation
 
 # process data by molecule over multiple parallel threads
 launchChildThreads(\&parseReadPair);
@@ -156,14 +153,18 @@ sub parseReadPair {
             if(!$excludeMol and $minMapQ >= $MIN_MAPQ){
 
                 # initialize molecule-level data based on bam source type
-                if($IS_SV_CAPTURE){
-                    @mol = (split(":", $alns[0][QNAME]), (0) x 8);
+                if($IS_SV_CAPTURE){ # takes precedence over USER_BAM since realignment bam file forced by pipeline
+                    @mol = (split(":", $alns[0][QNAME]), # MOL_ID to STRAND_COUNT2
+                            (0) x 8);                    # MOL_CLASS to SHARED_PROPER
                     # $mol[MOL_STRAND] = $isTruSeq ? 0 : ($mol[STRAND_COUNT1] ? 0 : 1);
                 } elsif($IS_USER_BAM){
-                    @mol = ($aln[1], (0) x 3, (1) x 2, ($alns[0][FLAG] & _IS_PAIRED) ^ _IS_PAIRED, (0) x 8); 
+                    @mol = ($aln[1],   # MOL_ID
+                            (1) x 2,   # UMI1, UMI2 dummy values
+                            ($alns[0][FLAG] & _IS_PAIRED) ^ _IS_PAIRED, # IS_MERGED as (0,1)
+                            (0) x 11); # IS_DUPLEX to SHARED_PROPER
                 } else { # genomex-mdi-tools align
-                    my @qname = split(":", $alns[0][QNAME]);
-                    @mol = ($aln[1], (0) x 3, @qname[$#qname - 2, $#qname], (0) x 8); 
+                    @mol = (split(":", $alns[0][QNAME]), # MOL_ID to IS_MERGED
+                            (0) x 11);                   # IS_DUPLEX to SHARED_PROPER
                 }
 
                 # identify pairs as proper or SV-containing and act accordingly

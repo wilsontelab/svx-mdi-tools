@@ -54,8 +54,8 @@ use constant {
     #-------------
     ALIGN_SPLIT => 12,
     #-------------
-    _IS_PAIRED => 1,
-    _REVERSE => 16, # SAM FLAG bits
+    _IS_PAIRED => 1, # SAM FLAG bits
+    _REVERSE => 16,
     _SECOND_IN_PAIR => 128,
     #-------------
     SHIFT_REVERSE => 4, # how far to shift those bits to yield binary values
@@ -114,17 +114,17 @@ sub parseReadPair {
 
     # run aligner output one alignment at a time
     my $readH = $readH[$childN];
-    my ($umi1, $umi2, $isMerged);
+    my ($molId, $umi1, $umi2, $isMerged);
     while(my $line = <$readH>){
         chomp $line;
         if($line eq END_READ_PAIR){
             
             # extract information on the source read pair
             if($IS_USER_BAM){ # user-supplied bam file cannot support UMIs, get merge status from FLAG
+                $umi1 = $umi2 = 1;            
                 $isMerged = !($alns[READ1] ? $alns[READ1][0][FLAG] & _IS_PAIRED : 1);
-                $umi1 = $umi2 = 1;
             } else { # reads were aligned by genomex-mdi-tools align
-                ($isMerged, $umi2, $umi1) = $alns[READ1] ? reverse(split(":", $alns[READ1][0][QNAME])) : ();
+                ($molId, $umi1, $umi2, $isMerged) = $alns[READ1] ? split(":", $alns[READ1][0][QNAME]) : ();
             }
  
             # discard orphan reads since cannot associate UMIs with endpoints

@@ -130,8 +130,8 @@ sub processPos2Group {
     # print a trailing line with group-level information required for consensus making
     print join("\t", '@M',
         $nOutputGroups,
+        @molKey[UMI1, UMI2], # used after re-mapping during endpoint uniqueness assessment (could be 1,1 if no UMIs)
         $$strandCount[STRAND1] || 0,
-        $$strandCount[STRAND2] || 0,
-        @molKey[UMI1, UMI2] # used after re-mapping during endpoint uniqueness assessment (could be 1,1 if no UMIs)
+        $$strandCount[STRAND2] || 0
     ), "\n";
 }
