@@ -20,7 +20,7 @@ resetCountFile();
 # environment variables
 fillEnvVar(\our $IS_COLLATED,      'IS_COLLATED', 1, 0);
 fillEnvVar(\my $IS_USER_BAM,       'IS_USER_BAM');
-fillEnvVar(\my $EXTRACT_PREFIX,    'EXTRACT_PREFIX');
+fillEnvVar(\our $EXTRACT_PREFIX,   'EXTRACT_PREFIX');
 fillEnvVar(\my $ACTION_DIR,        'ACTION_DIR');
 fillEnvVar(\my $N_CPU,             'N_CPU');
 fillEnvVar(\my $MIN_MAPQ,          'MIN_MAPQ');
@@ -34,7 +34,7 @@ fillEnvVar(\our $REGION_PADDING,   'REGION_PADDING');
 fillEnvVar(\our $TARGET_SCALAR,    'TARGET_SCALAR', 1, 10); # use 10 bp target resolution for svCapture targets
 
 # load additional dependencies
-require "$ACTION_DIR/extract/parse_nodes.pl";
+map { require "$ACTION_DIR/extract/$_.pl" } qw(files parse_nodes crosstab);
 
 # initialize the genome
 use vars qw(%chromIndex);
@@ -58,7 +58,8 @@ use constant {
     PNEXT => 7,
     TLEN => 8,
     SEQ => 9,
-    QUAL => 10,
+    ALN_N => 10,
+    RNAME_INDEX => 11,
     #-------------
     _IS_PAIRED => 1, # SAM FLAG bits
     _PROPER => 2,
@@ -91,17 +92,15 @@ use constant {
     #-------------
     IS_PROPER => 'P', # proper and anomalous molecule classes
     IS_SV     => 'V',
-    #-------------
-    MAX_CROSSTAB_COUNT => 100
 };
 
 # working variables
+our $isTargeted = $TARGETS_BED ? 1 : 0;
 my ($fwdSide2, $revSide2) = $IS_COLLATED ? # collated source molecules were grouped and re-aligned in FF orientation, like svCapture
    (RIGHT,     LEFT) : # FF orientation, same handling as merged, i.e, all source sequences from same strand of molecule
    (LEFT,      RIGHT); # FR orientation, handle read 2 in the opposite orientation, i.e., was from opposite strand as read 1
-our $isTargeted = $TARGETS_BED ? 1 : 0;
-our $isCountStrands = ($IS_COLLATED and $isTargeted);   
-our %strandCounts;
+my @initCollated   = ('X', 0, 0, 0, 'X', 0);
+my @initUncollated = (0, 0, 0, @initCollated);
 
 # process data by molecule over multiple parallel threads
 launchChildThreads(\&parseReadPair);
@@ -130,26 +129,12 @@ printCount($nReadPairs, 'nReadPairs', 'input read pairs');
 # child process to parse bam read pairs
 sub parseReadPair {
     my ($childN) = @_;
-    
-    # auto-flush output to prevent buffering and ensure proper feed to sort
-    $| = 1;
 
     # working variables
     our ($excludeMol, $minMapQ, $alnN, $jxnN, @alns, @mol) = (0, 1e9, 1, 0);
 
     # output file handles
-    my $spansFile = "$EXTRACT_PREFIX.spans.$childN.gz";
-    open our $spansH, "|-", "gzip -c > $spansFile" or die "$error: could not open $spansFile: $!\n";
-    my $nodesFile = "$EXTRACT_PREFIX.nodes.$childN.gz";
-    open our $nodesH, "|-", "gzip -c > $nodesFile" or die "$error: could not open $nodesFile: $!\n";
-
-    # # output file handles
-    # my $endpointFile = "$ENV{EXTRACT_PREFIX}.endpoints.$childN.gz";
-    # open our $endpointH, "|-", "gzip -c > $endpointFile" or die "$error: could not open $endpointFile: $!\n";
-    # my $tLenFile = "$ENV{EXTRACT_PREFIX}.insertSizes.$childN.gz";
-    # open our $tLenH, "|-", "gzip -c > $tLenFile" or die "$error: could not open $tLenFile: $!\n";
-    # my $nodeFile = "$ENV{EXTRACT_PREFIX}.nodes.$childN.gz";
-    # open our $nodeH, "|-", "gzip -c > $nodeFile" or die "$error: could not open $nodeFile: $!\n";
+    openFileHandles($childN);
   
     # run aligner output one alignment at a time
     my $readH = $readH[$childN];
@@ -168,16 +153,16 @@ sub parseReadPair {
                 # initialize molecule-level data based on bam source type
                 if($IS_COLLATED){ # takes precedence over IS_USER_BAM since realignment bam file forced by pipeline
                     @mol = (split(":", $alns[0][QNAME]), # MOL_ID to STRAND_COUNT2
-                            (0) x 6);                    # MOL_CLASS to SHARED_PROPER
+                            @initCollated);              # MOL_CLASS to SHARED_PROPER
                     # $mol[MOL_STRAND] = $isTruSeq ? 0 : ($mol[STRAND_COUNT1] ? 0 : 1);
                 } elsif($IS_USER_BAM){
                     @mol = ($aln[1],  # MOL_ID
                             (1) x 2,  # UMI1, UMI2 dummy values
                             ($alns[0][FLAG] & _IS_PAIRED) ^ _IS_PAIRED, # IS_MERGED as (0,1)
-                            (0) x 9); # IS_DUPLEX to SHARED_PROPER
+                            @initUncollated); # IS_DUPLEX to SHARED_PROPER
                 } else { # genomex-mdi-tools align
                     @mol = (split(":", $alns[0][QNAME]), # MOL_ID to IS_MERGED
-                            (0) x 9);                    # IS_DUPLEX to SHARED_PROPER
+                            @initUncollated);            # IS_DUPLEX to SHARED_PROPER
                 }
 
                 # identify pairs as proper or SV-containing and act accordingly
@@ -212,8 +197,8 @@ sub parseReadPair {
             $minMapQ = 1e9;
 
         } elsif(!$excludeMol){ # add new alignment to growing source molecule
-            $aln[RNAME] = $chromIndex{$aln[RNAME]} || 0; # non-canonical chroms are excluded, unmapped continue on (for now)   
-            $excludeMol = isExcludedPosition(@aln[RNAME, POS]) and next;
+            $aln[RNAME_INDEX] = $chromIndex{$aln[RNAME]} || 0; # non-canonical chroms are excluded, unmapped continue on (for now)   
+            $excludeMol = isExcludedPosition(@aln[RNAME_INDEX, POS]) and next;
             push @alns, \@aln;
             $minMapQ <= $aln[MAPQ] or $minMapQ = $aln[MAPQ];
             $alnN++; # unique identifier to establish alignment edges between nodes   
@@ -221,8 +206,7 @@ sub parseReadPair {
     }
 
     # close outputs
-    close $spansH;
-    close $nodesH;
+    closeFileHandles();
 
     # report a thread summary to log
     printCount($nThreadPairs,   "nThreadPairs-$childN",   "total read pairs processed in thread $childN");
@@ -230,33 +214,8 @@ sub parseReadPair {
     printCount($nFailedQuality, "nFailedQuality-$childN", "rejected read pairs failed MIN_MAPQ $MIN_MAPQ in thread $childN");
 
     # write summary information
-    $isCountStrands and printCrosstabFile($childN, \%strandCounts);
-}
-
-# print the crosstab results by targetClass and molClass (in same table)
-sub printCrosstabFile {
-    my ($childN, $strandCounts) = @_;
-    my $crosstabFile = "$ENV{EXTRACT_PREFIX}.strand_counts.$childN.txt";
-    open my $crosstabH, ">", $crosstabFile or die "$error: could not open $crosstabFile: $!\n";
-    my @tableCounts = 0..MAX_CROSSTAB_COUNT;
-    my @types;
-    foreach my $targetClass ('TT', 'TA', 'AA', 'tt', 'ta', 'aa', 't-', 'a-', '--'){
-        foreach my $molClass (IS_PROPER, IS_SV){ # not all combinations are possible, but that's fine
-            push @types, "$targetClass\t$molClass";
-        }
-    }
-    print $crosstabH join("\t", qw(targetClass molClass count1), @tableCounts), "\n";
-    foreach my $type(@types){
-        foreach my $count1(@tableCounts){
-            print $crosstabH "$type\t$count1";
-            foreach my $count2(@tableCounts){
-                print $crosstabH "\t", ($$strandCounts{$type} and $$strandCounts{$type}[$count1]) ?
-                                       ($$strandCounts{$type}[$count1][$count2] || 0) : 0;
-            }
-            print $crosstabH "\n";
-        }
-    }
-    close $crosstabH;     
+    printInsertSizeFile($childN);
+    printCrosstabFile($childN);
 }
 
 # UNMERGED READS
