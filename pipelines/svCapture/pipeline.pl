@@ -6,7 +6,7 @@ use warnings;
 $ENV{BAM_FILE} = "$ENV{DATA_FILE_PREFIX}.$ENV{GENOME}.name.realigned.bam";
 
 # force the behavior of svx find algorithms
-$ENV{IS_SV_CAPTURE} = 1;
-$ENV{LIBRARY_ORIENTATION} = "FF";
+$ENV{IS_COLLATED} = 1;
+$ENV{TARGET_SCALAR} = 10;
 
 1;

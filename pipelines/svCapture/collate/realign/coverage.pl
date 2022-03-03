@@ -14,7 +14,7 @@ fillEnvVar(\my $MIN_MAPQ,        'MIN_MAPQ');
 fillEnvVar(\my $GENOME_SIZE,     'GENOME_SIZE');
 fillEnvVar(\our $TARGETS_BED,    'TARGETS_BED');
 fillEnvVar(\our $REGION_PADDING, 'REGION_PADDING');
-our $TARGET_SCALAR = 10; # use 10 bp target resolution for svCapture targets
+fillEnvVar(\our $TARGET_SCALAR,  'TARGET_SCALAR', 1, 10); # use 10 bp target resolution for svCapture targets
 
 # constants
 use constant {

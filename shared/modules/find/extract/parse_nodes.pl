@@ -36,10 +36,8 @@ use constant {
     MOL_STRAND => 8,
     IS_OUTER_CLIP1 => 9,
     IS_OUTER_CLIP2 => 10,
-    IS_ORPHAN => 11,   # is this needed???
-    INSERT_SIZE => 12, # is this needed???
-    TARGET_CLASS => 13, # values added (or initialized) for svCapture
-    SHARED_PROPER => 14, 
+    TARGET_CLASS => 11, # values added (or initialized) for svCapture
+    SHARED_PROPER => 12, 
     #-------------
     _CLIP => 0, # outData and innData fields
     _POS  => 1,
@@ -71,19 +69,21 @@ use constant {
     UNKNOWN       => "?",
     PROPER        => 'P', 
     #-------------
-    _NULL => '*'
+    _NULL => '*',   
+    #-------------
+    MAX_CROSSTAB_COUNT => 100
 };
 
 # operating parameters
-my $leftClip_  = qr/^(\d+)S/;
-my $rightClip_ = qr/(\d+)S$/;
+use vars qw($leftClip_ $rightClip_);
 my @clips = ($leftClip_, $rightClip_);
-my @sides = (RIGHTWARD,  LEFTWARD); # e.g. at a left end clip, the read continues righward from that point
+my @sides = (RIGHTWARD,  LEFTWARD); # e.g., at a left end clip, the read continues righward from that point
 
 # working variables
 use vars qw(@alns @mol $jxnN
             $spansH $nodesH
-            $LIBRARY_TYPE $MIN_CLIP $MAX_TLEN $READ_LEN);      
+            $isTargeted $isCountStrands %strandCounts
+            $IS_COLLATED $TARGETS_BED $LIBRARY_TYPE $MIN_CLIP $MAX_TLEN $READ_LEN);      
 my $gapDelLimit =  2 * $MAX_TLEN - 2 * $READ_LEN; # these are conservative, i.e., call more proper than aligner typically
 my $gapDupLimit = -2 * $READ_LEN;
 my $collapseStrands = ($LIBRARY_TYPE eq 'TruSeq'); # otherwise, Nextera, where same signatures on opposite strands are unique source molecules
@@ -100,7 +100,11 @@ sub commitProperMolecule { # aln1/umi1 are the left/proximal end of the source m
     setEndpointData(\my @outData2, $aln2, $fwdSide2, $revSide2); # orientation depends on merge state
     $mol[IS_OUTER_CLIP1] = ($outData1[_CLIP] >= $MIN_CLIP ? 1 : 0);
     $mol[IS_OUTER_CLIP2] = ($outData2[_CLIP] >= $MIN_CLIP ? 1 : 0);
-    printOuterEndpoints($aln1, $aln2, \@outData1, \@outData2);
+    $isTargeted and $mol[TARGET_CLASS] = getTargetClass(
+        $$aln1[RNAME],   $$aln2[RNAME], 
+        $outData1[_POS], $outData2[_POS]
+    );
+    printOuterEndpoints($aln1, $aln2, \@outData1, \@outData2);  
 }
 #---------------------------------------------------------------------------------------------------
 # a merged read-pair (or single read) aligned in at least two segments, i.e., that crossed an SV junction
@@ -112,6 +116,10 @@ sub parseMergedSplit {
     setEndpointData(\my @outData2, $alns[$alnIs[$#alnIs]], RIGHT, LEFT);
     $mol[IS_OUTER_CLIP1] = ($$outData1s[$alnIs[0]][_CLIP] >= $MIN_CLIP ? 1 : 0);
     $mol[IS_OUTER_CLIP2] = ($outData2[_CLIP] >= $MIN_CLIP ? 1 : 0);
+    $isTargeted and $mol[TARGET_CLASS] = getTargetClass(
+        $alns[$alnIs[0]][RNAME],      $alns[$alnIs[$#alnIs]][RNAME], 
+        $$outData1s[$alnIs[0]][_POS], $outData2[_POS]
+    );
     printSequencedJunctions(@alns[@alnIs]); 
     printOuterEndpoints(@alns[$alnIs[0], $alnIs[$#alnIs]], $$outData1s[$alnIs[0]], \@outData2);    
 }
@@ -132,6 +140,10 @@ sub parseUnmergedHiddenJunction {
     setEndpointData(\my @outData2, $alns[$read2], LEFT,  RIGHT);
     $mol[IS_OUTER_CLIP1] = ($outData1[_CLIP] >= $MIN_CLIP ? 1 : 0);
     $mol[IS_OUTER_CLIP2] = ($outData2[_CLIP] >= $MIN_CLIP ? 1 : 0);
+    $isTargeted and $mol[TARGET_CLASS] = getTargetClass(
+        $alns[$read1][RNAME], $alns[$read2][RNAME], 
+        $outData1[_POS],      $outData2[_POS]
+    );
     printJunction(GAP, RIGHT, LEFT, $alns[$read1], $alns[$read2]);      
     printOuterEndpoints($alns[$read1], $alns[$read2], \@outData1, \@outData2); # actions based on inner portion of molecule
 }
@@ -175,6 +187,10 @@ sub parseUnmergedSplit {
     $mol[MOL_STRAND] = getMoleculeStrand($alnsByRead[READ1][$outI1], $alnsByRead[READ2][$outI2]);
     $mol[IS_OUTER_CLIP1] = ($outDatas[READ1][$outI1][_CLIP] >= $MIN_CLIP ? 1 : 0);
     $mol[IS_OUTER_CLIP2] = ($outDatas[READ2][$outI2][_CLIP] >= $MIN_CLIP ? 1 : 0);
+    $isTargeted and $mol[TARGET_CLASS] = getTargetClass(
+        $alnsByRead[READ1][$outI1][RNAME], $alnsByRead[READ2][$outI2][RNAME], 
+        $outDatas[READ1][$outI1][_POS],    $outDatas[READ2][$outI2][_POS]
+    );
     # actions based on inner portion of molecule
     # all junctions in all split reads
     foreach my $read(READ1, READ2){
@@ -188,7 +204,7 @@ sub parseUnmergedSplit {
     printOuterEndpoints(
         $alnsByRead[READ1][$outI1], $alnsByRead[READ2][$outI2],
           $outDatas[READ1][$outI1],   $outDatas[READ2][$outI2]
-    );      
+    );
 } 
 #===================================================================================================
 
@@ -361,9 +377,11 @@ sub setEndpointData {
 #---------------------------------------------------------------------------------------------------
 sub printOuterEndpoints { 
     my ($outAln1, $outAln2, $outData1, $outData2) = @_; 
+    # $isTargeted and printEndpoint($outAln1, UMI1, $outData1); # output used to do proper molecule matching
+    # $isTargeted and printEndpoint($outAln2, UMI2, $outData2);
     my $molIsOuterClipped = ($mol[IS_OUTER_CLIP1] or $mol[IS_OUTER_CLIP2]);
-    printNode($outAln1, $outData1, OUTER_CLIP, _NULL, -1, $molIsOuterClipped); # outer clip output used as SV evidence support
-    printNode($outAln2, $outData2, OUTER_CLIP, _NULL, -2, $molIsOuterClipped); # outer clips bear negative JXN_N, 1/2 for each molecule end
+    printNode(UMI1, $outAln1, $outData1, OUTER_CLIP, _NULL, -1, $molIsOuterClipped); # outer clip output used as SV evidence support
+    printNode(UMI2, $outAln2, $outData2, OUTER_CLIP, _NULL, -2, $molIsOuterClipped); # outer clips bear negative JXN_N, 1/2 for each molecule end
     print $spansH join("\t", # for coverage map and insert size analysis downstream
         $mol[MOL_CLASS],
         $collapseStrands ? 0 : $mol[MOL_STRAND], # molecule strand (not read-pair strand) and outer node signatures used for read-pair de-duplication
@@ -373,7 +391,25 @@ sub printOuterEndpoints {
             ($molIsOuterClipped ? getProperSpan($outData1, $outData2) : "-") : 
             getAlignmentSpans() # information for creating the coverage map
     ), "\n";
+    # prepare data to write a cross-tabulated file of _molecule_ strand1 count by strand2 count
+    # stratified by where the _outer_ molecule ends aligned, and if they were proper or SV
+    $isCountStrands and $strandCounts{"$mol[TARGET_CLASS]\t$mol[MOL_CLASS]"}[ # strand count order does not matter for crosstab
+        $mol[STRAND_COUNT1] > MAX_CROSSTAB_COUNT ? MAX_CROSSTAB_COUNT : $mol[STRAND_COUNT1]
+    ][
+        $mol[STRAND_COUNT2] > MAX_CROSSTAB_COUNT ? MAX_CROSSTAB_COUNT : $mol[STRAND_COUNT2]
+    ]++;
 }
+# # all source molecule outer endpoint nodes, whether SV evidence or not
+# sub printEndpoint {
+#     my ($aln, $umi, $node) = @_;
+#     my $sign = $$node[_SIDE] eq LEFTWARD ? 1 : -1;    
+#     my $pos = $$node[_POS] + $sign * $$node[_CLIP];   # hypothetical molecule endpoint at this alignment
+#     my $isSVClip = $$node[_CLIP] >= $MIN_CLIP ? 1 : 0; # flag whether a refAln pos was clipped
+#     # print $endpointH join("\t",                       # overall, same endpoint ID strategy as read pair grouping
+#     #     @mol[MOL_ID, MOL_CLASS, MOL_STRAND, TARGET_CLASS, INSERT_SIZE], # molecule properties
+#     #     join(":", $mol[$umi], $$aln[RNAME], $$node[_SIDE], $pos, $isSVClip) # this endpoint's signature
+#     # ), "\n";  
+# }
 sub getNodeSignature {
     my ($aln, $node) = @_;
     my $sign = $$node[_SIDE] eq LEFTWARD ? 1 : -1;    
@@ -403,17 +439,17 @@ sub getAlignmentSpans { # individual BED3 formatted spans for all SV alignments
 # all available SV evidence nodes, listed one row per node over all source molecules
 # carries information for subsequent collapse into junction and alignment edges
 sub printNode { 
-    my ($aln, $node, $nodeClass, $jxnType, $jxnN, $molIsOuterClipped) = @_;
+    my ($umi, $aln, $node, $nodeClass, $jxnType, $jxnN, $molIsOuterClipped) = @_;
     if($nodeClass == OUTER_CLIP and # all internal junction nodes are printed
        !$molIsOuterClipped and      # proper molecules with one outer clip are printed at both ends
        $mol[MOL_CLASS] eq IS_PROPER # all nodes on SV molecules are printed, even unclipped outer
     ){ return } # don't print anything for unclipped proper molecules
     my $alnN = $mol[MOL_CLASS] eq IS_PROPER ? 0 : $$aln[ALN_N]; # even unmerged proper molecules connect their outer nodes
     print $nodesH join("\t", 
-        @$node[_NODE, _CLIP, _SEQ], $nodeClass,    # node-level data
-        $jxnType, $jxnN,                           # edge/junction-level data
-        @$aln[FLAG, POS, MAPQ, CIGAR, SEQ], $alnN, # alignment-level data
-        @mol                                       # molecule-level data
+        @$node[_NODE, _CLIP, _SEQ], $nodeClass,      # node-level data
+        $jxnType, $jxnN,                             # edge/junction-level data
+        @$aln[FLAG, POS, MAPQ, CIGAR, SEQ], $alnN,   # alignment-level data
+        @mol[MOL_ID, $umi, IS_MERGED..SHARED_PROPER] # molecule-level data
     ), "\n";
 }
 #===================================================================================================

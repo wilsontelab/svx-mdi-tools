@@ -13,23 +13,25 @@ my ($nInputAlns, $nReadPairs,
 # load dependencies
 my $perlUtilDir = "$ENV{GENOMEX_MODULES_DIR}/utilities/perl";
 map { require "$perlUtilDir/$_.pl" } qw(workflow numeric);
-map { require "$perlUtilDir/genome/$_.pl" } qw(chroms exclude);
+map { require "$perlUtilDir/genome/$_.pl" } qw(chroms exclude targets);
 map { require "$perlUtilDir/sequence/$_.pl" } qw(general);
 resetCountFile();
 
 # environment variables
-fillEnvVar(\my $IS_SV_CAPTURE,     'IS_SV_CAPTURE', 1, 0);
+fillEnvVar(\our $IS_COLLATED,      'IS_COLLATED', 1, 0);
 fillEnvVar(\my $IS_USER_BAM,       'IS_USER_BAM');
 fillEnvVar(\my $EXTRACT_PREFIX,    'EXTRACT_PREFIX');
 fillEnvVar(\my $ACTION_DIR,        'ACTION_DIR');
 fillEnvVar(\my $N_CPU,             'N_CPU');
 fillEnvVar(\my $MIN_MAPQ,          'MIN_MAPQ');
 fillEnvVar(\our $LIBRARY_TYPE,     'LIBRARY_TYPE');
-fillEnvVar(\our $LIBRARY_ORIENTATION, 'LIBRARY_ORIENTATION', 1, "FR");
 fillEnvVar(\our $MIN_CLIP,         'MIN_CLIP');
 fillEnvVar(\our $MAX_TLEN,         'MAX_TLEN');
 fillEnvVar(\our $READ_LEN,         'READ_LEN');
 fillEnvVar(\our $BAD_REGIONS_FILE, 'BAD_REGIONS_FILE');
+fillEnvVar(\our $TARGETS_BED,      'TARGETS_BED');
+fillEnvVar(\our $REGION_PADDING,   'REGION_PADDING');
+fillEnvVar(\our $TARGET_SCALAR,    'TARGET_SCALAR', 1, 10); # use 10 bp target resolution for svCapture targets
 
 # load additional dependencies
 require "$ACTION_DIR/extract/parse_nodes.pl";
@@ -38,6 +40,9 @@ require "$ACTION_DIR/extract/parse_nodes.pl";
 use vars qw(%chromIndex);
 setCanonicalChroms();
 initializeExclude($BAD_REGIONS_FILE, $READ_LEN);
+
+# load the capture target regions
+loadTargetRegions();
 
 # constants
 use constant {
@@ -74,10 +79,8 @@ use constant {
     MOL_STRAND => 8,
     IS_OUTER_CLIP1 => 9,
     IS_OUTER_CLIP2 => 10,
-    IS_ORPHAN => 11,   # is this needed???
-    INSERT_SIZE => 12, # is this needed???
-    TARGET_CLASS => 13, # values added (or initialized) for svCapture
-    SHARED_PROPER => 14, 
+    TARGET_CLASS => 11, # values added (or initialized) for svCapture
+    SHARED_PROPER => 12, 
     #-------------
     READ1 => 0, # for code readability
     READ2 => 1,
@@ -85,10 +88,20 @@ use constant {
     #-------------
     LEFT  => 0, # clip recovery direction for code readability
     RIGHT => 1,   
+    #-------------
+    IS_PROPER => 'P', # proper and anomalous molecule classes
+    IS_SV     => 'V',
+    #-------------
+    MAX_CROSSTAB_COUNT => 100
 };
 
 # working variables
-my $isFF = ($LIBRARY_ORIENTATION eq "FF"); # else FR paired-end read orientation
+my ($fwdSide2, $revSide2) = $IS_COLLATED ? # collated source molecules were grouped and re-aligned in FF orientation, like svCapture
+   (RIGHT,     LEFT) : # FF orientation, same handling as merged, i.e, all source sequences from same strand of molecule
+   (LEFT,      RIGHT); # FR orientation, handle read 2 in the opposite orientation, i.e., was from opposite strand as read 1
+our $isTargeted = $TARGETS_BED ? 1 : 0;
+our $isCountStrands = ($IS_COLLATED and $isTargeted);   
+our %strandCounts;
 
 # process data by molecule over multiple parallel threads
 launchChildThreads(\&parseReadPair);
@@ -153,52 +166,25 @@ sub parseReadPair {
             if(!$excludeMol and $minMapQ >= $MIN_MAPQ){
 
                 # initialize molecule-level data based on bam source type
-                if($IS_SV_CAPTURE){ # takes precedence over USER_BAM since realignment bam file forced by pipeline
+                if($IS_COLLATED){ # takes precedence over IS_USER_BAM since realignment bam file forced by pipeline
                     @mol = (split(":", $alns[0][QNAME]), # MOL_ID to STRAND_COUNT2
-                            (0) x 8);                    # MOL_CLASS to SHARED_PROPER
+                            (0) x 6);                    # MOL_CLASS to SHARED_PROPER
                     # $mol[MOL_STRAND] = $isTruSeq ? 0 : ($mol[STRAND_COUNT1] ? 0 : 1);
                 } elsif($IS_USER_BAM){
-                    @mol = ($aln[1],   # MOL_ID
-                            (1) x 2,   # UMI1, UMI2 dummy values
+                    @mol = ($aln[1],  # MOL_ID
+                            (1) x 2,  # UMI1, UMI2 dummy values
                             ($alns[0][FLAG] & _IS_PAIRED) ^ _IS_PAIRED, # IS_MERGED as (0,1)
-                            (0) x 11); # IS_DUPLEX to SHARED_PROPER
+                            (0) x 9); # IS_DUPLEX to SHARED_PROPER
                 } else { # genomex-mdi-tools align
                     @mol = (split(":", $alns[0][QNAME]), # MOL_ID to IS_MERGED
-                            (0) x 11);                   # IS_DUPLEX to SHARED_PROPER
+                            (0) x 9);                    # IS_DUPLEX to SHARED_PROPER
                 }
 
                 # identify pairs as proper or SV-containing and act accordingly
-
-                # if($mol[IS_MERGED]){ # merged reads, expect just one alignment; any supplemental = SV
-                #     if(@alns == 1 and !($alns[0][FLAG] & _UNMAPPED)){ # unmapped v. rare since remapping; dicard them
-                #         parseMergedProper();
-                #     } elsif(@alns > 1){
-                #         parseMergedSplit();
-                #     }                
-                # } else { # unmerged reads, expect 2 alignments flagged as proper
-                #     if(@alns == 2 and ($alns[0][FLAG] & _PROPER)){
-                #         parseUnmergedProper();                    
-                #     } elsif(@alns == 2 and
-                #             !($alns[0][FLAG] & _UNMAPPED) and !($alns[1][FLAG] & _UNMAPPED)) {
-                #         if($alns[0][FLAG] & _SUPPLEMENTARY or $alns[1][FLAG] & _SUPPLEMENTARY){
-                #             $mol[IS_ORPHAN] = 1;
-                #             parseMergedSplit();
-                #         } else {
-                #             parseUnmergedHiddenJunction();
-                #         }
-                #     } elsif(@alns >= 2) {
-                #         parseUnmergedSplit();   
-                #     } elsif(@alns == 1){ # one read of a pair failed consensus; treat remaining alignment as a single merged read
-                #         $mol[IS_ORPHAN] = 1;
-                #         parseMergedProper();
-                #     }
-                # }   
-
-                # identify pairs as proper or SV-containing and act accordingly
-                if($alns[0][FLAG] & _IS_PAIRED){ # unmerged reads, expect 2 alignments flagged as proper
+                if($alns[0][FLAG] & _IS_PAIRED){ # unmerged read pairs, expect 2 alignments flagged as proper
                     if(@alns == 2 and ($alns[0][FLAG] & _PROPER)){ 
                         my ($read1, $read2) = ($alns[READ1][FLAG] & _FIRST_IN_PAIR) ? (READ1, READ2) : (READ2, READ1);
-                        commitProperMolecule($alns[$read1], $alns[$read2], LEFT,  RIGHT); 
+                        commitProperMolecule($alns[$read1], $alns[$read2], $fwdSide2, $revSide2); 
                     } elsif(@alns == 2 and !($alns[0][FLAG] & _UNMAPPED) and !($alns[1][FLAG] & _UNMAPPED)) {
                         parseUnmergedHiddenJunction();
                     } else {
@@ -206,7 +192,7 @@ sub parseReadPair {
                     }
                 } else { # merged or orphaned reads, expect just one alignment; any supplemental = SV
                     if(@alns == 1){ # equivalent to a _PROPER flag for merged/singleton reads
-                        $alns[MERGED_READ][FLAG] & _UNMAPPED or  # unmapped singleton reads are discarded
+                        $alns[MERGED_READ][FLAG] & _UNMAPPED or # unmapped singleton reads are discarded
                             commitProperMolecule($alns[MERGED_READ], $alns[MERGED_READ], RIGHT, LEFT);
                     } else {
                         parseMergedSplit();
@@ -242,6 +228,35 @@ sub parseReadPair {
     printCount($nThreadPairs,   "nThreadPairs-$childN",   "total read pairs processed in thread $childN");
     printCount($nExcluded,      "nExcluded-$childN",      "rejected read pairs in excluded regions in thread $childN");
     printCount($nFailedQuality, "nFailedQuality-$childN", "rejected read pairs failed MIN_MAPQ $MIN_MAPQ in thread $childN");
+
+    # write summary information
+    $isCountStrands and printCrosstabFile($childN, \%strandCounts);
+}
+
+# print the crosstab results by targetClass and molClass (in same table)
+sub printCrosstabFile {
+    my ($childN, $strandCounts) = @_;
+    my $crosstabFile = "$ENV{EXTRACT_PREFIX}.strand_counts.$childN.txt";
+    open my $crosstabH, ">", $crosstabFile or die "$error: could not open $crosstabFile: $!\n";
+    my @tableCounts = 0..MAX_CROSSTAB_COUNT;
+    my @types;
+    foreach my $targetClass ('TT', 'TA', 'AA', 'tt', 'ta', 'aa', 't-', 'a-', '--'){
+        foreach my $molClass (IS_PROPER, IS_SV){ # not all combinations are possible, but that's fine
+            push @types, "$targetClass\t$molClass";
+        }
+    }
+    print $crosstabH join("\t", qw(targetClass molClass count1), @tableCounts), "\n";
+    foreach my $type(@types){
+        foreach my $count1(@tableCounts){
+            print $crosstabH "$type\t$count1";
+            foreach my $count2(@tableCounts){
+                print $crosstabH "\t", ($$strandCounts{$type} and $$strandCounts{$type}[$count1]) ?
+                                       ($$strandCounts{$type}[$count1][$count2] || 0) : 0;
+            }
+            print $crosstabH "\n";
+        }
+    }
+    close $crosstabH;     
 }
 
 # UNMERGED READS
