@@ -96,9 +96,9 @@ use constant {
 
 # working variables
 our $isTargeted = $TARGETS_BED ? 1 : 0;
-my ($fwdSide2, $revSide2) = $IS_COLLATED ? # collated source molecules were grouped and re-aligned in FF orientation, like svCapture
-   (RIGHT,     LEFT) : # FF orientation, same handling as merged, i.e, all source sequences from same strand of molecule
-   (LEFT,      RIGHT); # FR orientation, handle read 2 in the opposite orientation, i.e., was from opposite strand as read 1
+our ($fwdSide2, $revSide2) = $IS_COLLATED ? # collated source molecules were grouped and re-aligned in FF orientation, like svCapture
+    (RIGHT,     LEFT) : # FF orientation, same handling as merged, i.e, all source sequences from same strand of molecule
+    (LEFT,      RIGHT); # FR orientation, handle read 2 in the opposite orientation, i.e., was from opposite strand as read 1
 my @initCollated   = ('X', 0, 0, 0, 'X', 0);
 my @initUncollated = (0, 0, 0, @initCollated);
 

@@ -84,6 +84,7 @@ my @sides = (RIGHTWARD,  LEFTWARD); # e.g., at a left end clip, the read continu
 use vars qw(@alns @mol $jxnN
             $spansH $nodesH $endpointsH
             $isTargeted $maxInsertSize %insertSizes $isCountStrands %strandCounts 
+            $fwdSide2 $revSide2
             $IS_COLLATED $TARGETS_BED $LIBRARY_TYPE $MIN_CLIP $MAX_TLEN $READ_LEN);    
 my $gapDelLimit =  2 * $MAX_TLEN - 2 * $READ_LEN; # these are conservative, i.e., call more proper than aligner typically
 my $gapDupLimit = -2 * $READ_LEN;
@@ -136,19 +137,19 @@ sub parseUnmergedHiddenJunction {
     $mol[MOL_STRAND] = getMoleculeStrand($alns[$read1], $alns[$read2]);
     # override aligner proper flag sometimes (aligner fails to call some things proper, e.g., failed-merge overruns)
     setEndpointData(\my @innData1, $alns[$read1], RIGHT, LEFT);
-    setEndpointData(\my @innData2, $alns[$read2], RIGHT, LEFT);
+    setEndpointData(\my @innData2, $alns[$read2], $revSide2, $fwdSide2);
     my $jxnType = getJxnType($alns[$read1], $alns[$read2], \@innData1, \@innData2, GAP);
-    $jxnType eq PROPER and return commitProperMolecule($alns[$read1], $alns[$read2], LEFT,  RIGHT);    
+    $jxnType eq PROPER and return commitProperMolecule($alns[$read1], $alns[$read2], $fwdSide2, $revSide2);    
     # commit SV if truly not proper    
     setEndpointData(\my @outData1, $alns[$read1], LEFT,  RIGHT);
-    setEndpointData(\my @outData2, $alns[$read2], LEFT,  RIGHT);
+    setEndpointData(\my @outData2, $alns[$read2], $fwdSide2, $revSide2);
     $mol[IS_OUTER_CLIP1] = ($outData1[_CLIP] >= $MIN_CLIP ? 1 : 0);
     $mol[IS_OUTER_CLIP2] = ($outData2[_CLIP] >= $MIN_CLIP ? 1 : 0);
     $isTargeted and $mol[TARGET_CLASS] = getTargetClass(
         $alns[$read1][RNAME], $alns[$read2][RNAME], 
         $outData1[_POS],      $outData2[_POS]
     );
-    printJunction(GAP, RIGHT, LEFT, $alns[$read1], $alns[$read2]);      
+    printJunction(GAP, $revSide2, $fwdSide2, $alns[$read1], $alns[$read2]);      
     printOuterEndpoints($alns[$read1], $alns[$read2], \@outData1, \@outData2); # actions based on inner portion of molecule
 }
 #---------------------------------------------------------------------------------------------------
@@ -176,6 +177,10 @@ sub parseUnmergedSplit {
     # determine the order of the alignments along the sequenced molecule in the split reads
     foreach my $read(READ1, READ2){
         # my ($fwdSide, $revSide) = ($read == READ1) ? (LEFT, RIGHT) : (RIGHT, LEFT);
+
+        # $revSide2, $fwdSide2
+
+
         if(@{$alnsByRead[$read]} == 1){ # an unsplit read paired with a split read
             @{$alnIs[$read]} = (0); # the index within @alnsByRead, not @alns
             setEndpointData(\my @outData, $alnsByRead[$read][0], LEFT, RIGHT);
