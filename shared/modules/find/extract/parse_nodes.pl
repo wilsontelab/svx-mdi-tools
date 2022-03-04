@@ -97,7 +97,7 @@ my $collapseStrands = ($LIBRARY_TYPE eq 'TruSeq'); # otherwise, Nextera, where s
 sub commitProperMolecule { # aln1/umi1 are the left/proximal end of the source molecule as provided to the aligner
     my ($aln1, $aln2, $fwdSide2, $revSide2) = @_;
     $mol[MOL_CLASS] = IS_PROPER;
-    $mol[MOL_STRAND] = ($$aln1[FLAG] & _REVERSE) >> _SHIFT_REVERSE; # 0=forward, 1=reverse
+    !defined $mol[MOL_STRAND] and $mol[MOL_STRAND] = ($$aln1[FLAG] & _REVERSE) >> _SHIFT_REVERSE; # 0=forward, 1=reverse
     setEndpointData(\my @outData1, $aln1, LEFT,  RIGHT); # LEFT = process the left clip if mapped on the forward strand
     setEndpointData(\my @outData2, $aln2, $fwdSide2, $revSide2); # orientation depends on merge state
     $mol[IS_OUTER_CLIP1] = ($outData1[_CLIP] >= $MIN_CLIP ? 1 : 0);
@@ -117,7 +117,7 @@ sub parseMergedSplit {
     # shortest clip1 will match umi1, longest will match umi2
     my ($outData1s, @alnIs) = sortReadAlignments(\@alns, LEFT, RIGHT);
     $mol[MOL_CLASS] = IS_SV;
-    $mol[MOL_STRAND] = getMoleculeStrand(@alns[$alnIs[0], $alnIs[$#alnIs]]);
+    !defined $mol[MOL_STRAND] and $mol[MOL_STRAND] = getMoleculeStrand(@alns[$alnIs[0], $alnIs[$#alnIs]]);
     setEndpointData(\my @outData2, $alns[$alnIs[$#alnIs]], RIGHT, LEFT);
     $mol[IS_OUTER_CLIP1] = ($$outData1s[$alnIs[0]][_CLIP] >= $MIN_CLIP ? 1 : 0);
     $mol[IS_OUTER_CLIP2] = ($outData2[_CLIP] >= $MIN_CLIP ? 1 : 0);
@@ -134,7 +134,7 @@ sub parseMergedSplit {
 sub parseUnmergedHiddenJunction {
     my ($read1, $read2) = ($alns[READ1][FLAG] & _FIRST_IN_PAIR) ? (READ1, READ2) : (READ2, READ1);
     $mol[MOL_CLASS] = IS_SV;
-    $mol[MOL_STRAND] = getMoleculeStrand($alns[$read1], $alns[$read2]);
+    !defined $mol[MOL_STRAND] and $mol[MOL_STRAND] = getMoleculeStrand($alns[$read1], $alns[$read2]);
     # override aligner proper flag sometimes (aligner fails to call some things proper, e.g., failed-merge overruns)
     setEndpointData(\my @innData1, $alns[$read1], RIGHT, LEFT);
     setEndpointData(\my @innData2, $alns[$read2], $revSide2, $fwdSide2);
@@ -176,24 +176,20 @@ sub parseUnmergedSplit {
     }
     # determine the order of the alignments along the sequenced molecule in the split reads
     foreach my $read(READ1, READ2){
-        # my ($fwdSide, $revSide) = ($read == READ1) ? (LEFT, RIGHT) : (RIGHT, LEFT);
-
-        # $revSide2, $fwdSide2
-
-
+        my ($fwdSide, $revSide) = ($read == READ1) ? (LEFT, RIGHT) : ($$fwdSide2, $revSide2);
         if(@{$alnsByRead[$read]} == 1){ # an unsplit read paired with a split read
             @{$alnIs[$read]} = (0); # the index within @alnsByRead, not @alns
-            setEndpointData(\my @outData, $alnsByRead[$read][0], LEFT, RIGHT);
+            setEndpointData(\my @outData, $alnsByRead[$read][0], $fwdSide, $revSide);
             $outDatas[$read] = [\@outData];
         } else { # one of either one or two split reads
-            ($outDatas[$read], @{$alnIs[$read]}) = sortReadAlignments($alnsByRead[$read], LEFT, RIGHT); 
+            ($outDatas[$read], @{$alnIs[$read]}) = sortReadAlignments($alnsByRead[$read], $fwdSide, $revSide); 
         }  
     }
     # actions based on outer portion of total source molecule
     my $outI1 = $alnIs[READ1][0];
     my $outI2 = $alnIs[READ2][0]; 
     $mol[MOL_CLASS] = IS_SV;     
-    $mol[MOL_STRAND] = getMoleculeStrand($alnsByRead[READ1][$outI1], $alnsByRead[READ2][$outI2]);
+    !defined $mol[MOL_STRAND] and $mol[MOL_STRAND] = getMoleculeStrand($alnsByRead[READ1][$outI1], $alnsByRead[READ2][$outI2]);
     $mol[IS_OUTER_CLIP1] = ($outDatas[READ1][$outI1][_CLIP] >= $MIN_CLIP ? 1 : 0);
     $mol[IS_OUTER_CLIP2] = ($outDatas[READ2][$outI2][_CLIP] >= $MIN_CLIP ? 1 : 0);
     $isTargeted and $mol[TARGET_CLASS] = getTargetClass(
@@ -209,7 +205,7 @@ sub parseUnmergedSplit {
     # possible additional SV junction in the gap
     my $innI1 = $alnIs[READ1][$#{$alnIs[READ1]}];
     my $innI2 = $alnIs[READ2][$#{$alnIs[READ2]}]; 
-    printJunction(GAP, RIGHT, LEFT, $alnsByRead[READ1][$innI1], $alnsByRead[READ2][$innI2]); 
+    printJunction(GAP, $revSide2, $fwdSide2, $alnsByRead[READ1][$innI1], $alnsByRead[READ2][$innI2]); 
     printOuterEndpoints(
         $alnsByRead[READ1][$outI1], $alnsByRead[READ2][$outI2],
           $outDatas[READ1][$outI1],   $outDatas[READ2][$outI2]
@@ -251,7 +247,7 @@ sub printSequencedJunctions{
 sub printJunction { 
     my ($nodeClass, $innFwdSide2, $innRevSide2, @alns) = @_;
 
-    # collect endpoint data on the alignments that flank the splitting junction
+    # collect endpoint data on the alignments that flank the junction
     my (@innData);
     setEndpointData(\@{$innData[READ1]}, $alns[READ1], RIGHT, LEFT);
     setEndpointData(\@{$innData[READ2]}, $alns[READ2], $innFwdSide2, $innRevSide2);
@@ -261,22 +257,22 @@ sub printJunction {
     $jxnN++;
 
     # reorient alignment pairs to always reflect the canonical junction strand
-    my ($read1, $read2, $isOuterClip1, $isOuterClip2) =
-        (READ1, READ2, IS_OUTER_CLIP1, IS_OUTER_CLIP2);
+    my ($read1, $read2, $umi1, $umi2, $isOuterClip1, $isOuterClip2) =
+        (READ1, READ2, UMI1, UMI2, IS_OUTER_CLIP1, IS_OUTER_CLIP2);
     my $isCanonical = isCanonicalStrand($jxnType, $nodeClass, @alns);   
     if(!$isCanonical){
-        ($read1, $read2, $isOuterClip1, $isOuterClip2) =
-        (READ2, READ1, IS_OUTER_CLIP2, IS_OUTER_CLIP1);
-        $alns[$read1][FLAG] ^= (_REVERSE + _FIRST_IN_PAIR + _SECOND_IN_PAIR); # TODO: handle _REVERSE differently?? *****
+        ($read1, $read2, $umi1, $umi2, $isOuterClip1, $isOuterClip2) =
+        (READ2, READ1, UMI2, UMI1, IS_OUTER_CLIP2, IS_OUTER_CLIP1);
+        $alns[$read1][FLAG] ^= (_REVERSE + _FIRST_IN_PAIR + _SECOND_IN_PAIR);
         $alns[$read2][FLAG] ^= (_REVERSE + _FIRST_IN_PAIR + _SECOND_IN_PAIR);    
     }    
-    
+
     # undo the RC action that aligner did to one of the pair of our inversion alignments
     # thus, both SEQs always exit relative to the source molecule on the canonical strand
-    if($nodeClass == GAP ?
+    if((!$IS_COLLATED and $nodeClass == GAP) ?
        ($alns[$read1][FLAG] & _REVERSE) == ($alns[$read2][FLAG] & _REVERSE) :
        ($alns[$read1][FLAG] & _REVERSE) != ($alns[$read2][FLAG] & _REVERSE)){
-        my $rcRead = $isCanonical ? # TODO: this may still need fixing for gaps?
+        my $rcRead = $isCanonical ? # TODO: this may still need fixing for uncollated gaps?
             (($alns[$read1][FLAG] & _REVERSE) ? $read1 : $read2) :
             (($alns[$read1][FLAG] & _REVERSE) ? $read2 : $read1);
         rc(\$alns[$rcRead][SEQ]);
@@ -285,8 +281,8 @@ sub printJunction {
     } 
 
     # print rectified nodes and edges    
-    printNode($alns[$read1], $innData[$read1], $nodeClass, $jxnType, $jxnN);
-    printNode($alns[$read2], $innData[$read2], $nodeClass, $jxnType, $jxnN);
+    printNode($umi1, $alns[$read1], $innData[$read1], $nodeClass, $jxnType, $jxnN);
+    printNode($umi2, $alns[$read2], $innData[$read2], $nodeClass, $jxnType, $jxnN);
 }
 #===================================================================================================
 
@@ -297,22 +293,24 @@ sub printJunction {
 sub getJxnType {
     my ($aln1, $aln2, $innData1, $innData2, $nodeClass) = @_;  
     $$aln1[RNAME_INDEX] != $$aln2[RNAME_INDEX] and return TRANSLOCATION;
-    my $rev1 = $$aln1[FLAG] & _REVERSE;
-    if($nodeClass == GAP){ # based on TLEN=insertSize (since we lack a junction); read strands inverted relative to each other in FR pair
-        $rev1 == ($$aln2[FLAG] & _REVERSE) and return INVERSION; 
-        my $dist = $rev1 ? ($$innData1[_POS] - $$innData2[_POS]) : ($$innData2[_POS] - $$innData1[_POS]);
+    if(!$IS_COLLATED and $nodeClass == GAP){
+        ($$aln1[FLAG] & _REVERSE) == ($$aln2[FLAG] & _REVERSE) and return INVERSION;
+    } else {
+        ($$aln1[FLAG] & _REVERSE) != ($$aln2[FLAG] & _REVERSE) and return INVERSION; # given that we expect FF or RR after for a sequenced junction or after collation
+    }
+    my $dist = abs($$innData2[_POS] - $$innData1[_POS]);
+    if($nodeClass == GAP){ # based on TLEN=insertSize (since we lack a junction)
         $dist < $gapDupLimit and return DUPLICATION;
         $dist > $gapDelLimit and return DELETION;
-    } else { # based on nodes that declare a sequenced junction; reads on the same strand
-        $rev1 != ($$aln2[FLAG] & _REVERSE) and return INVERSION; # given that we expect FF or RR after for a sequenced junction
-        my $dist = $rev1 ? ($$innData1[_POS] - $$innData2[_POS]) : ($$innData2[_POS] - $$innData1[_POS]);
+    } else { # based on nodes that declare a sequenced junction
         $dist <= 0 and return DUPLICATION;
         $dist > 1 and return DELETION;
     }
     return PROPER;
 }
-# assign a source strand to help track TruSeq strand duplicates of the same source molecule
+# assign a source strand to help track uncollated TruSeq strand duplicates of the same source molecule
 # this is a molecule-level property calculated on the outermost, i.e., reference alignments
+# if previously collated, MOL_STRAND was already set upstream to 0, 1, or 2 (duplex, i.e., both strands)
 sub getMoleculeStrand {
     my ($outAln1, $outAln2) = @_;
     my $strand1 = ($$outAln1[FLAG] & _REVERSE) >> _SHIFT_REVERSE; # 0=forward, 1=reverse
@@ -336,7 +334,7 @@ sub isCanonicalStrand {
     } elsif($jxnType eq INVERSION) {
         return $$aln1[POS] > $$aln2[POS] ? 0 : 1;
     } elsif($jxnType eq TRANSLOCATION){
-        if($nodeClass == GAP ? 
+        if((!$IS_COLLATED and $nodeClass == GAP) ? 
            ($$aln1[FLAG] & _REVERSE) != ($$aln2[FLAG] & _REVERSE) : 
            ($$aln1[FLAG] & _REVERSE) == ($$aln2[FLAG] & _REVERSE)){ 
             return $$aln1[FLAG] & _REVERSE ? 0 : 1;
@@ -364,6 +362,22 @@ sub sortReadAlignments {
 }
 # collect information on one endpoint (outer or inner) of an alignment
 sub setEndpointData {
+
+    # my ($data, $aln, $fwdSide, $revSide) = @_;
+    # my ($clip, $getEnd, $side) = ($$aln[FLAG] & _REVERSE) ?
+    #     ($clips[$revSide], $revSide, $sides[$revSide]) :
+    #     ($clips[$fwdSide], $fwdSide, $sides[$fwdSide]);
+    # $$data[_CLIP] = $$aln[CIGAR] =~ m/$clip/ ? $1 : 0; # the number of clipped bases
+    # $$data[_POS]  = $getEnd ? getEnd($$aln[POS], $$aln[CIGAR]) : $$aln[POS]; # the coordinate of the last aligned base
+    # $$data[_SIDE] = $side; # the direction the aligned read moves away from that coordinate
+    # $$data[_SEQ] = $$data[_CLIP] >= $minClip ? # the sequence of the clipped bases
+    #     ($getEnd ?
+    #         substr($$aln[SEQ], -$$data[_CLIP]) :
+    #         substr($$aln[SEQ], 0, $$data[_CLIP])):
+    #     _NULL;
+    # $$data[_NODE] = join(":", $$aln[RNAME], @$data[_SIDE, _POS]); # signature of the SV breakpoint position
+
+
     my ($data, $aln, $fwdSide, $revSide) = @_;
     my ($clip, $getEnd, $side) = ($$aln[FLAG] & _REVERSE) ?
         ($clips[$revSide], $revSide, $sides[$revSide]) :

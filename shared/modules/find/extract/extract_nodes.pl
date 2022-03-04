@@ -19,11 +19,11 @@ resetCountFile();
 
 # environment variables
 fillEnvVar(\our $IS_COLLATED,      'IS_COLLATED', 1, 0);
-fillEnvVar(\my $IS_USER_BAM,       'IS_USER_BAM');
+fillEnvVar(\our $IS_USER_BAM,      'IS_USER_BAM');
 fillEnvVar(\our $EXTRACT_PREFIX,   'EXTRACT_PREFIX');
-fillEnvVar(\my $ACTION_DIR,        'ACTION_DIR');
-fillEnvVar(\my $N_CPU,             'N_CPU');
-fillEnvVar(\my $MIN_MAPQ,          'MIN_MAPQ');
+fillEnvVar(\our $ACTION_DIR,       'ACTION_DIR');
+fillEnvVar(\our $N_CPU,            'N_CPU');
+fillEnvVar(\our $MIN_MAPQ,         'MIN_MAPQ');
 fillEnvVar(\our $LIBRARY_TYPE,     'LIBRARY_TYPE');
 fillEnvVar(\our $MIN_CLIP,         'MIN_CLIP');
 fillEnvVar(\our $MAX_TLEN,         'MAX_TLEN');
@@ -80,7 +80,7 @@ use constant {
     MOL_STRAND => 8,
     IS_OUTER_CLIP1 => 9,
     IS_OUTER_CLIP2 => 10,
-    TARGET_CLASS => 11, # values added (or initialized) for svCapture
+    TARGET_CLASS => 11, # values added (or initialized) for svCapture only
     SHARED_PROPER => 12, 
     #-------------
     READ1 => 0, # for code readability
@@ -99,7 +99,7 @@ our $isTargeted = $TARGETS_BED ? 1 : 0;
 our ($fwdSide2, $revSide2) = $IS_COLLATED ? # collated source molecules were grouped and re-aligned in FF orientation, like svCapture
     (RIGHT,     LEFT) : # FF orientation, same handling as merged, i.e, all source sequences from same strand of molecule
     (LEFT,      RIGHT); # FR orientation, handle read 2 in the opposite orientation, i.e., was from opposite strand as read 1
-my @initCollated   = ('X', 0, 0, 0, 'X', 0);
+my @initCollated   = ('X', undef, 0, 0, 'X', 0);
 my @initUncollated = (0, 0, 0, @initCollated);
 
 # process data by molecule over multiple parallel threads
@@ -154,7 +154,7 @@ sub parseReadPair {
                 if($IS_COLLATED){ # takes precedence over IS_USER_BAM since realignment bam file forced by pipeline
                     @mol = (split(":", $alns[0][QNAME]), # MOL_ID to STRAND_COUNT2
                             @initCollated);              # MOL_CLASS to SHARED_PROPER
-                    # $mol[MOL_STRAND] = $isTruSeq ? 0 : ($mol[STRAND_COUNT1] ? 0 : 1);
+                    $mol[MOL_STRAND] = $mol[STRAND_COUNT1] ? ($mol[STRAND_COUNT2] ? 2 : 0) : 1;
                 } elsif($IS_USER_BAM){
                     @mol = ($aln[1],  # MOL_ID
                             (1) x 2,  # UMI1, UMI2 dummy values

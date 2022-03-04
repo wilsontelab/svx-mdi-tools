@@ -15,7 +15,7 @@ use constant {
 # operating parameters
 use vars qw($error $IS_COLLATED $isTargeted $EXTRACT_PREFIX $MAX_TLEN);
 our $maxInsertSize = int($MAX_TLEN * 1.25);  
-our $isCountStrands = ($IS_COLLATED and $isTargeted);   
+our $isCountStrands = ($IS_COLLATED and $isTargeted); # e.g., svCapture
 our (%insertSizes, %strandCounts);
 
 # print proper source molecule insert sizes by targetClass
