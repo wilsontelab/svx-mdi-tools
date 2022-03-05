@@ -19,8 +19,8 @@ SORT_RAM_PER_CPU_INT=$(($RAM_PER_CPU_INT - 1000000000))
 # extra SV nodes and molecule spans
 runWorkflowStep 1 extract extract/extract_nodes.sh
 
-# # create a copy number map and analyze the insert size distribution
-# runWorkflowStep 2 coverage coverage/coverage_map.sh
+# create a copy number map and analyze the insert size distribution
+runWorkflowStep 2 coverage coverage/coverage_map.sh
 
 # # further processing on the extracted nodes, e.g., to establish graph edges
 # runWorkflowStep 3 compile compile/compile_nodes.sh

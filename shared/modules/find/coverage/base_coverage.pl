@@ -34,8 +34,7 @@ my $maxPosInChunk = CHUNK_SIZE - 1; # the last position in the working chrom chu
 my $coverage = 0; # running coverage value as breaks are handled, RESETS EVERY CHROM
 my $pos0 = -1;    # 0-indexed base position for first element of @breaks, RESETS EVERY CHROM
 my $maxEnd1 = -1; # rightmost span end encountered so far, RESETS EVERY CHROM
-my $nProperSpans = 0; # for expressing insertSizes as frequencies, summed over all chroms
-my ($prevChromI, @insertSizes); # tally of TLENs for histogram
+my ($prevChromI); # tally of TLENs for histogram
 
 # output files
 my $filePrefix = "$ENV{DATA_FILE_PREFIX}.baseCoverage";
@@ -50,13 +49,7 @@ print $idxH join("\t", qw(chromIndex chunkIndex cumNBreaks)), "\n";
 # run all sorted spans
 while (<STDIN>) {
 	chomp;
-	my ($chromI, $start0, $end1, $molClass) = split("\t");
-
-	# count proper molecule insert sizes
-	if($molClass eq 'P'){
-		$nProperSpans++;
-		$insertSizes[$end1 - $start0]++;
-	} 
+	my ($chromI, $start0, $end1, $molClass) = split("\t"); 
 
 	# finish a chromosome
 	if($prevChromI){
@@ -92,7 +85,6 @@ print $idxH join("\t", $prevChromI, $chunkIndex, $nBreaksPrinted), "\n";
 close $posH;
 close $covH;
 close $idxH;
-printInsertSizes();
 
 # parse and print the completed coverage spans
 sub commitBreaks {
@@ -111,18 +103,6 @@ sub commitBreaks {
 		$breaks[$p0 % BUFFER_LEN] = 0;
 	}
 	$pos0 = $start0;                          
-}
-
-# print the insert size histogram
-sub printInsertSizes {
-	my $outFile = "$ENV{EXTRACT_PREFIX}.insertSizes.txt";
-	open my $outH, ">", "$outFile" or die "\ncould not open file for writing:\n$outFile:\n$!\n";
-	print $outH join("\t", 'insertSize', 'frequency'), "\n";
-	foreach my $insertSize(0..$#insertSizes){
-		my $count = $insertSizes[$insertSize] || 0;
-		print $outH join("\t", $insertSize, $count / $nProperSpans), "\n";
-	}
-	close $outH;
 }
 
 1;

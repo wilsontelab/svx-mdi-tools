@@ -89,6 +89,7 @@ use vars qw(@alns @mol $jxnN
 my $gapDelLimit =  2 * $MAX_TLEN - 2 * $READ_LEN; # these are conservative, i.e., call more proper than aligner typically
 my $gapDupLimit = -2 * $READ_LEN;
 my $collapseStrands = ($LIBRARY_TYPE eq 'TruSeq'); # otherwise, Nextera, where same signatures on opposite strands are unique source molecules
+my $isFR = !$IS_COLLATED;
 
 #===================================================================================================
 # top level molecule parsers, called by main thread loop
@@ -269,7 +270,7 @@ sub printJunction {
 
     # undo the RC action that aligner did to one of the pair of our inversion alignments
     # thus, both SEQs always exit relative to the source molecule on the canonical strand
-    if((!$IS_COLLATED and $nodeClass == GAP) ?
+    if(($isFR and $nodeClass == GAP) ?
        ($alns[$read1][FLAG] & _REVERSE) == ($alns[$read2][FLAG] & _REVERSE) :
        ($alns[$read1][FLAG] & _REVERSE) != ($alns[$read2][FLAG] & _REVERSE)){
         my $rcRead = $isCanonical ? # TODO: this may still need fixing for uncollated gaps?
@@ -293,7 +294,7 @@ sub printJunction {
 sub getJxnType {
     my ($aln1, $aln2, $innData1, $innData2, $nodeClass) = @_;  
     $$aln1[RNAME_INDEX] != $$aln2[RNAME_INDEX] and return TRANSLOCATION;
-    if(!$IS_COLLATED and $nodeClass == GAP){
+    if($isFR and $nodeClass == GAP){
         ($$aln1[FLAG] & _REVERSE) == ($$aln2[FLAG] & _REVERSE) and return INVERSION;
     } else {
         ($$aln1[FLAG] & _REVERSE) != ($$aln2[FLAG] & _REVERSE) and return INVERSION; # given that we expect FF or RR after for a sequenced junction or after collation
@@ -334,7 +335,7 @@ sub isCanonicalStrand {
     } elsif($jxnType eq INVERSION) {
         return $$aln1[POS] > $$aln2[POS] ? 0 : 1;
     } elsif($jxnType eq TRANSLOCATION){
-        if((!$IS_COLLATED and $nodeClass == GAP) ? 
+        if(($isFR and $nodeClass == GAP) ? 
            ($$aln1[FLAG] & _REVERSE) != ($$aln2[FLAG] & _REVERSE) : 
            ($$aln1[FLAG] & _REVERSE) == ($$aln2[FLAG] & _REVERSE)){ 
             return $$aln1[FLAG] & _REVERSE ? 0 : 1;
@@ -362,22 +363,6 @@ sub sortReadAlignments {
 }
 # collect information on one endpoint (outer or inner) of an alignment
 sub setEndpointData {
-
-    # my ($data, $aln, $fwdSide, $revSide) = @_;
-    # my ($clip, $getEnd, $side) = ($$aln[FLAG] & _REVERSE) ?
-    #     ($clips[$revSide], $revSide, $sides[$revSide]) :
-    #     ($clips[$fwdSide], $fwdSide, $sides[$fwdSide]);
-    # $$data[_CLIP] = $$aln[CIGAR] =~ m/$clip/ ? $1 : 0; # the number of clipped bases
-    # $$data[_POS]  = $getEnd ? getEnd($$aln[POS], $$aln[CIGAR]) : $$aln[POS]; # the coordinate of the last aligned base
-    # $$data[_SIDE] = $side; # the direction the aligned read moves away from that coordinate
-    # $$data[_SEQ] = $$data[_CLIP] >= $minClip ? # the sequence of the clipped bases
-    #     ($getEnd ?
-    #         substr($$aln[SEQ], -$$data[_CLIP]) :
-    #         substr($$aln[SEQ], 0, $$data[_CLIP])):
-    #     _NULL;
-    # $$data[_NODE] = join(":", $$aln[RNAME], @$data[_SIDE, _POS]); # signature of the SV breakpoint position
-
-
     my ($data, $aln, $fwdSide, $revSide) = @_;
     my ($clip, $getEnd, $side) = ($$aln[FLAG] & _REVERSE) ?
         ($clips[$revSide], $revSide, $sides[$revSide]) :
@@ -400,11 +385,14 @@ sub setEndpointData {
 #---------------------------------------------------------------------------------------------------
 sub printOuterEndpoints { 
     my ($outAln1, $outAln2, $outData1, $outData2) = @_; 
+    my $node1 = getNodeSignature($outAln1, UMI1, $outData1);
+    my $node2 = getNodeSignature($outAln2, UMI2, $outData2);
 
     # prepare for setting SHARED_PROPER downstream
     if($endpointsH){
-        printEndpoint($outAln1, UMI1, $outData1); # output used to do proper molecule matching
-        printEndpoint($outAln2, UMI2, $outData2);
+        my $mol = join("\t", @mol[MOL_ID, MOL_CLASS, MOL_STRAND, TARGET_CLASS]); # molecule properties
+        print $endpointsH join("\t", $mol, $node1), "\n";
+        print $endpointsH join("\t", $mol, $node2), "\n";
     }
 
     # prepare for SV evidence support via clipped nodes
@@ -416,11 +404,13 @@ sub printOuterEndpoints {
     $spansH and print $spansH join("\t", 
         $mol[MOL_CLASS],
         $collapseStrands ? 0 : $mol[MOL_STRAND], # molecule strand (not read-pair strand) and outer node signatures used for read-pair de-duplication
-        $mol[MOL_STRAND] ? getNodeSignature($outAln2, $outData2) : getNodeSignature($outAln1, $outData1), # flip order for bottom strand proper
-        $mol[MOL_STRAND] ? getNodeSignature($outAln1, $outData1) : getNodeSignature($outAln2, $outData2),
+        $mol[MOL_STRAND] ? $node2 : $node1, # flip order for bottom strand proper
+        $mol[MOL_STRAND] ? $node1 : $node2,
         $mol[MOL_CLASS] eq IS_PROPER ? 
-            ($molIsOuterClipped ? getProperSpan($outData1, $outData2) : "-") : 
-            getAlignmentSpans() # information for creating the coverage map
+            ($molIsOuterClipped ? 
+             join(":", $mol[MOL_STRAND] ? ($$outData2[_POS], $$outData1[_POS]) : ($$outData1[_POS], $$outData2[_POS])) : 
+             "-") : 
+            join("::", map {join(":", $$_[RNAME_INDEX], $$_[POS] - 1, getEnd($$_[POS], $$_[CIGAR])) } @alns)
     ), "\n";
 
     # prepare data to write a cross-tabulated file of _molecule_ strand1 count by strand2 count if targeted
@@ -431,34 +421,16 @@ sub printOuterEndpoints {
         $mol[STRAND_COUNT2] > MAX_FAMILY_COUNT ? MAX_FAMILY_COUNT : $mol[STRAND_COUNT2]
     ]++;
 }
-sub printEndpoint { # all source molecule outer endpoint nodes, whether SV evidence or not
-    my ($aln, $umi, $node) = @_;
-    my $sign = $$node[_SIDE] eq LEFTWARD ? 1 : -1;    
-    my $pos = $$node[_POS] + $sign * $$node[_CLIP];        # hypothetical molecule endpoint at this alignment
-    my $isSVClip = $$node[_CLIP] >= $MIN_CLIP ? 1 : 0;     # flag whether a refAln pos was clipped
-    print $endpointsH join("\t",                           # overall, same endpoint ID strategy as read pair grouping
-        @mol[MOL_ID, MOL_CLASS, MOL_STRAND, TARGET_CLASS], # molecule properties
-        join(":", $mol[$umi], $$aln[RNAME_INDEX], $$node[_SIDE], $pos, $isSVClip) # this endpoint's signature
-    ), "\n";  
-}
 sub getNodeSignature {
-    my ($aln, $node) = @_;
-    my $sign = $$node[_SIDE] eq LEFTWARD ? 1 : -1;    
-    my $pos = max(1, $$node[_POS] + $sign * $$node[_CLIP]); # hypothetical molecule endpoint at this alignment
-    join("\t", $$aln[RNAME_INDEX], $$node[_SIDE], $pos);  # this endpoint's signature
-}
-sub getProperSpan {
-    my ($outData1, $outData2) = @_;
-    join(":", 
-        $mol[MOL_STRAND] ? 
-            ($$outData2[_POS], $$outData1[_POS]) : 
-            ($$outData1[_POS], $$outData2[_POS])
-    )    
-}
-sub getAlignmentSpans { # individual BED3 formatted spans for all SV alignments
-    join("::", map {
-        join(":", $$_[RNAME_INDEX], $$_[POS] - 1, getEnd($$_[POS], $$_[CIGAR])) 
-    } @alns);
+    my ($aln, $umi, $node) = @_;
+    my $pos = $$node[_POS] + ($$node[_SIDE] eq LEFTWARD ? 1 : -1) * $$node[_CLIP]; # hypothetical molecule endpoint at this alignment
+    join(":", # this endpoint's signature 
+        $mol[$umi], 
+        $$aln[RNAME_INDEX], 
+        $$node[_SIDE], 
+        $pos < 1 ? 1 : $pos, 
+        $$node[_CLIP] >= $MIN_CLIP ? 1 : 0  # flag whether a refAln pos was clipped
+    );
 }
 #===================================================================================================
 

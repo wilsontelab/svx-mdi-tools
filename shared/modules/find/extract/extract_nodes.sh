@@ -28,6 +28,14 @@ checkPipe
 
 # TODO: index coordinate bam
 
+# plot the insert size distribution(s)
+echo "plotting insert size histogram"
+zcat $EXTRACT_PREFIX.insert_sizes.*.gz |
+sort -k1,1n |
+bedtools groupby -g 1 -c 2,3,4,5,6 -o sum | 
+Rscript $ACTION_DIR/extract/insertSizes.R
+checkPipe
+
 # clean up
 rm -rf $TMP_DIR_WRK/*
 

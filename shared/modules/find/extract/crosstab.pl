@@ -26,7 +26,7 @@ sub printInsertSizeFile {
     open my $crosstabH, "|-", $$file{stream} or die $$file{error};
     my @insertSizes = 0..$maxInsertSize;
     my @targetClasses = ('X', 'TT', 'TA', 'AA', '--'); # the target classes that could support proper molecules
-    print $crosstabH join("\t", "insertSize", 'untargeted', 'TT', 'TA', 'AA', 'xx'), "\n"; # R-compatible column names
+    # print $crosstabH join("\t", "insertSize", 'untargeted', 'TT', 'TA', 'AA', 'xx'), "\n"; # R-compatible column names
     foreach my $insertSize(@insertSizes){
         print $crosstabH "$insertSize";
         foreach my $targetClass(@targetClasses){
