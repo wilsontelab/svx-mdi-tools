@@ -41,7 +41,7 @@ use vars qw(%chromIndex);
 setCanonicalChroms();
 initializeExclude($BAD_REGIONS_FILE, $READ_LEN);
 
-# load the capture target regions
+# load the target regions
 loadTargetRegions();
 
 # constants

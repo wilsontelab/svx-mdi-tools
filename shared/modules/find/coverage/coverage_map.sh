@@ -10,6 +10,7 @@
 #     $DATA_FILE_PREFIX.baseCoverage.*
 #     insertSizes histogram
 
+# coverage map only applies to whole genomic SV analysis
 if [ "$TARGETS_BED" = "" ]; then
 
 # set the sort parameters

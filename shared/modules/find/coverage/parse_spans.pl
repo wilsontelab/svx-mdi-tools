@@ -15,8 +15,8 @@ use constant {
     #------------
     UMI => 0,
     RNAME_INDEX => 1,
-    _SIDE => 2,
-    _POS => 3,
+    SIDE => 2,
+    POS => 3,
     IS_CLIPPED => 4,
 };
 
@@ -28,11 +28,11 @@ while(<STDIN>){
     if($F[SPANS] eq '-'){
         my @node1 = split(":", $F[NODE1]);
         my @node2 = split(":", $F[NODE2]);
-        print join("\t", $node1[RNAME_INDEX], $node1[_POS] - 1, $node2[_POS], 'P'), "\n";
+        print join("\t", $node1[RNAME_INDEX], $node1[POS] - 1, $node2[POS], 'P'), "\n";
 
     } elsif($F[MOL_CLASS] eq 'P') {
         my @node1 = split(":", $F[NODE1], 3);        
-        my @pos = split(":", $F[SPANS]);
+        my @pos   = split(":", $F[SPANS]);
         print join("\t", $node1[RNAME_INDEX], $pos[0] - 1, $pos[1], 'P'), "\n";
 
     # for SV molecules, use the span of all alignments, but not the gaps between them

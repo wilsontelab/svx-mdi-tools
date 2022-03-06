@@ -10,29 +10,36 @@ use warnings;
 
 # constants
 use constant {
-    CHROM_STRAND => 0,
-    POSITION => 1,
+    NODE => 0, # node-level data
+    CLIP_LEN => 1,
+    CLIP_SEQ => 2,
+    NODE_CLASS => 3,
     #---------------
-    NODE => 2, # node-level data
-    CLIP_LEN => 3,
-    CLIP_SEQ => 4,
-    NODE_CLASS => 5,
+    JXN_TYPE => 4, # edge/junction-level data
+    JXN_N => 5,
     #---------------
-    JXN_TYPE => 6, # edge/junction-level data
-    JXN_N => 7,
+    FLAG => 6, # alignment-level data
+    POS => 7,
+    MAPQ => 8,
+    CIGAR => 9,
+    SEQ => 10,
+    ALN_N => 11,
     #---------------
-    FLAG => 8, # alignment-level data
-    POS => 9,
-    MAPQ => 10,
-    CIGAR => 11,
-    SEQ => 12,
-    ALN_N => 13,
+    MOL_ID => 12, # molecule-level information  
+    UMI => 13,
+    IS_MERGED => 14,
+    IS_DUPLEX => 15,
+    STRAND_COUNT1 => 16,
+    STRAND_COUNT2 => 17,
+    MOL_CLASS => 18,
+    MOL_STRAND => 19,
+    IS_OUTER_CLIP1 => 20,
+    IS_OUTER_CLIP2 => 21,
+    TARGET_CLASS => 22,
+    SHARED_PROPER => 23,
     #---------------
-    MOL_ID => 14,  # molecule-level information
-    MOL_CLASS => 15,
-    MOL_STRAND => 16,
-    IS_OUTER_CLIP1 => 17,
-    IS_OUTER_CLIP2 => 18,
+    CHROM_STRAND => 24,
+    POSITION => 25,
     #---------------
     INITIALIZED => 0,
     PENDING => 1,
@@ -41,7 +48,7 @@ use constant {
 
 # operating parameters
 my $maxTLen = $ENV{MAX_TLEN};
-#my $minAlnLen = $ENV{MIN_ALN_LEN} || 30; # estimate of the smallest number of bases BWA needs to align a base segment
+#my $minAlnLen = $ENV{MIN_ALN_LEN} || 30; # estimate of the smallest number of bases aligner needs to align a base segment
 my $separationLimit = $maxTLen * 1.1; # - 2 * $minAlnLen;
 
 # working variables
@@ -59,7 +66,7 @@ print $idxH join("\t", qw(node offset size)), "\n";
 while(my $line = <STDIN>){
     chomp $line;
     my @f = split("\t", $line);
-    my $outLine = join("\t", @f[NODE..IS_OUTER_CLIP2])."\n";
+    my $outLine = join("\t", @f[NODE..SHARED_PROPER])."\n";
     print $outH $outLine;
     
     # break condition between nodes

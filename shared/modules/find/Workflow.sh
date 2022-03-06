@@ -11,6 +11,7 @@ export GENOMEX_MODULES_DIR=$SUITES_DIR/genomex-mdi-tools/shared/modules
 source $GENOMEX_MODULES_DIR/genome/set_genome_vars.sh
 source $GENOMEX_MODULES_DIR/align/set_alignment_vars.sh
 source $MODULES_DIR/library/set_library_vars.sh
+if [ "$ON_TARGET" =  "" ]; then export ON_TARGET=0; fi
 
 # set the sort parameters
 source $MODULES_DIR/utilities/shell/create_temp_dir.sh
@@ -22,11 +23,11 @@ runWorkflowStep 1 extract extract/extract_nodes.sh
 # create a copy number map and analyze the insert size distribution
 runWorkflowStep 2 coverage coverage/coverage_map.sh
 
-# # further processing on the extracted nodes, e.g., to establish graph edges
-# runWorkflowStep 3 compile compile/compile_nodes.sh
+# further processing on the extracted nodes, e.g., to establish graph edges
+runWorkflowStep 3 compile compile/compile_nodes.sh
 
-# # find structural variants across extracted nodes and molecules
-# runWorkflowStep 4 find/find_junctions.sh
+# find structural variants across extracted nodes and molecules
+runWorkflowStep 4 find/find_junctions.sh
 
 # clean up
 rm -rf $TMP_DIR_WRK

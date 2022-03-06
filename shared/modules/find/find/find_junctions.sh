@@ -31,7 +31,7 @@ load_nodes nodes_by_proximity
 #   genome
 echo "loading $GENOME into RAM"
 export SHM_GENOME_FASTA=$SHM_DIR_WRK/$GENOME.fa
-cp $GENOME_FASTA $SHM_GENOME_FASTA
+cp $GENOME_FASTA     $SHM_GENOME_FASTA
 cp $GENOME_FASTA.fai $SHM_GENOME_FASTA.fai
 
 ########################

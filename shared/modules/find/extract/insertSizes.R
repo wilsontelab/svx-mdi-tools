@@ -4,8 +4,9 @@ env$READ_LEN <- as.numeric(env$READ_LEN)
 env$MAX_TLEN <- as.numeric(env$MAX_TLEN)
 
 # get input data
-counts <- read.table(file("stdin"), header = FALSE, sep = "\t", stringsAsFactors = FALSE)
-countNames <- c("untargeted", "TT", "TA", "AA", "xx")
+counts <- read.table(file = "stdin", header = FALSE, sep = "\t", stringsAsFactors = FALSE)
+countNames  <- c("untargeted", "TT", "TA", "AA", "xx")
+legendNames <- c("untargeted", "TT", "TA", "AA", "--")
 names(counts) <- c("insertSize", countNames)
 
 # convert counts to frequencies
@@ -44,7 +45,7 @@ for(i in seq_len(countNames)){
     col  <- cols[i]
     if(sum(counts[[name]]) >= minCountToPlot){
         lines(freqs$insertSize, freqs[[name]], col = col)
-        plottedNames <- c(plottedNames, name)
+        plottedNames <- c(plottedNames, legendNames[i])
         plottedCols  <- c(plottedCols,  col)
     }
 }

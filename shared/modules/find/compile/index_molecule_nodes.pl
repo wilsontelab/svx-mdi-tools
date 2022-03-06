@@ -21,11 +21,18 @@ use constant {
     SEQ => 10,
     ALN_N => 11,
     #---------------
-    MOL_ID => 12,  # molecule-level information
-    MOL_CLASS => 13,
-    MOL_STRAND => 14,
-    IS_OUTER_CLIP1 => 15,
-    IS_OUTER_CLIP2 => 16 
+    MOL_ID => 12, # molecule-level information  
+    UMI => 13,
+    IS_MERGED => 14,
+    IS_DUPLEX => 15,
+    STRAND_COUNT1 => 16,
+    STRAND_COUNT2 => 17,
+    MOL_CLASS => 18,
+    MOL_STRAND => 19,
+    IS_OUTER_CLIP1 => 20,
+    IS_OUTER_CLIP2 => 21,
+    TARGET_CLASS => 22,
+    SHARED_PROPER => 23,
 };
 
 # working variables

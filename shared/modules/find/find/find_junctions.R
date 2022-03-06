@@ -13,13 +13,14 @@ library(data.table)
 env <- as.list(Sys.getenv())
 stringEnvVars <- c(
     'SHM_DIR_WRK',    
-    'PIPELINE_DIR',
+    'ACTION_DIR',
     'FIND_PREFIX',
     'COMPILE_PREFIX'
 )
 integerEnvVars <- c(
     'N_CPU',
     'MAX_TLEN',
+    'ON_TARGET',
     'MIN_MAPQ_BOTH',
     'MIN_MAPQ_ONE',
     'MIN_SV_SIZE',
@@ -87,10 +88,16 @@ printNodes <- function(svId, nodes){
 # molecule-level values that are the same on both nodes of a junction
 molAggCols_first <- c( 
     'NODE_CLASS',
+    'IS_MERGED',    
+    'IS_DUPLEX',
+    'STRAND_COUNT1',
+    'STRAND_COUNT2',
+    'SHARED_PROPER',
     'SEQ' # only valid if IS_MERGED = TRUE (otherwise, TLEN is NA to us at this point)
 )
 # alignment-level values, i.e., potentially different on the two nodes of a junction
 molAggCols_collapse <- c( 
+    'UMI',
     'MAPQ'
 )
 #-------------------------------------------------------------------------------------
@@ -98,6 +105,16 @@ molAggCols_collapse <- c(
 #-------------------------------------------------------------------------------------
 message("finding SV junctions as sets of anomalous edges between alignment nodes")
 nAllEdges <- nrow(edges)
+
+# on target filter
+if(env$ON_TARGET != 0){ # no target filter
+    edges <- switch(env$ON_TARGET,
+        edges[TARGET_CLASS != '--'], # at least one end in padded target
+        edges[!grepl('-', TARGET_CLASS)] # both ends in padded target
+    )    
+}
+nOnTargetEdges  <- nrow(edges)
+nOffTargetEdges <- nAllEdges - nOnTargetEdges
 
 # SV size filter
 if(env$SV_SIZE_FACTOR > 0){
@@ -107,13 +124,14 @@ if(env$SV_SIZE_FACTOR > 0){
     edges <- edges[JXN_TYPE == "T" | size >= env$MIN_SV_SIZE]
 }
 nAnalyzed <- nrow(edges)
-nTooSmall <- nAllEdges - nAnalyzed
+nTooSmall <- nOnTargetEdges - nAnalyzed
 
 # report some stats
 reportStat <- function(value, message){
     message(paste(value, message, sep = "\t"))
 }
 reportStat(nAllEdges,       "input edges")
+reportStat(nOffTargetEdges, "edges rejected by on-target requirements")
 reportStat(nTooSmall,       "edges rejected because the SV is too small")
 reportStat(nAnalyzed,       "edges subjected to further processing")
 #-------------------------------------------------------------------------------------
@@ -170,6 +188,7 @@ processEdge <- function(i){
         paste(network$matchingJunctionNames, collapse = "::"),
         paste(network$otherJunctionNames,    collapse = "::"),
         #-------------
+        junction$TARGET_CLASS, # NB: _not_ the same as the _molecule_ target class attached to nodes
         call$JXN_TYPE,        
         #-------------
         call$refNodes[1, chrom], # TODO: convert chrom indices back to string chroms
@@ -194,8 +213,15 @@ processEdge <- function(i){
         molAgg_first[, sum(NODE_CLASS == nodeClasses$SPLIT)],
         molAgg_first[, sum(NODE_CLASS == nodeClasses$GAP)],
         molAgg_first[, sum(NODE_CLASS == nodeClasses$OUTER_CLIP)],
+        molAgg_first[NODE_CLASS != nodeClasses$OUTER_CLIP, sum(IS_DUPLEX)],
+        molAgg_first[                                    , sum(IS_DUPLEX)],
+        molAgg_first[NODE_CLASS != nodeClasses$OUTER_CLIP, sum(STRAND_COUNT1 + STRAND_COUNT2)],
+        molAgg_first[                                    , sum(STRAND_COUNT1 + STRAND_COUNT2)],
+        molAgg_first[NODE_CLASS != nodeClasses$OUTER_CLIP, sum(SHARED_PROPER)],
+        molAgg_first[                                    , sum(SHARED_PROPER)], 
         #-------------
         paste(nchar(molAgg_first$SEQ), collapse = ","),
+        paste(molAgg_collapse$UMI,  collapse = ","),
         paste(molAgg_collapse$MAPQ, collapse = ","),
         #-------------
         index$CHUNK_OFFSET,
@@ -217,10 +243,8 @@ svTable <- fread(
 # finalize and write the output SV summary table
 #-------------------------------------------------------------------------------------
 message("writing SV summary table")
-
 previouslyFollowed <- svTable[, is.na(TARGET_CLASS)]
 rejectedNodes <- function(reason) svTable[, TARGET_CLASS == as.character(reason)]
-
 rejectedGetNodes       <- rejectedNodes(rejectionReasons$getNodes)
 rejectedMatchingNodes  <- rejectedNodes(rejectionReasons$matchingNodes)
 rejectedNodeFilter     <- rejectedNodes(rejectionReasons$failedNodeFilters)
