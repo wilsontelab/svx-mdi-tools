@@ -12,7 +12,7 @@
 # log file feedback
 echo "grouping read pairs to unique, consensus source molecules"
 source $GENOMEX_MODULES_DIR/source/check_name_bam_file.sh
-echo $NAME_BAM_FILE
+echo "input bam: $NAME_BAM_FILE"
 
 # do the work
 slurp -s 250M $NAME_BAM_FILE |

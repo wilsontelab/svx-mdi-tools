@@ -5,7 +5,7 @@
 # usage:
 #     source $MODULES_DIR/library/set_library_vars.sh
 
-if [ !-e $NAME_BAM_FILE]; then
+if [ ! -e $NAME_BAM_FILE ]; then
     echo "missing alignment file: $NAME_BAM_FILE"
     exit 1
 fi

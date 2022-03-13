@@ -6,6 +6,11 @@ export COMPILE_PREFIX=$DATA_FILE_PREFIX.compile
 export FIND_PREFIX=$DATA_FILE_PREFIX.find
 mkdir -p $PLOTS_DIR
 
+# if a collated find, force name-sorted source file to the re-alignment bam
+if [ "$IS_COLLATED" != ""  ]; then
+    export BAM_FILE=$DATA_FILE_PREFIX.$GENOME.name.realigned.bam
+fi
+
 # set derivative environment variables
 export GENOMEX_MODULES_DIR=$SUITES_DIR/genomex-mdi-tools/shared/modules
 source $GENOMEX_MODULES_DIR/genome/set_genome_vars.sh

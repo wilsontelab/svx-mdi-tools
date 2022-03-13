@@ -18,7 +18,7 @@ fillEnvVar(\my $ADJACENCY_LIMIT,  'ADJACENCY_LIMIT');
 
 # constants
 use constant {
-    MOL_KEY => 0, # input fields, as output by parse_BWA.pl
+    MOL_KEY => 0, # input fields, as output by parse_bam.pl
     GROUP_POS1 => 1,
     GROUP_POS2 => 2, 
     SEQ1 => 3,

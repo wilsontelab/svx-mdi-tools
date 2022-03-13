@@ -34,7 +34,7 @@ fillEnvVar(\our $MIN_SW_SCORE_FACTOR, 'MIN_SW_SCORE_FACTOR');
 fillEnvVar(\our $CONSENSUS_FACTOR,    'CONSENSUS_FACTOR');
 
 # load additional dependencies
-map { require "$ACTION_DIR/$_.pl" } qw(merge consensus quality);
+map { require "$ACTION_DIR/consensus/$_.pl" } qw(merge consensus quality);
 
 # constants
 use constant {

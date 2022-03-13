@@ -3,6 +3,8 @@ pipeline:
     name: svCapture
     description: "Characterize structural variant junctions in short-read, paired-end capture library(s)"
     version: v0.0.0
+suiteVersions:
+    genomex-mdi-tools: main
 actions:
     align:
         order: 1
@@ -39,7 +41,6 @@ actions:
     #     order: 3
     #     thread: do
     #     module: find  
-
 
 # package:
 #     uploadType: _template # a signal to the Stage 2 framework regarding the package contents

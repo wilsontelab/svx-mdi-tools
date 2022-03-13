@@ -31,7 +31,7 @@ sub openFileHandles {
     $file = getFileStream('spans', $childN);
     $isTargeted or open $spansH, "|-", $$file{stream} or die $$file{error};
 
-    # endpoint nodes of all molecules, i.e., both proper and SV
+    # outer endpoint nodes of all molecules, i.e., both proper and SV
     # used to set the SHARED_PROPER count in later steps
     # only used if targeted, i.e., if svCapture, where we expect large strand family sizes
     $file = getFileStream('endpoints', $childN);
