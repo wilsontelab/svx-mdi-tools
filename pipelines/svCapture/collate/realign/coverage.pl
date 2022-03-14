@@ -8,6 +8,7 @@ our $script = "coverage";
 my $perlUtilDir = "$ENV{GENOMEX_MODULES_DIR}/utilities/perl";
 map { require "$perlUtilDir/$_.pl" } qw(workflow numeric);
 map { require "$perlUtilDir/genome/$_.pl" } qw(targets);
+resetCountFile();
 
 # environment variables
 fillEnvVar(\my $MIN_MAPQ,        'MIN_MAPQ');
@@ -105,12 +106,12 @@ while(my $line = <STDIN>){
 # print summary information
 my $onTarget   = $sumTargetLens ? int($sumCoverage{'TT'} / $sumTargetLens * 1000 + 0.5) / 1000 : 0;
 my $offTarget  = $offTargetSize ? int($sumCoverage{'--'} / $offTargetSize * 1000 + 0.5) / 1000 : 0;
-my $enrichment = $offTarget ? int($onTarget / $offTarget* 10 + 0.5) / 10 : 0;
-printCount($sumCoverage{'TT'}, 'sumCoverage[TT]', 'number of bases covered in unpadded target regions');
-printCount($sumCoverage{'--'}, 'sumCoverage[--]', 'number of bases covered in off-target regions');
-printCount($onTarget,   'foldCoverage[TT]', 'coverage depth in target regions');
-printCount($offTarget,  'foldCoverage[--]', 'coverage depth in off-target regions');
-printCount($enrichment, 'enrichment', 'foldCoverage[TT] / foldCoverage[--]');
+my $enrichment = $offTarget     ? int($onTarget / $offTarget* 10 + 0.5) / 10 : 0;
+printCount($sumCoverage{'TT'}, 'sumCoverage[TT]',  'number of bases covered in unpadded target regions');
+printCount($sumCoverage{'--'}, 'sumCoverage[--]',  'number of bases covered in off-target regions');
+printCount($onTarget,          'foldCoverage[TT]', 'coverage depth in target regions');
+printCount($offTarget,         'foldCoverage[--]', 'coverage depth in off-target regions');
+printCount($enrichment,        'enrichment',       'foldCoverage[TT] / foldCoverage[--]');
 
 # add a proper molecule to the appropriate coverage sum
 sub addProperMoleculeCoverage {
