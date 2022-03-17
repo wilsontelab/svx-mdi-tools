@@ -26,20 +26,13 @@ function load_nodes {
     cp $COMPILE_PREFIX.$1.txt       $SHM_DIR_WRK/$1.txt
     cp $COMPILE_PREFIX.$1.txt.index $SHM_DIR_WRK/$1.txt.index
 }
-load_nodes nodes_by_molecule
 load_nodes nodes_by_proximity
+load_nodes outer_clips
 #   genome
 echo "loading $GENOME into RAM"
 export SHM_GENOME_FASTA=$SHM_DIR_WRK/$GENOME.fa
 cp $GENOME_FASTA     $SHM_GENOME_FASTA
 cp $GENOME_FASTA.fai $SHM_GENOME_FASTA.fai
-
-########################
-echo $SHM_DIR_WRK
-ls -lh $SHM_DIR_WRK
-exit 1
-
-
 
 # filter molecules and find junctions
 Rscript $ACTION_DIR/find/find_junctions.R

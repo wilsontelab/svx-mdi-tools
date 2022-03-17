@@ -17,7 +17,7 @@ options:
         description: "--min-sw-score-factor * length = minimum accepted Smith-Waterman score"
     consensus-factor: 
         order: 3
-        short: C
+        short: e
         type: double
         required: false
         default: 0.667

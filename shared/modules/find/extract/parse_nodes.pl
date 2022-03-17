@@ -45,6 +45,7 @@ use constant {
     _SIDE => 2,
     _SEQ  => 3,
     _NODE => 4,
+    _CHROM_SIDE => 5,
     #-------------
     READ1 => 0, # for code readability
     READ2 => 1,
@@ -177,7 +178,7 @@ sub parseUnmergedSplit {
     }
     # determine the order of the alignments along the sequenced molecule in the split reads
     foreach my $read(READ1, READ2){
-        my ($fwdSide, $revSide) = ($read == READ1) ? (LEFT, RIGHT) : ($$fwdSide2, $revSide2);
+        my ($fwdSide, $revSide) = ($read == READ1) ? (LEFT, RIGHT) : ($fwdSide2, $revSide2);
         if(@{$alnsByRead[$read]} == 1){ # an unsplit read paired with a split read
             @{$alnIs[$read]} = (0); # the index within @alnsByRead, not @alns
             setEndpointData(\my @outData, $alnsByRead[$read][0], $fwdSide, $revSide);
@@ -282,8 +283,8 @@ sub printJunction {
     } 
 
     # print rectified nodes and edges    
-    printNode($umi1, $alns[$read1], $innData[$read1], $nodeClass, $jxnType, $jxnN);
-    printNode($umi2, $alns[$read2], $innData[$read2], $nodeClass, $jxnType, $jxnN);
+    printNode($umi1, $alns[$read1], $innData[$read1], $innData[$read2], $nodeClass, $jxnType, $jxnN);
+    printNode($umi2, $alns[$read2], $innData[$read2], $innData[$read1], $nodeClass, $jxnType, $jxnN);
 }
 #===================================================================================================
 
@@ -375,7 +376,8 @@ sub setEndpointData {
             substr($$aln[SEQ], -$$data[_CLIP]) :
             substr($$aln[SEQ], 0, $$data[_CLIP])):
         _NULL;
-    $$data[_NODE] = join(":", $$aln[RNAME_INDEX], @$data[_SIDE, _POS]); # signature of the SV breakpoint position
+    $$data[_NODE]       = join(":", $$aln[RNAME_INDEX], @$data[_SIDE, _POS]); # complete signature of the SV breakpoint position
+    $$data[_CHROM_SIDE] = join(":", $$aln[RNAME_INDEX], $$data[_SIDE]);       # used to sort into SV side 2 groups prior to indexing by proximity
 }
 #===================================================================================================
 
@@ -390,15 +392,15 @@ sub printOuterEndpoints {
 
     # prepare for setting SHARED_PROPER downstream
     if($endpointsH){
-        my $mol = join("\t", @mol[MOL_ID, MOL_CLASS, MOL_STRAND, TARGET_CLASS]); # molecule properties
-        print $endpointsH join("\t", $mol, $node1), "\n";
-        print $endpointsH join("\t", $mol, $node2), "\n";
+        my $mol = join("\t", @mol[MOL_ID, MOL_CLASS]); # molecule properties
+        print $endpointsH join("\t", $node1, $mol), "\n";
+        print $endpointsH join("\t", $node2, $mol), "\n";
     }
 
     # prepare for SV evidence support via clipped nodes
     my $molIsOuterClipped = ($mol[IS_OUTER_CLIP1] or $mol[IS_OUTER_CLIP2]);
-    printNode(UMI1, $outAln1, $outData1, OUTER_CLIP, _NULL, -1, $molIsOuterClipped); # outer clip output used as SV evidence support
-    printNode(UMI2, $outAln2, $outData2, OUTER_CLIP, _NULL, -2, $molIsOuterClipped); # outer clips bear negative JXN_N, 1/2 for each molecule end
+    printNode(UMI1, $outAln1, $outData1, $outData2, OUTER_CLIP, _NULL, -1, $molIsOuterClipped); # outer clip output used as SV evidence support
+    printNode(UMI2, $outAln2, $outData2, $outData1, OUTER_CLIP, _NULL, -2, $molIsOuterClipped); # outer clips bear negative JXN_N, 1/2 for each molecule end
 
     # prepare for coverage map analysis downstream if untargeted
     $spansH and print $spansH join("\t", 
@@ -408,8 +410,8 @@ sub printOuterEndpoints {
         $mol[MOL_STRAND] ? $node1 : $node2,
         $mol[MOL_CLASS] eq IS_PROPER ? 
             ($molIsOuterClipped ? 
-             join(":", $mol[MOL_STRAND] ? ($$outData2[_POS], $$outData1[_POS]) : ($$outData1[_POS], $$outData2[_POS])) : 
-             "-") : 
+                join(":", $mol[MOL_STRAND] ? ($$outData2[_POS], $$outData1[_POS]) : ($$outData1[_POS], $$outData2[_POS])) : 
+                "-") : 
             join("::", map {join(":", $$_[RNAME_INDEX], $$_[POS] - 1, getEnd($$_[POS], $$_[CIGAR])) } @alns)
     ), "\n";
 
@@ -440,16 +442,16 @@ sub getNodeSignature {
 #   edges = SV junctions that connect two nodes (whether sequenced or just inferred)
 #---------------------------------------------------------------------------------------------------
 # all available SV evidence nodes, listed one row per node over all source molecules
-# carries information for subsequent collapse into junction and alignment edges
 sub printNode { 
-    my ($umi, $aln, $node, $nodeClass, $jxnType, $jxnN, $molIsOuterClipped) = @_;
+    my ($umi, $aln, $nodeThis, $nodeOther, $nodeClass, $jxnType, $jxnN, $molIsOuterClipped) = @_;
     if($nodeClass == OUTER_CLIP and # all internal junction nodes are printed
        !$molIsOuterClipped and      # proper molecules with one outer clip are printed at both ends
        $mol[MOL_CLASS] eq IS_PROPER # all nodes on SV molecules are printed, even unclipped outer
     ){ return } # don't print anything for unclipped proper molecules
     my $alnN = $mol[MOL_CLASS] eq IS_PROPER ? 0 : $$aln[ALN_N]; # even unmerged proper molecules connect their outer nodes
     print $nodesH join("\t", 
-        @$node[_NODE, _CLIP, _SEQ], $nodeClass,      # node-level data
+        @$nodeThis[_NODE, _CLIP, _SEQ], $nodeClass,  # node-level data for this node
+        $$nodeOther[_CHROM_SIDE],                    # node-level data for its partner node (other side of SV, or opposite end of molecule)
         $jxnType, $jxnN,                             # edge/junction-level data
         @$aln[FLAG, POS, MAPQ, CIGAR, SEQ], $alnN,   # alignment-level data
         @mol[MOL_ID, $umi, IS_MERGED..SHARED_PROPER] # molecule-level data

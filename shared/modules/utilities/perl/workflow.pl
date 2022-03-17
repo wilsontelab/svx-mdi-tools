@@ -3,8 +3,8 @@ use warnings;
 
 # utility functions available to perl-based pipeline scripts
 
-use vars qw($action);
-sub getActionName { $action || "unknown" }
+use vars qw($action $script);
+sub getActionName { $action || $script || "unknown" }
 
 #----------------------------------------------------------
 # error handling

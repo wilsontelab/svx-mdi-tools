@@ -8,12 +8,13 @@ action: # required
         - r-4.1
     optionFamilies: # these options apply to all actions
         - genomex-mdi-tools//genome
+        - genomex-mdi-tools//name-bam-file
         - genomex-mdi-tools//bam-format
         - genomex-mdi-tools//illumina-type
         - genomex-mdi-tools//read-filtering
-        - genomex-mdi-tools//read-merging            
+        - genomex-mdi-tools//read-merging           
         - sv-filtering
-        - genomex-mdi-tools//fixed-width-bins            
+        - genomex-mdi-tools//target-region
     resources:
         required:
             total-ram: 32G

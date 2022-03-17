@@ -18,13 +18,16 @@ echo $NAME_BAM_FILE
 
 # extract SV info from name sorted bam and send all reads to coordinate sort
 slurp -s 250M $NAME_BAM_FILE |
-tee >( 
-    samtools view - |
-    perl $ACTION_DIR/extract/extract_nodes.pl
-) |
-samtools sort $CRAM_OUTPUT_OPTIONS --threads $N_CPU -m $SORT_RAM_PER_CPU_INT -T $TMP_FILE_PREFIX.samtools.sort - |
-slurp -s 250M -o $COORDINATE_BAM_FILE
+samtools view - |
+perl $ACTION_DIR/extract/extract_nodes.pl
 checkPipe
+# tee >( 
+#     samtools view - |
+#     perl $ACTION_DIR/extract/extract_nodes.pl
+# ) |
+# samtools sort $CRAM_OUTPUT_OPTIONS --threads $N_CPU -m $SORT_RAM_PER_CPU_INT -T $TMP_FILE_PREFIX.samtools.sort - |
+# slurp -s 250M -o $COORDINATE_BAM_FILE
+# checkPipe
 
 # TODO: index coordinate bam
 

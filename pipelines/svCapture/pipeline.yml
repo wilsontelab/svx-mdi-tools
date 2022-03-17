@@ -36,12 +36,10 @@ actions:
             recommended:
                 time-limit: 24:00:00
         description: "collate read groups, make consensuses, and re-align to genome"
-
-    # find:
-    #     order: 3
-    #     thread: do
-    #     module: find  
-
+    find:
+        order: 3
+        thread: do
+        module: find  
 # package:
 #     uploadType: _template # a signal to the Stage 2 framework regarding the package contents
 #     packageAction: do     # the pipeline action after which the data package should assembled

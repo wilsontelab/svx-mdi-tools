@@ -8,8 +8,9 @@
 # input:
 #     $EXTRACT_PREFIX.nodes.*.gz
 # outputs:
-#     $DATA_FILE_PREFIX.baseCoverage.*
-#     insertSizes histogram
+#     $DATA_FILE_PREFIX.junction_edges.*
+#     $DATA_FILE_PREFIX.nodes_by_proximity.*
+#     $DATA_FILE_PREFIX.outer_clips.*
 
 #-----------------------------------------------------------------
 # define common actions
@@ -32,46 +33,48 @@ NODE=1 # node-level data
 CLIP_LEN=2
 CLIP_SEQ=3
 NODE_CLASS=4
+PARTNER=5 # chromI:side for the other node in a junction or molecule
 #---------------
-JXN_TYPE=5 # edge/junction-level data
-JXN_N=6
+JXN_TYPE=6 # edge/junction-level data
+JXN_N=7
 #---------------
-FLAG=7 # alignment-level data
-POS=8
-MAPQ=9
-CIGAR=10
-SEQ=11
-ALN_N=12
+FLAG=8 # alignment-level data
+POS=9
+MAPQ=10
+CIGAR=11
+SEQ=12
+ALN_N=13
 #---------------
-MOL_ID=13 # molecule-level information  
-UMI=14
-IS_MERGED=15
-IS_DUPLEX=16
-STRAND_COUNT1=17
-STRAND_COUNT2=18
-MOL_CLASS=19
-MOL_STRAND=20
-IS_OUTER_CLIP1=21
-IS_OUTER_CLIP2=22
-TARGET_CLASS=23
-SHARED_PROPER=24
+MOL_ID=14 # molecule-level information  
+UMI=15
+IS_MERGED=16
+IS_DUPLEX=17
+STRAND_COUNT1=18
+STRAND_COUNT2=19
+MOL_CLASS=20
+MOL_STRAND=21
+IS_OUTER_CLIP1=22
+IS_OUTER_CLIP2=23
+TARGET_CLASS=24
+SHARED_PROPER=25
 #---------------
-CHROM_STRAND=25
-POSITION=26
+CHROM_STRAND=26
+POSITION=27
 #-----------------------------------------------------------------
 # endpoint columns
 #-----------------------------------------------------------------
-EP_MOL_ID=1       # source molecule number
-EP_MOL_CLASS=2    # P or V
-EP_MOL_STRAND=3   # 0, 1 or 2 (for duplex)
-EP_TARGET_CLASS=4 # TT tt t- etc.
-EP_NODE=5 # umi:chromI:side:projPos:isSVClip
+EP_NODE=1      # umi:chromI:side:projPos:isSVClip
+EP_MOL_ID=2    # source molecule number
+EP_MOL_CLASS=3 # P or V
 #-----------------------------------------------------------------
 # node classes
 #-----------------------------------------------------------------
 GAP=0 # node classes
 SPLIT=1
 OUTER_CLIP=2
+#-----------------------------------------------------------------
+JXN_NODES='$'$NODE_CLASS'!='$OUTER_CLIP'&&$'$JXN_TYPE'!="P"'
+CLIP_NODES='$'$NODE_CLASS'=='$OUTER_CLIP'&&$'$CLIP_LEN'>='$MIN_CLIP
 
 # some calculations only apply to collated molecules, i.e., svCapture
 if [ "$IS_COLLATED" != "" ]; then
@@ -103,62 +106,60 @@ checkPipe
 echo "calculating duplex rates and strand family sizes"
 #-----------------------------------------------------------------
 cat \
-<(cat $EXTRACT_PREFIX.strand_counts.1.txt | head -n1) \
-<(cat $EXTRACT_PREFIX.strand_counts.*.txt | grep -v 'targetClass' | sort -k1,1 -k2,2 -k3,3n) |
+<(zcat $EXTRACT_PREFIX.strand_counts.1.gz | head -n1) \
+<(zcat $EXTRACT_PREFIX.strand_counts.*.gz | grep -v 'targetClass' | sort -k1,1 -k2,2 -k3,3n) |
 $RSCRIPT_COMPILE/family_sizes.R
 checkPipe
 
 fi
 
 #-----------------------------------------------------------------
-echo "declaring junction edges"
+echo "declaring SV junction edges"
 #-----------------------------------------------------------------
-function print_junctions {
-    echo "  $2"
-    $SLURP_NODES |
-    awk '$'$JXN_N'>0&&$'$NODE_CLASS'=='$1'&&$'$JXN_TYPE'!="P"' |
-    cut -f $NODE,$JXN_TYPE,$JXN_N,$MOL_ID |    
-    $SORT -k4,4n -k3,3n -k1,1 |
-    $GROUP_BY -g 3,4 -c 1,2 -o collapse,first |
-    sed 's/,/\t/g' |
-    $PERL_COMPILE/set_junction_target_class.pl | # returns: node1, node2, type, targetClass, molId
-    $SORT -k1,1 -k2,2 -k3,3 -k4,4 -k5,5n |
-    $GROUP_BY -g 1,2,3,4 -c 5,5,5 -o collapse,count,count_distinct | # aggregate molId by node pair
-    $PIGZ |
-    $SLURP_OUT $COMPILE_PREFIX.$2.gz
-    checkPipe
-    echo "    done"
-}
-print_junctions $SPLIT 'sequenced_junctions'
-print_junctions $GAP   'gap_junctions'
-
-#-----------------------------------------------------------------
-echo "indexing SV nodes by molecule"
-#-----------------------------------------------------------------
-$SLURP_NODES | # include all nodes, even unclipped outer
-$SORT -k$MOL_ID,$MOL_ID"n" | 
-$MASK_NODES |
-$PERL_COMPILE/index_molecule_nodes.pl
+$SLURP_NODES |
+awk $JXN_NODES |
+cut -f $NODE,$NODE_CLASS,$JXN_TYPE,$JXN_N,$MOL_ID |    
+$SORT -k5,5n -k4,4n -k1,1 |
+$GROUP_BY -g 4,5 -c 1,2,3 -o collapse,first,first | # group by molId+jxnN
+sed 's/,/\t/g' |
+$PERL_COMPILE/set_junction_target_class.pl | # returns: nodeClass, node1, node2, jxnType, targetClass, molId
+$SORT -k1,1nr -k2,5 -k6,6n | # sort splits first
+$GROUP_BY -g 1,2,3,4,5 -c 6,6,6 -o collapse,count,count_distinct | # aggregate molId by node pair
+$PIGZ |
+$SLURP_OUT $COMPILE_PREFIX.junction_edges.gz
 checkPipe
-echo "  done"
 
 #-----------------------------------------------------------------
-echo "indexing SV nodes by coordinate proximity"
+echo "indexing SV junction nodes by coordinate proximity"
 #-----------------------------------------------------------------
-$SLURP_NODES | # only include SV evidence nodes
-awk 'BEGIN{OFS="\t"}$'$JXN_TYPE'!="*"||$'$CLIP_LEN'>='$MIN_CLIP'{
+$SLURP_NODES |
+awk 'BEGIN{OFS="\t"}'$JXN_NODES'{
     split($'$NODE', x, ":");
     print $0, x[1]":"x[2], x[3];
 }' |
-$SORT -k$CHROM_STRAND,$CHROM_STRAND -k$POSITION,$POSITION"n" | 
-# $PIGZ |
-# $SLURP_OUT $COMPILE_PREFIX.nodes_by_proximity.tmp.gz
-# $SLURP_GZ $COMPILE_PREFIX.nodes_by_proximity.tmp.gz | 
+$SORT -k$PARTNER,$PARTNER -k$CHROM_STRAND,$CHROM_STRAND -k$POSITION,$POSITION"n" |  
 $MASK_NODES | 
 $PERL_COMPILE/index_proximity.pl
 checkPipe
-echo "  done"
 
+#-----------------------------------------------------------------
+echo "indexing SV clip nodes by name"
+#-----------------------------------------------------------------
+$SLURP_NODES |
+awk $CLIP_NODES |
+$SORT -k$NODE,$NODE | 
+$MASK_NODES | 
+$PERL_COMPILE/index_clips.pl
+checkPipe
+
+# #-----------------------------------------------------------------
+# echo "indexing SV nodes by molecule"
+# #-----------------------------------------------------------------
+# $SLURP_NODES | # include all nodes in SV molecules, even unclipped outer
+# $SORT -k$MOL_ID,$MOL_ID"n" | 
+# $MASK_NODES |
+# $PERL_COMPILE/index_molecule_nodes.pl
+# checkPipe
 
 # clean up
 rm -r $TMP_DIR_WRK

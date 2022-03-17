@@ -23,9 +23,6 @@ sort --parallel=$N_CPU -T $TMP_DIR_WRK -S $SORT_RAM_INT"b" | # the de-duplicatio
 bedtools groupby -g 1,2,3,4 -c 5 -o first | # the de-duplication grouping
 perl $ACTION_DIR/coverage/parse_spans.pl | # convert to 3-column BED + type in col 4
 sort --parallel=$N_CPU -T $TMP_DIR_WRK -S $SORT_RAM_INT"b" -k1,1n -k2,2n | # the span coordinate sort
-# pigz -p $N_CPU -c | 
-# slurp -s 500M -o $DATA_FILE_PREFIX.baseCoverage.tmp.gz
-# slurp -s 500M pigz -p $N_CPU -dc $DATA_FILE_PREFIX.baseCoverage.tmp.gz | 
 perl $ACTION_DIR/coverage/base_coverage.pl
 checkPipe
 

@@ -14,19 +14,19 @@ env <- as.list(Sys.getenv())
 stringEnvVars <- c(
     'SHM_DIR_WRK',    
     'ACTION_DIR',
-    'FIND_PREFIX',
-    'COMPILE_PREFIX'
+    'COMPILE_PREFIX',
+    'FIND_PREFIX'
 )
 integerEnvVars <- c(
     'N_CPU',
     'MAX_TLEN',
-    'ON_TARGET',
-    'MIN_MAPQ_BOTH',
     'MIN_MAPQ_ONE',
+    'MIN_MAPQ_BOTH',
     'MIN_SV_SIZE',
     'SV_SIZE_FACTOR',
     'PURGE_DISTANCE',
-    'MIN_MERGE_OVERLAP'
+    'MIN_MERGE_OVERLAP',
+    'ON_TARGET'
 )
 doubleEnvVars <- c('MIN_MERGE_DENSITY')
 checkEnvVar <- function(x){

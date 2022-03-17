@@ -11,15 +11,17 @@ names(counts) <- c("insertSize", countNames)
 
 # convert counts to frequencies
 freqs <- counts
+sums  <- list()
 for (name in countNames) freqs[[name]] <- {
-    sum <- sum(freqs[[name]])
-    if(sum > 0) freqs[[name]] / sum else 0
+    sums[[name]] <- sum(freqs[[name]])
+    if(sums[[name]] > 0) freqs[[name]] / sums[[name]] else 0
 }
 
-# set the plot scale
+# set the plot scale and order
 maskReadLens <- env$READ_LEN + -2:2
 scaleFreq <- freqs[!(freqs$insertSize %in% maskReadLens), countNames]
 maxFreq <- max(scaleFreq)
+orderedNames <- names(sums)[order(unlist(sums))]
 
 # initialize plot histogram with thresholds
 pngFile <- paste(env$PLOT_PREFIX, "insertSizes", "png", sep = ".")
@@ -40,10 +42,10 @@ minCountToPlot <- 1000
 cols <- c("blue", "green4", "blue", "red3", "gray50")
 plottedNames <- character()
 plottedCols  <- integer()
-for(i in seq_len(countNames)){
-    name <- countNames[i]
+for(name in orderedNames){
+    i <- which(countNames == name)
     col  <- cols[i]
-    if(sum(counts[[name]]) >= minCountToPlot){
+    if(sums[[name]] >= minCountToPlot){
         lines(freqs$insertSize, freqs[[name]], col = col)
         plottedNames <- c(plottedNames, legendNames[i])
         plottedCols  <- c(plottedCols,  col)

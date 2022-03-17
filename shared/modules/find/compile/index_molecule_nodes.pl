@@ -10,29 +10,30 @@ use constant {
     CLIP_LEN => 1,
     CLIP_SEQ => 2,
     NODE_CLASS => 3,
+    PARTNER => 4, # chromI:side for the other node in a junction or molecule
     #---------------
-    JXN_TYPE => 4, # edge/junction-level data
-    JXN_N => 5,
+    JXN_TYPE => 5, # edge/junction-level data
+    JXN_N => 6,
     #---------------
-    FLAG => 6, # alignment-level data
-    POS => 7,
-    MAPQ => 8,
-    CIGAR => 9,
-    SEQ => 10,
-    ALN_N => 11,
+    FLAG => 7, # alignment-level data
+    POS => 8,
+    MAPQ => 9,
+    CIGAR => 10,
+    SEQ => 11,
+    ALN_N => 12,
     #---------------
-    MOL_ID => 12, # molecule-level information  
-    UMI => 13,
-    IS_MERGED => 14,
-    IS_DUPLEX => 15,
-    STRAND_COUNT1 => 16,
-    STRAND_COUNT2 => 17,
-    MOL_CLASS => 18,
-    MOL_STRAND => 19,
-    IS_OUTER_CLIP1 => 20,
-    IS_OUTER_CLIP2 => 21,
-    TARGET_CLASS => 22,
-    SHARED_PROPER => 23,
+    MOL_ID => 13, # molecule-level information  
+    UMI => 14,
+    IS_MERGED => 15,
+    IS_DUPLEX => 16,
+    STRAND_COUNT1 => 17,
+    STRAND_COUNT2 => 18,
+    MOL_CLASS => 19,
+    MOL_STRAND => 20,
+    IS_OUTER_CLIP1 => 21,
+    IS_OUTER_CLIP2 => 22,
+    TARGET_CLASS => 23,
+    SHARED_PROPER => 24,
 };
 
 # working variables

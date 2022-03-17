@@ -38,7 +38,7 @@ options:
         description: "if >0, override --min-sv-size to be --sv-size-factor * maxTLen"   
     purge-distance: 
         order: 6
-        short: P
+        short: u
         type: integer
         required: false
         default: 5
@@ -50,3 +50,10 @@ options:
         required: false
         default: 5
         description: "No. of bases by which INN_POS can vary and still be the same junction" 
+    on-target:
+        order: 8
+        short: e
+        type: integer
+        required: false
+        default: 1
+        description: "if applicable, at least this many SV ends must be in a padded target region" 

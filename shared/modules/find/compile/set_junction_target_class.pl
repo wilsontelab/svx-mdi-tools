@@ -6,6 +6,7 @@ use warnings;
 
 # load dependencies
 my $perlUtilDir = "$ENV{GENOMEX_MODULES_DIR}/utilities/perl";
+map { require "$perlUtilDir/$_.pl" } qw(workflow);
 map { require "$perlUtilDir/genome/$_.pl" } qw(chroms targets);
 
 # environment variables
@@ -19,10 +20,12 @@ use constant {
     MOL_ID => 1,
     NODE1 => 2,
     NODE2 => 3,
-    JXN_TYPE => 4
+    NODE_CLASS => 4,
+    JXN_TYPE => 5
 };
 
 # load the target regions
+setCanonicalChroms();
 loadTargetRegions('quiet');
 use vars qw(%revChromIndex $nRegions);
 
@@ -33,6 +36,7 @@ while(my $line = <STDIN>){
     my ($chromI1, $side1, $pos1) = split(':', $f[NODE1]);
     my ($chromI2, $side2, $pos2) = split(':', $f[NODE2]);
     print join("\t", 
+        $f[NODE_CLASS], 
         $f[NODE1], 
         $f[NODE2], 
         $f[JXN_TYPE], 

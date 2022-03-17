@@ -1,12 +1,14 @@
 use strict;
 use warnings;
 
-# created a sorted nodes file with an index to rapidly retrieve
-# all nodes within a coordinate proximity of query node
-# the returned nodes will:
+# create a sorted junction nodes file with an index to rapidly retrieve
+# all potentially compatible nodes within coordinate proximity of a query node
+# the returned nodes for a query will:
 #   be in the same orientation as the query node
+#   have the same partner chrom+side as the query node
 #   include nodes to the left and right of the query node
 #   include the query node itself
+#   only include junction nodes (i.e, splits and gaps, not outer clips)
 
 # constants
 use constant {
@@ -14,32 +16,33 @@ use constant {
     CLIP_LEN => 1,
     CLIP_SEQ => 2,
     NODE_CLASS => 3,
+    PARTNER => 4, # chromI:side for the other node in a junction or molecule
     #---------------
-    JXN_TYPE => 4, # edge/junction-level data
-    JXN_N => 5,
+    JXN_TYPE => 5, # edge/junction-level data
+    JXN_N => 6,
     #---------------
-    FLAG => 6, # alignment-level data
-    POS => 7,
-    MAPQ => 8,
-    CIGAR => 9,
-    SEQ => 10,
-    ALN_N => 11,
+    FLAG => 7, # alignment-level data
+    POS => 8,
+    MAPQ => 9,
+    CIGAR => 10,
+    SEQ => 11,
+    ALN_N => 12,
     #---------------
-    MOL_ID => 12, # molecule-level information  
-    UMI => 13,
-    IS_MERGED => 14,
-    IS_DUPLEX => 15,
-    STRAND_COUNT1 => 16,
-    STRAND_COUNT2 => 17,
-    MOL_CLASS => 18,
-    MOL_STRAND => 19,
-    IS_OUTER_CLIP1 => 20,
-    IS_OUTER_CLIP2 => 21,
-    TARGET_CLASS => 22,
-    SHARED_PROPER => 23,
+    MOL_ID => 13, # molecule-level information  
+    UMI => 14,
+    IS_MERGED => 15,
+    IS_DUPLEX => 16,
+    STRAND_COUNT1 => 17,
+    STRAND_COUNT2 => 18,
+    MOL_CLASS => 19,
+    MOL_STRAND => 20,
+    IS_OUTER_CLIP1 => 21,
+    IS_OUTER_CLIP2 => 22,
+    TARGET_CLASS => 23,
+    SHARED_PROPER => 24,
     #---------------
-    CHROM_STRAND => 24,
-    POSITION => 25,
+    CHROM_STRAND => 25,
+    POSITION => 26,
     #---------------
     INITIALIZED => 0,
     PENDING => 1,
@@ -48,8 +51,7 @@ use constant {
 
 # operating parameters
 my $maxTLen = $ENV{MAX_TLEN};
-#my $minAlnLen = $ENV{MIN_ALN_LEN} || 30; # estimate of the smallest number of bases aligner needs to align a base segment
-my $separationLimit = $maxTLen * 1.1; # - 2 * $minAlnLen;
+my $separationLimit = $maxTLen * 1.1;
 
 # working variables
 my ($prevChromStrand, $offset, @nodes, %committed) = ("", 0);
@@ -68,14 +70,15 @@ while(my $line = <STDIN>){
     my @f = split("\t", $line);
     my $outLine = join("\t", @f[NODE..SHARED_PROPER])."\n";
     print $outH $outLine;
+    my $chromStrand = join(":", @f[PARTNER, CHROM_STRAND]);
     
     # break condition between nodes
     if($prevChromStrand and ( 
-            $prevChromStrand ne $f[CHROM_STRAND] or
+            $prevChromStrand ne $chromStrand or
             abs($f[POSITION] - $nodes[0]{position}) > $separationLimit
         )){
         processProximityGroups($f[POSITION]); # do work on the current node set
-        if($prevChromStrand ne $f[CHROM_STRAND]){ # start a new chrom+side afresh
+        if($prevChromStrand ne $chromStrand){ # start a new chrom+side afresh
             @nodes = ();
             %committed = ();
         } else {
@@ -86,7 +89,7 @@ while(my $line = <STDIN>){
     }
     
     # add the current node to the growing set
-    $prevChromStrand = $f[CHROM_STRAND];
+    $prevChromStrand = $chromStrand;
     my $length = length($outLine);
     push @nodes, {
         name     => $f[NODE],

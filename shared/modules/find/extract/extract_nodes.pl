@@ -18,23 +18,23 @@ map { require "$perlUtilDir/sequence/$_.pl" } qw(general);
 resetCountFile();
 
 # environment variables
-fillEnvVar(\our $IS_COLLATED,      'IS_COLLATED', 1, 0);
+fillEnvVar(\our $IS_COLLATED,      'IS_COLLATED', 1, 0); # set in code
 fillEnvVar(\our $IS_USER_BAM,      'IS_USER_BAM');
 fillEnvVar(\our $EXTRACT_PREFIX,   'EXTRACT_PREFIX');
 fillEnvVar(\our $ACTION_DIR,       'ACTION_DIR');
-fillEnvVar(\our $N_CPU,            'N_CPU');
+fillEnvVar(\our $MAX_TLEN,         'MAX_TLEN');
+fillEnvVar(\our $READ_LEN,         'READ_LEN');
+fillEnvVar(\our $N_CPU,            'N_CPU'); # user options, or derived from them
 fillEnvVar(\our $MIN_MAPQ,         'MIN_MAPQ');
 fillEnvVar(\our $LIBRARY_TYPE,     'LIBRARY_TYPE');
 fillEnvVar(\our $MIN_CLIP,         'MIN_CLIP');
-fillEnvVar(\our $MAX_TLEN,         'MAX_TLEN');
-fillEnvVar(\our $READ_LEN,         'READ_LEN');
 fillEnvVar(\our $BAD_REGIONS_FILE, 'BAD_REGIONS_FILE');
-fillEnvVar(\our $TARGETS_BED,      'TARGETS_BED');
-fillEnvVar(\our $REGION_PADDING,   'REGION_PADDING');
-fillEnvVar(\our $TARGET_SCALAR,    'TARGET_SCALAR', 1, 10); # use 10 bp target resolution for svCapture targets
+fillEnvVar(\our $TARGETS_BED,      'TARGETS_BED',    1, "");
+fillEnvVar(\our $REGION_PADDING,   'REGION_PADDING', 1, 0);
+fillEnvVar(\our $TARGET_SCALAR,    'TARGET_SCALAR',  1, 10); # use 10 bp target resolution for svCapture targets
 
 # load additional dependencies
-map { require "$ACTION_DIR/extract/$_.pl" } qw(files parse_nodes crosstab);
+map { require "$ACTION_DIR/extract/$_.pl" } qw(crosstab files parse_nodes);
 
 # initialize the genome
 use vars qw(%chromIndex);
@@ -95,7 +95,8 @@ use constant {
 };
 
 # working variables
-our $isTargeted = $TARGETS_BED ? 1 : 0;
+our $isTargeted = ($TARGETS_BED and $TARGETS_BED ne "null") ? 1 : 0;
+our $isCountStrands = ($IS_COLLATED and $isTargeted); # e.g., svCapture
 our ($fwdSide2, $revSide2) = $IS_COLLATED ? # collated source molecules were grouped and re-aligned in FF orientation, like svCapture
     (RIGHT,     LEFT) : # FF orientation, same handling as merged, i.e, all source sequences from same strand of molecule
     (LEFT,      RIGHT); # FR orientation, handle read 2 in the opposite orientation, i.e., was from opposite strand as read 1
