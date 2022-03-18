@@ -41,8 +41,11 @@ use constant {
     TARGET_CLASS => 23,
     SHARED_PROPER => 24,
     #---------------
-    CHROM_STRAND => 25,
-    POSITION => 26,
+    OUT_POS_1 => 25,
+    OUT_POS_2 => 26,
+    #---------------
+    CHROM_STRAND => 27,
+    POSITION => 28,
     #---------------
     INITIALIZED => 0,
     PENDING => 1,
@@ -61,14 +64,14 @@ my $outFile = "$ENV{COMPILE_PREFIX}.nodes_by_proximity.txt";
 my $idxFile = join(".", $outFile, 'index');
 open my $outH, "|-", "slurp -s 50M -o $outFile" or die "could not open $outFile for writing\n";
 open my $idxH, "|-", "slurp -s 50M -o $idxFile" or die "could not open $idxFile for writing\n";
-print $idxH join("\t", qw(node offset size)), "\n";
+print $idxH join("\t", qw(key offset size)), "\n";
 
 # loop pre-sorted nodes and commit as chrom-strand-specific proximity groups
 # i.e., for each node, index those nodes within a distance consistent with a single junction
 while(my $line = <STDIN>){
     chomp $line;
     my @f = split("\t", $line);
-    my $outLine = join("\t", @f[NODE..SHARED_PROPER])."\n";
+    my $outLine = join("\t", @f[NODE..OUT_POS_2])."\n";
     print $outH $outLine;
     my $chromStrand = join(":", @f[PARTNER, CHROM_STRAND]);
     

@@ -11,30 +11,31 @@ library(data.table)
 #-------------------------------------------------------------------------------------
 # load and parse environment variables
 env <- as.list(Sys.getenv())
-stringEnvVars <- c(
-    'SHM_DIR_WRK',    
-    'ACTION_DIR',
-    'COMPILE_PREFIX',
-    'FIND_PREFIX'
-)
-integerEnvVars <- c(
-    'N_CPU',
-    'MAX_TLEN',
-    'MIN_MAPQ_ONE',
-    'MIN_MAPQ_BOTH',
-    'MIN_SV_SIZE',
-    'SV_SIZE_FACTOR',
-    'PURGE_DISTANCE',
-    'MIN_MERGE_OVERLAP',
-    'ON_TARGET'
-)
-doubleEnvVars <- c('MIN_MERGE_DENSITY')
-checkEnvVar <- function(x){
-    if(is.null(env[[x]])) stop(paste('missing environment variable:', x))
-}
-invisible(sapply(c(stringEnvVars, integerEnvVars, doubleEnvVars), checkEnvVar))
-env[integerEnvVars] <- as.integer(env[integerEnvVars])
-env[doubleEnvVars]  <- as.double(env[doubleEnvVars])
+rUtilDir <- file.path(env$MODULES_DIR, 'utilities', 'R')
+source(rUtilDir, 'workflow.R')
+loadEnvVars(list(
+    string = c(
+        'ACTION_DIR',
+        'GENOME',
+        'COMPILE_PREFIX',
+        'FIND_PREFIX', 
+        'SHM_DIR_WRK'
+    ),
+    integer = c(
+        'N_CPU',
+        'MAX_TLEN',
+        'MIN_MAPQ_ONE',
+        'MIN_MAPQ_BOTH',
+        'MIN_SV_SIZE',
+        'SV_SIZE_FACTOR',
+        'PURGE_DISTANCE',
+        'MIN_MERGE_OVERLAP',
+        'ON_TARGET'
+    ),
+    double = c(
+        'MIN_MERGE_DENSITY'
+    ),
+))
 #-------------------------------------------------------------------------------------
 # set some options
 setDTthreads(env$N_CPU)
@@ -42,13 +43,17 @@ options(scipen = 999) # prevent 1+e6 in printed, which leads to read.table error
 #options(warn=2)
 #-------------------------------------------------------------------------------------
 # source R scripts
-rUtilDir <- file.path(env$MODULES_DIR, 'utilities', 'R')
 source(rUtilDir, 'utilities.R')
+#-------------------------------------------------------------------------------------
 sequenceUtilDir <- file.path(rUtilDir, 'sequence')
 source(file.path(sequenceUtilDir, 'general.R'))
-source(file.path(sequenceUtilDir, 'faidx.R'))
 source(file.path(sequenceUtilDir, 'IUPAC.R'))
 source(file.path(sequenceUtilDir, 'smith_waterman.R'))
+#-------------------------------------------------------------------------------------
+genomeUtilDir <- file.path(rUtilDir, 'genome')
+source(file.path(genomeUtilDir, 'general.R'))
+source(file.path(genomeUtilDir, 'faidx.R'))
+#-------------------------------------------------------------------------------------
 findStepDir <- file.path(env$ACTION_DIR, 'find')
 sourceScript(findStepDir, 'column_definitions.R')
 sourceScript(findStepDir, 'node_retrieval.R')
@@ -56,7 +61,7 @@ sourceScript(findStepDir, 'network.R')
 sourceScript(findStepDir, 'analyze_junctions.R')
 #-------------------------------------------------------------------------------------
 # initialize genome
-loadFaidx(env$SHM_DIR_WRK, env$GENOME)
+loadFaidx(env$SHM_DIR_WRK)
 faidx_padding <- round(env$MAX_TLEN * 1.5, 0) # sufficient to contain any source molecule span
 #=====================================================================================
 
@@ -109,7 +114,7 @@ nAllEdges <- nrow(edges)
 # on target filter
 if(env$ON_TARGET != 0){ # no target filter
     edges <- switch(env$ON_TARGET,
-        edges[TARGET_CLASS != '--'], # at least one end in padded target
+        edges[TARGET_CLASS != '--'],     # at least one end in padded target
         edges[!grepl('-', TARGET_CLASS)] # both ends in padded target
     )    
 }
@@ -127,9 +132,6 @@ nAnalyzed <- nrow(edges)
 nTooSmall <- nOnTargetEdges - nAnalyzed
 
 # report some stats
-reportStat <- function(value, message){
-    message(paste(value, message, sep = "\t"))
-}
 reportStat(nAllEdges,       "input edges")
 reportStat(nOffTargetEdges, "edges rejected by on-target requirements")
 reportStat(nTooSmall,       "edges rejected because the SV is too small")
@@ -141,10 +143,7 @@ nSvTableCol <- length(find$structural_variants)
 rejectEdge  <- function(reason) paste(rep(reason, nSvTableCol), collapse = "\t")
 followedJxn <- rejectEdge(NA)
 SV_ID <- 0
-edgesProcessed <- 0
 processEdge <- function(i){
-    if((edgesProcessed %% round(nAnalyzed / 10, 0)) == 0) message(paste(edgesProcessed, 'edges processed'))
-    edgesProcessed <<- edgesProcessed + 1
     
     # parse the query junction
     junction <- edges[i, ]

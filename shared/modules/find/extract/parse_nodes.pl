@@ -91,6 +91,7 @@ my $gapDelLimit =  2 * $MAX_TLEN - 2 * $READ_LEN; # these are conservative, i.e.
 my $gapDupLimit = -2 * $READ_LEN;
 my $collapseStrands = ($LIBRARY_TYPE eq 'TruSeq'); # otherwise, Nextera, where same signatures on opposite strands are unique source molecules
 my $isFR = !$IS_COLLATED;
+my @outerPos;
 
 #===================================================================================================
 # top level molecule parsers, called by main thread loop
@@ -127,8 +128,8 @@ sub parseMergedSplit {
         $alns[$alnIs[0]][RNAME],      $alns[$alnIs[$#alnIs]][RNAME], 
         $$outData1s[$alnIs[0]][_POS], $outData2[_POS]
     );
+    printOuterEndpoints(@alns[$alnIs[0], $alnIs[$#alnIs]], $$outData1s[$alnIs[0]], \@outData2);     
     printSequencedJunctions(@alns[@alnIs]); 
-    printOuterEndpoints(@alns[$alnIs[0], $alnIs[$#alnIs]], $$outData1s[$alnIs[0]], \@outData2);    
 }
 #---------------------------------------------------------------------------------------------------
 # an unmerged FR read pair with no split alignments (i.e., exactly one aln each read)
@@ -151,8 +152,8 @@ sub parseUnmergedHiddenJunction {
         $alns[$read1][RNAME], $alns[$read2][RNAME], 
         $outData1[_POS],      $outData2[_POS]
     );
+    printOuterEndpoints($alns[$read1], $alns[$read2], \@outData1, \@outData2); # actions based on inner portion of molecule    
     printJunction(GAP, $revSide2, $fwdSide2, $alns[$read1], $alns[$read2]);      
-    printOuterEndpoints($alns[$read1], $alns[$read2], \@outData1, \@outData2); # actions based on inner portion of molecule
 }
 #---------------------------------------------------------------------------------------------------
 # an unmerged FR read-pair that sequenced an SV junction in >=1 of its reads (the most complex alignment patterns land here)
@@ -198,6 +199,10 @@ sub parseUnmergedSplit {
         $alnsByRead[READ1][$outI1][RNAME], $alnsByRead[READ2][$outI2][RNAME], 
         $outDatas[READ1][$outI1][_POS],    $outDatas[READ2][$outI2][_POS]
     );
+    printOuterEndpoints(
+        $alnsByRead[READ1][$outI1], $alnsByRead[READ2][$outI2],
+          $outDatas[READ1][$outI1],   $outDatas[READ2][$outI2]
+    );    
     # actions based on inner portion of molecule
     # all junctions in all split reads
     foreach my $read(READ1, READ2){
@@ -208,10 +213,6 @@ sub parseUnmergedSplit {
     my $innI1 = $alnIs[READ1][$#{$alnIs[READ1]}];
     my $innI2 = $alnIs[READ2][$#{$alnIs[READ2]}]; 
     printJunction(GAP, $revSide2, $fwdSide2, $alnsByRead[READ1][$innI1], $alnsByRead[READ2][$innI2]); 
-    printOuterEndpoints(
-        $alnsByRead[READ1][$outI1], $alnsByRead[READ2][$outI2],
-          $outDatas[READ1][$outI1],   $outDatas[READ2][$outI2]
-    );
 } 
 #===================================================================================================
 
@@ -387,10 +388,17 @@ sub setEndpointData {
 #---------------------------------------------------------------------------------------------------
 sub printOuterEndpoints { 
     my ($outAln1, $outAln2, $outData1, $outData2) = @_; 
-    my $node1 = getNodeSignature($outAln1, UMI1, $outData1);
-    my $node2 = getNodeSignature($outAln2, UMI2, $outData2);
+
+    # generate two identifying outer positions per source molecule
+    # does not have to be accurate, just sufficiently identifying for further duplicate purging downstream
+    @outerPos = (
+        $$outData1[_POS] + $$outData1[_CLIP],
+        $$outData2[_POS] + $$outData2[_CLIP],
+    );
 
     # prepare for setting SHARED_PROPER downstream
+    my $node1 = getNodeSignature($outAln1, UMI1, $outData1);
+    my $node2 = getNodeSignature($outAln2, UMI2, $outData2);    
     if($endpointsH){
         my $mol = join("\t", @mol[MOL_ID, MOL_CLASS]); # molecule properties
         print $endpointsH join("\t", $node1, $mol), "\n";
@@ -454,7 +462,8 @@ sub printNode {
         $$nodeOther[_CHROM_SIDE],                    # node-level data for its partner node (other side of SV, or opposite end of molecule)
         $jxnType, $jxnN,                             # edge/junction-level data
         @$aln[FLAG, POS, MAPQ, CIGAR, SEQ], $alnN,   # alignment-level data
-        @mol[MOL_ID, $umi, IS_MERGED..SHARED_PROPER] # molecule-level data
+        @mol[MOL_ID, $umi, IS_MERGED..SHARED_PROPER],# molecule-level data
+        @outerPos
     ), "\n";
 }
 #===================================================================================================

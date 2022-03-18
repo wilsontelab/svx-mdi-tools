@@ -1,7 +1,6 @@
 #=====================================================================================
 # describe a consensus SV based on sequence data from a set of molecules discovered as evidence
 # along the way, purge molecules that are considered false evidence
-# requires data.table
 #-------------------------------------------------------------------------------------
 getFractionMatchingBases <- function(seq1, seq2, fixedLength = NULL, side = NULL){
     if(is.null(fixedLength)){
@@ -21,8 +20,7 @@ getFractionMatchingBases <- function(seq1, seq2, fixedLength = NULL, side = NULL
 #-------------------------------------------------------------------------------------
     # initialize a blank/null junction
 #-------------------------------------------------------------------------------------
-characterizeSVJunction <- function(nodes, nJunctionMolecules){ # nodes includes all nodes (not just junction nodes)
-                                                               # pre-sorted by NODE_N
+characterizeSVJunction <- function(nodes, nJunctionMolecules){ # nodes pre-sorted by NODE_N
     call <- list(
         rejected = FALSE,
         JXN_TYPE = "",
@@ -39,17 +37,17 @@ characterizeSVJunction <- function(nodes, nJunctionMolecules){ # nodes includes 
     # examine all SV-flanking molecules for nearly-identical molecule spans
     # aggregate presumed duplicate molecules to prevent them from appearing as falsely independent evidence
 #-------------------------------------------------------------------------------------
-    # identify and sort the molecules with two alignments flanking the SV junction
-    usableNodes <- nodes[, IS_JUNCTION_NODE & NODE_CLASS != nodeClasses$OUTER_CLIP]
-    if(!any(usableNodes)) return( rejectJunction('noUsableNodes') )
-    splitGapNodes <- nodes[usableNodes]   
-    splitGapKeys  <- splitGapNodes[, unique(junctionKey)]      
+    junctionKeys <- nodes[, unique(junctionKey)] # MOL_ID:JXN_N   
     nodes[, N_COLLAPSED := 1] # when nothing is purged, every node represents 1 molecule
-    if(length(splitGapKeys) > 1){ # singleton-molecule SVs need no action
+    if(length(junctionKeys) > 1){ # singleton-molecule SVs need no action
 
-        # generate two identifying molecule outer positions per junction, one position per each node
-        x <- splitGapNodes[, {
+        # generate two identifying outer positions per molecule-junction, one position per each node
+        x <- nodes[, {
+
+
             outPos <- pos[1:2] - nchar(SEQ[1:2]) + CLIP_LEN[1:2] # does not have to be accurate, just identifying
+
+
             list(
                 outPos1 = outPos[1],
                 outPos2 = outPos[2],
@@ -58,7 +56,7 @@ characterizeSVJunction <- function(nodes, nJunctionMolecules){ # nodes includes 
         }, by = "junctionKey"]  
 
         # calculate the euclidean distance between the endpoints of each pair of molecules
-        pairs <- setDT(as.data.frame(t(combn(splitGapKeys, 2)), stringsAsFactors = FALSE))
+        pairs <- setDT(as.data.frame(t(combn(junctionKeys, 2)), stringsAsFactors = FALSE))
         setnames(pairs, c('junctionKey1', 'junctionKey2'))
         pairs[, dist := apply(pairs, 1, function(ij) x[
             ij,
@@ -82,22 +80,20 @@ characterizeSVJunction <- function(nodes, nJunctionMolecules){ # nodes includes 
                 }))
                 bestJunctionKey  <- pairs[i, ..bestJ][[1]]         
                 worstJ <- if(bestJ == 1) 2 else 1    
-                worstJunctionKey <- pairs[i, ..worstJ][[1]]   
+                worstJunctionKey <- pairs[i, ..worstJ][[1]]
   
                 # ascend up any prior chain to the best of a set of colliding molecules
                 while(!is.null(remappedJunctionKeys[[bestJunctionKey]])) {
                     bestJunctionKey <- remappedJunctionKeys[[bestJunctionKey]]
                 }
-                remappedJunctionKeys[[worstJunctionKey]] <- bestJunctionKey # the molecule that holds a rejected molecules counts # nolint
+                remappedJunctionKeys[[worstJunctionKey]] <- bestJunctionKey # the molecule that holds a rejected molecule's counts # nolint
   
                 # keep track of how many molecules were collapsed into others
-                nodes[junctionKey == bestJunctionKey, ':='(
-                    N_COLLAPSED = N_COLLAPSED + 1
-                )]
+                nodes[junctionKey == bestJunctionKey, N_COLLAPSED := N_COLLAPSED + 1]
 
                 # add to the list of rejected molecules
                 rejectedMoleculeIds <- append(rejectedMoleculeIds,
-                                              splitGapNodes[junctionKey == worstJunctionKey, MOL_ID[1]])
+                                              nodes[junctionKey == worstJunctionKey, MOL_ID[1]])
             }       
 
             # finally completely purge the presumed duplicate _molecules_ from the nodes list

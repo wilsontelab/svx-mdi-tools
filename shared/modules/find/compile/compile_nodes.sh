@@ -58,8 +58,11 @@ IS_OUTER_CLIP2=23
 TARGET_CLASS=24
 SHARED_PROPER=25
 #---------------
-CHROM_STRAND=26
-POSITION=27
+OUT_POS_1=26
+OUT_POS_2=27
+#---------------
+CHROM_STRAND=28
+POSITION=29
 #-----------------------------------------------------------------
 # endpoint columns
 #-----------------------------------------------------------------
@@ -69,9 +72,14 @@ EP_MOL_CLASS=3 # P or V
 #-----------------------------------------------------------------
 # node classes
 #-----------------------------------------------------------------
-GAP=0 # node classes
+GAP=0
 SPLIT=1
 OUTER_CLIP=2
+#-----------------------------------------------------------------
+# molecule classes
+#-----------------------------------------------------------------
+IS_PROPER='P'
+IS_SV='V'
 #-----------------------------------------------------------------
 JXN_NODES='$'$NODE_CLASS'!='$OUTER_CLIP'&&$'$JXN_TYPE'!="P"'
 CLIP_NODES='$'$NODE_CLASS'=='$OUTER_CLIP'&&$'$CLIP_LEN'>='$MIN_CLIP
@@ -130,7 +138,7 @@ $SLURP_OUT $COMPILE_PREFIX.junction_edges.gz
 checkPipe
 
 #-----------------------------------------------------------------
-echo "indexing SV junction nodes by coordinate proximity"
+echo "indexing SV junction nodes by coordinate proximity" # used to collect junction-flanking evidence
 #-----------------------------------------------------------------
 $SLURP_NODES |
 awk 'BEGIN{OFS="\t"}'$JXN_NODES'{
@@ -143,7 +151,7 @@ $PERL_COMPILE/index_proximity.pl
 checkPipe
 
 #-----------------------------------------------------------------
-echo "indexing SV clip nodes by name"
+echo "indexing outer clip nodes by name" # used to add outer clips as SV evidence
 #-----------------------------------------------------------------
 $SLURP_NODES |
 awk $CLIP_NODES |
@@ -151,6 +159,15 @@ $SORT -k$NODE,$NODE |
 $MASK_NODES | 
 $PERL_COMPILE/index_clips.pl
 checkPipe
+
+# #-----------------------------------------------------------------
+# echo "indexing outer clip nodes by molecule" # used to suppress molecule duplicates as unique SV evidence
+# #-----------------------------------------------------------------
+# $SLURP_NODES |
+# awk $CLIP_NODES'&&$'$MOL_CLASS'=="'$IS_SV'"' |
+# $SORT -k$MOL_ID,$MOL_ID"n" | 
+# $PERL_COMPILE/index_clips.pl 'molecule'
+# checkPipe
 
 # #-----------------------------------------------------------------
 # echo "indexing SV nodes by molecule"

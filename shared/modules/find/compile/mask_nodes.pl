@@ -38,7 +38,9 @@ use constant {
     IS_OUTER_CLIP2 => 22,
     TARGET_CLASS => 23,
     SHARED_PROPER => 24,
-    # sometimes, not always, is additional columns
+    #---------------
+    OUT_POS_1 => 25,
+    OUT_POS_2 => 26,
 };
 
 # working variables
@@ -56,8 +58,7 @@ close $endpointH;
 
 # fill the SHARED_PROPER column of a node stream
 while(my $line = <STDIN>){
-    chomp $line;
     my @node = split("\t", $line);
     $node[SHARED_PROPER] = $knownEndpoints{$node[MOL_ID]} || 0;
-    print join("\t", @node), "\n";
+    print join("\t", @node);
 }

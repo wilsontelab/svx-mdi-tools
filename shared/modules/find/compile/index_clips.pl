@@ -34,17 +34,20 @@ use constant {
     IS_OUTER_CLIP2 => 22,
     TARGET_CLASS => 23,
     SHARED_PROPER => 24,
+    #---------------
+    OUT_POS_1 => 25,
+    OUT_POS_2 => 26,
 };
 
 # working variables
-my ($prevName, $offset, $chunkSize) = ("", 0, 0);
+my ($prevKey, $offset, $chunkSize) = ("", 0, 0);
 
 # output file handles
 my $outFile = "$ENV{COMPILE_PREFIX}.outer_clips.txt";
 my $idxFile = join(".", $outFile, 'index');
 open my $outH, "|-", "slurp -s 50M -o $outFile" or die "could not open $outFile for writing\n";
 open my $idxH, "|-", "slurp -s 50M -o $idxFile" or die "could not open $idxFile for writing\n";
-print $idxH join("\t", qw(node offset size)), "\n";
+print $idxH join("\t", qw(key offset size)), "\n";
 
 # loop pre-sorted nodes and commit as chrom-strand-specific proximity groups
 # i.e., for each node, index those nodes within a distance consistent with a single junction
@@ -53,19 +56,19 @@ while(my $line = <STDIN>){
     my @f = split("\t", $line, CLIP_SEQ);
 
     # break condition between node signatures
-    if($prevName and $prevName ne $f[NODE]){
-        print $idxH join("\t", $prevName, $offset, $chunkSize), "\n";
+    if($prevKey and $prevKey ne $f[NODE]){
+        print $idxH join("\t", $prevKey, $offset, $chunkSize), "\n";
         $offset += $chunkSize;
         $chunkSize = 0;
     }
     
     # add the current node to the growing set
-    $prevName = $f[NODE];
+    $prevKey = $f[NODE];
     $chunkSize += length($line);
 }
 
 # commit the last set of nodes
-print $idxH join("\t", $prevName, $offset, $chunkSize), "\n";
+print $idxH join("\t", $prevKey, $offset, $chunkSize), "\n";
 
 # finish up
 close $outH;

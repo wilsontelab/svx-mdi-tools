@@ -11,7 +11,7 @@ edgeTypes <- list(
     termination = 'T'
 )
 nodeClasses <- list(
-    GAP           = 0, # SV evidence type codes, i.e. node classes
+    GAP           = 0, # SV evidence type codes, i.e., node classes
     SPLIT         = 1,
     OUTER_CLIP    = 2,
     RECONSTRUCTED = 3
@@ -39,34 +39,46 @@ junctionTypes <- list(
 #----------------------------------------------------------------------
 compile <- list(
     edges = list(
-        'NODE1' = 'character',
-        'NODE2' = 'character',
-        'JXN_TYPE' = 'character',
-        'MOL_IDS' = 'character',
-        'COUNT' = 'integer',
+        'NODE_CLASS'     = 'integer',
+        'NODE1'          = 'character',
+        'NODE2'          = 'character',
+        'JXN_TYPE'       = 'character',
+        'TARGET_CLASS'   = 'character',
+        'MOL_IDS'        = 'character',
+        'COUNT'          = 'integer',
         'COUNT_DISTINCT' = 'integer' 
     ),
     nodes = list(
-        'NODE' = 'character', # node-level data
-        'CLIP_LEN' = 'integer',
-        'CLIP_SEQ' = 'character',
-        'NODE_CLASS' = 'integer',
+        'NODE'           = 'character', # node-level data
+        'CLIP_LEN'       = 'integer',
+        'CLIP_SEQ'       = 'character',
+        'NODE_CLASS'     = 'integer',
+        'PARTNER'        = 'character',
         #---------------
-        'JXN_TYPE' = 'character', # edge/junction-level data
-        'JXN_N' = 'integer',
+        'JXN_TYPE'       = 'character', # edge/junction-level data
+        'JXN_N'          = 'integer',
         #---------------
-        'FLAG' = 'integer', # alignment-level data
-        'POS' = 'integer',
-        'MAPQ' = 'integer',
-        'CIGAR' = 'character',
-        'SEQ' = 'character',
-        'ALN_N' = 'integer',
+        'FLAG'           = 'integer', # alignment-level data
+        'POS'            = 'integer',
+        'MAPQ'           = 'integer',
+        'CIGAR'          = 'character',
+        'SEQ'            = 'character',
+        'ALN_N'          = 'integer',
         #---------------
-        'MOL_ID' = 'character', # molecule-level data ######### integer
-        'MOL_CLASS' = 'character',
-        'MOL_STRAND' = 'integer',
+        'MOL_ID'         = 'character', # molecule-level data ######### integer
+        'UMI'            = 'integer',
+        'IS_MERGED'      = 'integer',
+        'IS_DUPLEX'      = 'integer',
+        'STRAND_COUNT1'  = 'integer',
+        'STRAND_COUNT2'  = 'integer',
+        'MOL_CLASS'      = 'character',
+        'MOL_STRAND'     = 'integer',
         'IS_OUTER_CLIP1' = 'integer',
-        'IS_OUTER_CLIP2' = 'integer'
+        'IS_OUTER_CLIP2' = 'integer',
+        'TARGET_CLASS'   = 'character',
+        'SHARED_PROPER'  = 'integer',
+        'OUT_POS1'       = 'integer',
+        'OUT_POS2'       = 'integer'
     )
 )
 
@@ -75,52 +87,52 @@ compile <- list(
 #----------------------------------------------------------------------
 find <- list(
     structural_variants = list( 
-        SV_ID = "integer", # SV identifiers
-        JUNCTION_NAME = "character",  # the query junction
-        MATCHING_NAMES = "character", # e.g. gaps that match a split query (should NOT be present as a JUNCTION_NAME in any row) # nolint
-        OTHER_NAMES = "character",    # other non-matching SV junctions carried in the same molecules
+        SV_ID           = "integer",   # SV identifiers
+        JUNCTION_NAME   = "character", # the query junction
+        MATCHING_NAMES  = "character", # e.g. gaps that match a split query (should NOT be present as a JUNCTION_NAME in any row) # nolint
+        OTHER_NAMES     = "character", # other non-matching SV junctions carried in the same molecules
         #-------------
-        JXN_TYPE = "character",
+        JXN_TYPE        = "character",
         #-------------
-        CHROM_1 = "character", # node-level data
-        SIDE_1 = "character",
-        POS_1 = "integer",
-        CHROM_2 = "character",
-        SIDE_2 = "character",
-        POS_2 = "integer",
+        CHROM_1         = "character", # node-level data
+        SIDE_1          = "character",
+        POS_1           = "integer",
+        CHROM_2         = "character",
+        SIDE_2          = "character",
+        POS_2           = "integer",
         #-------------
-        JXN_SEQ = "character", # joint (re)construction data
-        MERGE_LEN = "integer",
-        FAIDX_PADDING = "integer",
-        GEN_REF_1 = "character",
-        GEN_REF_2 = "character",
+        JXN_SEQ         = "character", # joint (re)construction data
+        MERGE_LEN       = "integer",
+        FAIDX_PADDING   = "integer",
+        GEN_REF_1       = "character",
+        GEN_REF_2       = "character",
         #-------------
-        MICROHOM_LEN = "integer", # joint data
-        MICROHOM_MATCH = "integer",
-        JXN_BASES = "character",
-        SV_SIZE = "integer",     
+        MICROHOM_LEN    = "integer",   # joint data
+        MICROHOM_MATCH  = "integer",
+        JXN_BASES       = "character",
+        SV_SIZE         = "integer",     
         #-------------
-        N_TOTAL = "integer", # evidence counts
-        N_SPLITS = "integer",
-        N_GAPS = "integer",
-        N_OUTER_CLIPS = "integer",
+        N_TOTAL         = "integer",   # evidence counts
+        N_SPLITS        = "integer",
+        N_GAPS          = "integer",
+        N_OUTER_CLIPS   = "integer",
         #------------- 
-        SEQ_LEN = "character", # is TLEN iff IS_MERGED == TRUE, otherwise is first READ_LEN (e.g. 151)
-        MAPQ = 'character',
+        SEQ_LEN         = "character", # is TLEN iff IS_MERGED == TRUE, otherwise is first READ_LEN (e.g. 151)
+        MAPQ            = 'character',
         #-------------
-        CHUNK_OFFSET = "integer", # index into the all_nodes evidence file
-        CHUNK_SIZE = "integer"
+        CHUNK_OFFSET    = "integer",   # index into the all_nodes evidence file
+        CHUNK_SIZE      = "integer"
     ),
     all_nodes = list(
         # logicals here are boolean integers, so they print as 0/1 (for a bit of file space compaction)
-        SV_ID = "integer", # numeric identifier for the SV junction
-        NODE_N = "integer", # which SV junction node this matched
+        SV_ID            = "integer", # numeric identifier for the SV junction
+        NODE_N           = "integer", # which SV junction node this matched
         IS_JUNCTION_NODE = "integer", # node is consistent with the query SV junction (false for non-SV nodes in molecules) # nolint
-        IS_SEED_NODE = "integer", # node is an exact match to the the seed/query junction
-        IS_REF_NODE = "integer", # this node was one of two used to characterize the junction
-        IS_RC = "integer", # this SEQ was rc'ed as it was an inversion outer clip
-        IS_REPEAT = "integer", # set in a later step to TRUE/1 if node was already claimed by a lower numbered SV
-        N_COLLAPSED = "integer" # number of other initial molecules that were merged into this one as presumed duplicates # nolint
+        IS_SEED_NODE     = "integer", # node is an exact match to the the seed/query junction
+        IS_REF_NODE      = "integer", # this node was one of two used to characterize the junction
+        IS_RC            = "integer", # this SEQ was rc'ed as it was an inversion outer clip
+        IS_REPEAT        = "integer", # set in a later step to TRUE/1 if node was already claimed by a lower numbered SV
+        N_COLLAPSED      = "integer"  # number of other initial molecules that were merged into this one as presumed duplicates # nolint
     )
 )
 find$all_nodes <- c(find$all_nodes, compile$nodes)
