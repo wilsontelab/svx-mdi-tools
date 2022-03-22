@@ -43,15 +43,11 @@ characterizeSVJunction <- function(nodes, nJunctionMolecules){ # nodes pre-sorte
 
         # generate two identifying outer positions per molecule-junction, one position per each node
         x <- nodes[, {
-
-
-            outPos <- pos[1:2] - nchar(SEQ[1:2]) + CLIP_LEN[1:2] # does not have to be accurate, just identifying
-
-
             list(
-                outPos1 = outPos[1],
-                outPos2 = outPos[2],
-                N_SEED_NODE = sum(IS_SEED_NODE) # for determining which molecules to keep
+                OUT_POS1 = OUT_POS1[1],
+                OUT_POS2 = OUT_POS2[1],
+                N_SEED_NODE = sum(IS_SEED_NODE), # for determining which molecules to keep
+                STRAND_COUNT = STRAND_COUNT1[1] + STRAND_COUNT2[1]
             )
         }, by = "junctionKey"]  
 
@@ -60,10 +56,10 @@ characterizeSVJunction <- function(nodes, nJunctionMolecules){ # nodes pre-sorte
         setnames(pairs, c('junctionKey1', 'junctionKey2'))
         pairs[, dist := apply(pairs, 1, function(ij) x[
             ij,
-            dist(.SD[, .(outPos1, outPos2)]),
+            dist(.SD[, .(OUT_POS1, OUT_POS2)]),
             on = "junctionKey"
         ])]    
- 
+
         # for all colliding pairs, keep the molecule with the best read evidence and add other molecules to its counts
         collisionIs <- pairs[, .I[dist < env$PURGE_DISTANCE]]
         if(length(collisionIs) > 0){
@@ -73,12 +69,12 @@ characterizeSVJunction <- function(nodes, nJunctionMolecules){ # nodes pre-sorte
    
                 # determine which molecule of the colliding pair to keep
                 bestJ <- which.max(sapply(paste0('junctionKey', 1:2), function(jkCol){
-                    x[ # best = give preference to SEED junctions
+                    x[ # best = highest STRAND_COUNT, but with preference to SEED junctions
                         junctionKey == pairs[i, ..jkCol][[1]],
-                        N_SEED_NODE
+                        N_SEED_NODE * 1e4 + STRAND_COUNT
                     ]
                 }))
-                bestJunctionKey  <- pairs[i, ..bestJ][[1]]         
+                bestJunctionKey <- pairs[i, ..bestJ][[1]]         
                 worstJ <- if(bestJ == 1) 2 else 1    
                 worstJunctionKey <- pairs[i, ..worstJ][[1]]
   
@@ -87,16 +83,22 @@ characterizeSVJunction <- function(nodes, nJunctionMolecules){ # nodes pre-sorte
                     bestJunctionKey <- remappedJunctionKeys[[bestJunctionKey]]
                 }
                 remappedJunctionKeys[[worstJunctionKey]] <- bestJunctionKey # the molecule that holds a rejected molecule's counts # nolint
-  
-                # keep track of how many molecules were collapsed into others
-                nodes[junctionKey == bestJunctionKey, N_COLLAPSED := N_COLLAPSED + 1]
+
+                # add the worst strand counts to the best molecule and count how often we did this
+                worstCount1 <- splitGapNodes[junctionKey == worstJunctionKey, STRAND_COUNT1[1]]
+                worstCount2 <- splitGapNodes[junctionKey == worstJunctionKey, STRAND_COUNT2[1]]
+                nodes[junctionKey == bestJunctionKey, ':='(
+                    STRAND_COUNT1 = STRAND_COUNT1 + worstCount1,
+                    STRAND_COUNT2 = STRAND_COUNT2 + worstCount2,
+                    N_COLLAPSED   = N_COLLAPSED + 1
+                )]
 
                 # add to the list of rejected molecules
                 rejectedMoleculeIds <- append(rejectedMoleculeIds,
                                               nodes[junctionKey == worstJunctionKey, MOL_ID[1]])
-            }       
+            }   
 
-            # finally completely purge the presumed duplicate _molecules_ from the nodes list
+            # finally, completely purge the presumed duplicate _molecules_ from the nodes list
             nodes <- nodes[!(MOL_ID %in% rejectedMoleculeIds)]
         }
     }    
@@ -105,12 +107,8 @@ characterizeSVJunction <- function(nodes, nJunctionMolecules){ # nodes pre-sorte
     # select one molecule as a reference for characterizing the junction
     # make sure it has the same signature as the original seed junction for the network
 #-------------------------------------------------------------------------------------
-    usableNodes <- nodes[, # splits can always completely sequence a junction, prefer them
-        IS_JUNCTION_NODE & NODE_CLASS == nodeClasses$SPLIT
-    ]
-    if(!any(usableNodes)) usableNodes <- nodes[, # gaps can only approximately locate a junction
-        IS_JUNCTION_NODE & NODE_CLASS == nodeClasses$GAP
-    ] 
+    usableNodes <- nodes[, NODE_CLASS == nodeClasses$SPLIT] # splits can always completely sequence a junction, prefer them # nolint
+    if(!any(usableNodes)) usableNodes <- nodes              # gaps can only approximately locate a junction
     # for splits and gaps, prefer seed junctions, i.e., molecules of the type used to build the SV network    
     # for splits, prefer longest clip on the shorter-clip side (promotes long molecules with central junctions)
     # for gaps, prefer molecules with the longest clips on either side
@@ -131,13 +129,27 @@ characterizeSVJunction <- function(nodes, nJunctionMolecules){ # nodes pre-sorte
     refNodes <- nodes[usableNodes & junctionKey == bestJxnKey] # always exactly two nodes that help build the call set 
     call$JXN_TYPE <- refNodes[1, JXN_TYPE]
     if(call$JXN_TYPE == junctionTypes$UNKNOWN) return(call)
-    
+
 #-------------------------------------------------------------------------------------
     # ensure that the reference nodes are properly paired and ordered
 #-------------------------------------------------------------------------------------
     if(refNodes[, paste0(NODE_N, collapse = ",") != "1,2"]) {
         return(list(rejected = TRUE, reason = rejectionReasons$tooFewRefNodes))
-    }      
+    } 
+
+#-------------------------------------------------------------------------------------
+    # add any outer clips that match inner clips at the reference nodes (whether reference in a split or a gap)
+#-------------------------------------------------------------------------------------
+    for(nodeN in 1:2){
+        
+        refNodes[NODE_N == nodeN]
+        if(isSplit) {
+            if(splits) nodes <- rbind(nodes, x)
+        }
+        
+    }
+
+    
 
 #-------------------------------------------------------------------------------------
     # flip inversion outer clips as needed to also put them on the canonical strand
