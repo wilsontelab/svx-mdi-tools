@@ -24,7 +24,7 @@ characterizeSVJunction <- function(nodes, nJunctionMolecules){ # nodes pre-sorte
     call <- list(
         rejected = FALSE,
         JXN_TYPE = "",
-        JXN_SEQ = NA,   # sequence of the single read or merged reads used to call a junction (not all sequence evidence) # nolint
+        JXN_SEQ = NA,   # sequence of the single read or merged reads used to call a junction # nolint
         MERGE_LEN = NA, # number of merged bases, can use as flag for reconstructed junctions
         MICROHOM_LEN = 0,
         MICROHOM_MATCH = NA,
