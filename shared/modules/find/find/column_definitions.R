@@ -65,7 +65,7 @@ compile <- list(
         'SEQ'            = 'character',
         'ALN_N'          = 'integer',
         #---------------
-        'MOL_ID'         = 'character', # molecule-level data ######### integer
+        'MOL_ID'         = 'integer', # molecule-level data 
         'UMI'            = 'integer',
         'IS_MERGED'      = 'integer',
         'IS_DUPLEX'      = 'integer',
@@ -127,7 +127,7 @@ find <- list(
         # logicals here are boolean integers, so they print as 0/1 (for a bit of file space compaction)
         SV_ID            = "integer", # numeric identifier for the SV junction
         NODE_N           = "integer", # which SV junction node this matched
-        IS_JUNCTION_NODE = "integer", # node is consistent with the query SV junction (false for non-SV nodes in molecules) # nolint
+        # IS_JUNCTION_NODE = "integer", # node is consistent with the query SV junction (false for non-SV nodes in molecules) # nolint
         IS_SEED_NODE     = "integer", # node is an exact match to the the seed/query junction
         IS_REF_NODE      = "integer", # this node was one of two used to characterize the junction
         IS_RC            = "integer", # this SEQ was rc'ed as it was an inversion outer clip

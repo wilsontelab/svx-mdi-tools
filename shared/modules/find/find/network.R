@@ -133,8 +133,7 @@ followSvJunction <- function(edge){
         rejected = FALSE,
         junctionName = junctionName, # the query junction
         matchingJunctionNames = matchingJunctionNames, # includes junctionName  
-        nodes = junctionNodes, 
-        nJunctionMolecules = length(jxnMolIds) 
+        nodes = junctionNodes
     )  
 }
 #=====================================================================================

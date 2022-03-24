@@ -19,7 +19,8 @@ loadEnvVars(list(
         'GENOME',
         'COMPILE_PREFIX',
         'FIND_PREFIX', 
-        'SHM_DIR_WRK'
+        'SHM_DIR_WRK',
+        'GENOME_CHROMS'
     ),
     integer = c(
         'N_CPU',
@@ -45,6 +46,7 @@ options(scipen = 999) # prevent 1+e6 in printed, which leads to read.table error
 # source R scripts
 source(rUtilDir, 'utilities.R')
 #-------------------------------------------------------------------------------------
+rUtilDir <- file.path(env$GENOMEX_MODULES_DIR, 'utilities', 'R')
 sequenceUtilDir <- file.path(rUtilDir, 'sequence')
 source(file.path(sequenceUtilDir, 'general.R'))
 source(file.path(sequenceUtilDir, 'IUPAC.R'))
@@ -52,6 +54,7 @@ source(file.path(sequenceUtilDir, 'smith_waterman.R'))
 #-------------------------------------------------------------------------------------
 genomeUtilDir <- file.path(rUtilDir, 'genome')
 source(file.path(genomeUtilDir, 'general.R'))
+source(file.path(genomeUtilDir, 'chroms.R'))
 source(file.path(genomeUtilDir, 'faidx.R'))
 #-------------------------------------------------------------------------------------
 findStepDir <- file.path(env$ACTION_DIR, 'find')
@@ -61,6 +64,7 @@ sourceScript(findStepDir, 'network.R')
 sourceScript(findStepDir, 'analyze_junctions.R')
 #-------------------------------------------------------------------------------------
 # initialize genome
+setCanonicalChroms()
 loadFaidx(env$SHM_DIR_WRK)
 faidx_padding <- round(env$MAX_TLEN * 1.5, 0) # sufficient to contain any source molecule span
 #=====================================================================================
@@ -155,18 +159,16 @@ processEdge <- function(i){
     if(network$rejected) return( rejectEdge(network$reason) )
     
     # characterize the assembled junction
-    call <- characterizeSVJunction(network$nodes, network$nJunctionMolecules)
+    call <- characterizeSVJunction(network$nodes)
     if(call$rejected) return( rejectEdge(call$reason) )
 
     # get attributes of molecules and junction nodes in the network
-    molAgg_first <- call$nodes[ 
-        IS_JUNCTION_NODE == TRUE,
+    molAgg_first <- call$nodes[,
         lapply(.SD, function(v) v[1]),
         by = MOL_ID,
         .SDcols = molAggCols_first
     ]
-    molAgg_collapse <- call$nodes[ 
-        IS_JUNCTION_NODE == TRUE,
+    molAgg_collapse <- call$nodes[,
         lapply(.SD, paste, collapse = ":"),
         by = MOL_ID,
         .SDcols = molAggCols_collapse
@@ -180,17 +182,19 @@ processEdge <- function(i){
     # store indices for fast node retrieval
     index <- printNodes(SV_ID, call$nodes)
 
+    # revert chrom indices back to string names
+    call$refNodes[, chrom := revChromIndex[chrom]]
+
     # parse the filterable table of all SV junctions
     paste(  
         SV_ID,
         network$junctionName,
         paste(network$matchingJunctionNames, collapse = "::"),
-        paste(network$otherJunctionNames,    collapse = "::"),
         #-------------
         junction$TARGET_CLASS, # NB: _not_ the same as the _molecule_ target class attached to nodes
         call$JXN_TYPE,        
         #-------------
-        call$refNodes[1, chrom], # TODO: convert chrom indices back to string chroms
+        call$refNodes[1, chrom],
         call$refNodes[1, side],  
         call$refNodes[1, pos],
         call$refNodes[2, chrom],
@@ -219,9 +223,10 @@ processEdge <- function(i){
         molAgg_first[NODE_CLASS != nodeClasses$OUTER_CLIP, sum(SHARED_PROPER)],
         molAgg_first[                                    , sum(SHARED_PROPER)], 
         #-------------
+        paste(molAgg_first$IS_MERGED,  collapse = ","), # for distribution plots mostly
         paste(nchar(molAgg_first$SEQ), collapse = ","),
-        paste(molAgg_collapse$UMI,  collapse = ","),
-        paste(molAgg_collapse$MAPQ, collapse = ","),
+        paste(molAgg_collapse$UMI,     collapse = ","),
+        paste(molAgg_collapse$MAPQ,    collapse = ","),
         #-------------
         index$CHUNK_OFFSET,
         index$CHUNK_SIZE,

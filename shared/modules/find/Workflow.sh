@@ -40,7 +40,7 @@ runWorkflowStep 2 coverage coverage/coverage_map.sh
 runWorkflowStep 3 compile compile/compile_nodes.sh
 
 # find structural variants across extracted nodes and molecules
-# runWorkflowStep 4 find/find_junctions.sh
+runWorkflowStep 4 find/find_junctions.sh
 
 # clean up
 rm -rf $TMP_DIR_WRK

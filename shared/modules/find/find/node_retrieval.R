@@ -36,7 +36,8 @@ unpackNodeNames <- function(nodeNames){
         matrix(unlist(strsplit(nodeNames, '\\W')), ncol = 3, byrow = TRUE),
         stringsAsFactors = FALSE
     )
-    x[[3]] <- as.integer(x[[3]]) # TODO: treat chromI as integer?
+    x[[1]] <- as.integer(x[[1]])
+    x[[3]] <- as.integer(x[[3]])
     x
 }
 # load the edges we will analyze as a data.table
@@ -71,6 +72,7 @@ getNodes <- function(type, keyValues, unpackNodeNames = FALSE, setIsSVJunction =
         NULL
     })
     if(is.null(x)) return(NULL)
+    if(nchar(x) == 0) return(NULL)
 
     # build a data table of all unique matching nodes
     # concatenate the text block for each of a series of query nodes, then read as table

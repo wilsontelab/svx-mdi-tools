@@ -20,7 +20,7 @@ getFractionMatchingBases <- function(seq1, seq2, fixedLength = NULL, side = NULL
 #-------------------------------------------------------------------------------------
     # initialize a blank/null junction
 #-------------------------------------------------------------------------------------
-characterizeSVJunction <- function(nodes, nJunctionMolecules){ # nodes pre-sorted by NODE_N
+characterizeSVJunction <- function(nodes){ # nodes pre-sorted by node #
     call <- list(
         rejected = FALSE,
         JXN_TYPE = "",
@@ -108,7 +108,7 @@ characterizeSVJunction <- function(nodes, nJunctionMolecules){ # nodes pre-sorte
     # make sure it has the same signature as the original seed junction for the network
 #-------------------------------------------------------------------------------------
     usableNodes <- nodes[, NODE_CLASS == nodeClasses$SPLIT] # splits can always completely sequence a junction, prefer them # nolint
-    if(!any(usableNodes)) usableNodes <- nodes              # gaps can only approximately locate a junction
+    if(!any(usableNodes)) usableNodes <- TRUE               # gaps can only approximately locate a junction
     # for splits and gaps, prefer seed junctions, i.e., molecules of the type used to build the SV network    
     # for splits, prefer longest clip on the shorter-clip side (promotes long molecules with central junctions)
     # for gaps, prefer molecules with the longest clips on either side
@@ -133,42 +133,41 @@ characterizeSVJunction <- function(nodes, nJunctionMolecules){ # nodes pre-sorte
 #-------------------------------------------------------------------------------------
     # ensure that the reference nodes are properly paired and ordered
 #-------------------------------------------------------------------------------------
-    if(refNodes[, paste0(NODE_N, collapse = ",") != "1,2"]) {
+    if(refNodes[, paste0(nodeN, collapse = ",") != "1,2"]) {
         return(list(rejected = TRUE, reason = rejectionReasons$tooFewRefNodes))
     } 
 
 #-------------------------------------------------------------------------------------
     # add any outer clips that match inner clips at the reference nodes (whether reference in a split or a gap)
 #-------------------------------------------------------------------------------------
-    for(nodeN in 1:2){
-        
-        refNodes[NODE_N == nodeN]
-        if(isSplit) {
-            if(splits) nodes <- rbind(nodes, x)
-        }
-        
-    }
-
-    
-
-#-------------------------------------------------------------------------------------
-    # flip inversion outer clips as needed to also put them on the canonical strand
-#-------------------------------------------------------------------------------------
     nodes[, IS_RC := FALSE] # whether or not characterizeSVJunction applied RC to node sequences
-    if(refNodes[1, side] == refNodes[2, side]){
-        flipNode <- if(refNodes[1, side] == 'R') 1L else 2L       
-        flipNodeIs <- nodes[, .I[
-            IS_JUNCTION_NODE &
-            NODE_N == flipNode &
-            NODE_CLASS == nodeClasses$OUTER_CLIP
-        ]]      
-        nodes[flipNodeIs, ':='(
-            SEQ      = rc(SEQ),
-            CLIP_SEQ = rc(CLIP_SEQ),
-            CIGAR    = rc_cigar(CIGAR),
-            IS_RC    = TRUE
+    isInversion <- refNodes[1, side] == refNodes[2, side]
+    flipNode    <- if(refNodes[1, side] == 'R') 1L else 2L
+    for(i in 1:2){
+        if(refNodes[i, CLIP_LEN == 0]) next # unclipped gap nodes aren't informative for outer clip matching
+        outerClipNodes <- getNodes('outer_clips', refNodes[i, NODE], unpackNodeNames = TRUE)
+        if(is.null(outerClipNodes)) next
+        outerClipNodes[, ':='(
+            junctionKey = paste(MOL_ID, JXN_N, sep = ":"),
+            nodeN = i,
+            IS_SEED_NODE = FALSE,
+            N_COLLAPSED = 1,
+            IS_RC = FALSE
         )]
-    }       
+
+        # flip inversion outer clips as needed to also put them on the canonical strand
+        if(isInversion && flipNode == i){        
+            outerClipNodes[, ':='(
+                SEQ      = rc(SEQ),
+                CLIP_SEQ = rc(CLIP_SEQ),
+                CIGAR    = rc_cigar(CIGAR),
+                IS_RC    = TRUE
+            )]
+        } 
+
+        # merge inner and outer node evidence
+        nodes <- rbind(nodes, outerClipNodes) # TODO: sort clips in by nodeN ??
+    }
 
 #-------------------------------------------------------------------------------------
     # attempt to merge gap+clip-only junctions by using clipped nodes from different molecules
@@ -176,21 +175,20 @@ characterizeSVJunction <- function(nodes, nJunctionMolecules){ # nodes pre-sorte
 #-------------------------------------------------------------------------------------
     if(refNodes[1, NODE_CLASS] == nodeClasses$SPLIT) { 
         call$JXN_SEQ <- refNodes[1, SEQ] 
-    } else if(refNodes[1, NODE_CLASS] == nodeClasses$GAP &&
-              nJunctionMolecules > 1){ # process only relevant when there are multiple molecules but no splits
+    } else if(nodes[, length(unique(MOL_ID)) > 1]){ # only relevant when there are multiple molecules but no splits
         
         # get the two nodes with the greatest potential for overlap with the other side
-        # NB: merge nodes CAN include outer clips
-        mergeNodes <- do.call('rbind', lapply(1:2, function(nodeN){
-            d <- nodes[IS_JUNCTION_NODE & NODE_N == nodeN]  
-            i <- if(refNodes[nodeN, side] == 'L') d[, which.max(pos + CLIP_LEN)]
-                                            else d[, which.min(pos - CLIP_LEN)]
-            d[i] 
+        # NB: merge nodes can include outer clips
+        mergeNodes <- do.call('rbind', lapply(1:2, function(i){
+            d <- nodes[nodeN == i]
+            j <- if(refNodes[i, side] == 'L') d[, which.max(pos + CLIP_LEN)]
+                                         else d[, which.min(pos - CLIP_LEN)]
+            d[j] 
         }))
 
         # find the best overlap score over all possible merge registers
         if(mergeNodes[, all(CLIP_LEN > 0)] && # both nodes must be clipped, so that node positions characterize a junction # nolint
-           mergeNodes[1, MOL_ID] != mergeNodes[2, MOL_ID]){ # no point in continuing, had already tried to merge these nodes # nolint
+           mergeNodes[1, MOL_ID] != mergeNodes[2, MOL_ID]){ #  we've already tried to merge nodes from the same molecule # nolint
             maxOverlap <- mergeNodes[, min(nchar(SEQ))]
             if(env$MIN_MERGE_OVERLAP <= maxOverlap){
                 end1 <- nchar(mergeNodes[1, SEQ])        
@@ -217,16 +215,16 @@ characterizeSVJunction <- function(nodes, nJunctionMolecules){ # nodes pre-sorte
 
 #-------------------------------------------------------------------------------------
     # purge clip molecules
-    #   from gap-only/unsequenced junctions; they cannot be validated as meaningful
+    #   from unsequenced, gap-only junctions; they cannot be validated as meaningful
     #   that don't match the assembled junction on the unaligned side
 #-------------------------------------------------------------------------------------
-    clipIs <- nodes[, .I[IS_JUNCTION_NODE & NODE_CLASS == nodeClasses$OUTER_CLIP]]
+    clipIs <- nodes[, .I[NODE_CLASS == nodeClasses$OUTER_CLIP]]
     if(length(clipIs) > 0){
         discardClipIs <- if(is.na(call$JXN_SEQ)){
             clipIs # result therefore leaves only gap molecules
         } else {
             na.omit(sapply(clipIs, function(i){
-                nodeN <- nodes[i, NODE_N]
+                nodeN <- nodes[i, nodeN]
                 x <- getFractionMatchingBases(nodes[i, CLIP_SEQ],
                                               refNodes[nodeN, CLIP_SEQ],
                                               side = refNodes[nodeN, side])
@@ -234,15 +232,9 @@ characterizeSVJunction <- function(nodes, nJunctionMolecules){ # nodes pre-sorte
             }))
         }       
         if(length(discardClipIs) > 0) {
-            followedJunctions[nodes[discardClipIs, NODE]] <<- NULL # release lock, clip may match a subsequent junction
             nodes <- nodes[!(MOL_ID %in% nodes[discardClipIs, unique(MOL_ID)])] # remove clips as evidence
         }
     }
-
-    # TODO: build the junction consensus sequence using aligned and inserted bases (not clipped)
-    # essentially, this would become a consensus CIGAR string, i.e., consensus operation per reference base
-    # doing so requires building the matrix as constructed for junction plotting
-    # thus, can also defer this action (like plotting) for only junctions that the user later requests
 
 #-------------------------------------------------------------------------------------
     # characterize the junction when possible
