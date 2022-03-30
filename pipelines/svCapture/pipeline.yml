@@ -4,16 +4,14 @@ pipeline:
     description: "Characterize structural variant junctions in short-read, paired-end capture library(s)"
     version: v0.0.0
 suiteVersions:
-    genomex-mdi-tools: main
+    genomex-mdi-tools: main 
 actions:
     align:
         order: 1
-        thread: do
         module: genomex-mdi-tools//align/dna-paired-end  
     collate:
         order: 2
-        thread: do
-        condaFamilies:
+        condaFamilies: # matches align to share an environment
             - genomex-mdi-tools//base
             - genomex-mdi-tools//bwa
         optionFamilies: # these options apply to all actions
@@ -36,26 +34,51 @@ actions:
             recommended:
                 time-limit: 24:00:00
         description: "collate read groups, make consensuses, and re-align to genome"
-    find:
+    extract:
         order: 3
-        thread: do
-        module: find  
+        module: extract
+    find:
+        order: 4
+        module: find2
+    # find:
+    #     order: 3
+    #     module: find  
+    # compare:
+    #     order: 4
+    #     module: compare
+package:
+    find: # the pipeline action after which a data package should assembled
+        uploadType: svCapture # a signal to the Stage 2 framework regarding the package contents
+        files:
+            targetsBed:
+                type: bed
+                file: $TARGETS_BED          
+            environment: # TODO: probably replace this by printing READ_LEN MAX_TLEN or what have you to logs, carried into package automatically
+                type: json 
+                file: $FIND_PREFIX.environment.json
+            structuralVariants:
+                type: tab-delimited
+                file: $FIND_PREFIX.structural_variants.gz
+            allNodes:
+                type: tab-delimited
+                file: $FIND_PREFIX.all_nodes.txt
+            # manifestFile: # a sample manifest
+            #     type: manifest-file
+            #     manifestType: xxxx
+            #     file: $XXXX.xxxx   
 # package:
-#     uploadType: _template # a signal to the Stage 2 framework regarding the package contents
-#     packageAction: do     # the pipeline action after which the data package should assembled
-#     files:
-#         directoryContents:  # a contentFileType of any name you choose; 'manifestFile' has special meaning
-#             type: file-list # additional information as to the file type
-#             file: $DATA_FILE_PREFIX.directoryContents.txt
-#         dataFrame:
-#             type: sample-value-matrix
-#             header: true
-#             separator: comma
-#             file: $DATA_FILE_PREFIX.mtcars.csv
-#         # manifestFile: # a sample manifest
-#         #     type: manifest-file
-#         #     manifestType: xxxx
-#         #     file: $XXXX.xxxx
+#     compare: # the pipeline action after which a data package should assembled
+#         uploadType: svCapture # a signal to the Stage 2 framework regarding the package contents
+#         files:
+#             targetsBed:
+#                 type: bed
+#                 file: $TARGETS_BED          
+#             environment: # TODO: probably replace this by printing READ_LEN MAX_TLEN or what have you to logs, carried into package automatically
+#                 type: json 
+#                 file: $COMPARE_PREFIX.environment.json
+#             structuralVariants:
+#                 type: tab-delimited
+#                 file: $COMPARE_PREFIX.structural_variants.gz
 container:
     supported: false    # set to true if you maintain a container registry for this pipeline [false]
     registry:  ghcr.io  # domain name of your OCI-compatible, oras-accessible, container registry [ghcr.io]

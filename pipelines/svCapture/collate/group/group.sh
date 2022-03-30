@@ -24,4 +24,3 @@ perl $ACTION_DIR/consensus/make_consensus.pl # merge reads and build strand/mole
 checkPipe
 
 echo "done"
-echo

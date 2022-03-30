@@ -1,17 +1,11 @@
 #!/bin/bash
 
-# set and create file paths and prefixes
-export CONSENSUS_PREFIX=$DATA_FILE_PREFIX.consensus
-
-# set derivative environment variables
+# set derivative environment variables and file paths
 export GENOMEX_MODULES_DIR=$SUITES_DIR/genomex-mdi-tools/shared/modules
 source $GENOMEX_MODULES_DIR/genome/set_genome_vars.sh
 source $GENOMEX_MODULES_DIR/align/set_alignment_vars.sh
-
-# #########################
+source $MODULES_DIR/files/set_svx_paths.sh
 source $MODULES_DIR/library/set_library_vars.sh
-# export READ_LEN=151
-# export MAX_TLEN=862
 
 # set the sort parameters
 source $MODULES_DIR/utilities/shell/create_temp_dir.sh
@@ -25,4 +19,5 @@ runWorkflowStep 1 group group/group.sh
 runWorkflowStep 2 realign realign/realign.sh
 
 # clean up
-rm -r $TMP_DIR_WRK
+rm -fr $TMP_DIR_WRK
+# rm -f  $CONSENSUS_PREFIX.*.fq.gz

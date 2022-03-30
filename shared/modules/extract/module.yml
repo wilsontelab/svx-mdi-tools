@@ -1,0 +1,26 @@
+---
+version: v0.0.0 # optional, for internal tracking
+action: # required
+    condaFamilies:
+        - base
+        - genomex-mdi-tools//genome
+        - r-4.1
+    optionFamilies: # these options apply to all actions
+        - genomex-mdi-tools//genome
+        - genomex-mdi-tools//name-bam-file
+        - genomex-mdi-tools//bam-format
+        - genomex-mdi-tools//illumina-type
+        - genomex-mdi-tools//read-filtering
+        - genomex-mdi-tools//read-merging 
+        - clip
+        - genomex-mdi-tools//target-region
+    resources:
+        required:
+            total-ram: 32G
+        recommended: 
+            n-cpu: 8
+            ram-per-cpu: 4G
+    job-manager:
+        recommended:
+            time-limit: 4:00:00
+    description: "scan name-sorted reads for molecules with alignment discontinuities"

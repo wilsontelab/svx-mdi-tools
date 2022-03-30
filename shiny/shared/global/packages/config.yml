@@ -1,8 +1,9 @@
 #----------------------------------------------------------------------
 # R package dependencies common to many apps
 #----------------------------------------------------------------------
-# packages:
-#   R:  
-#     - xxx
-#     - yyy
-#   Bioconductor: null
+packages:
+  R:  
+    - data.table
+    - imager
+    - abind
+  Bioconductor: null

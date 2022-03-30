@@ -1,5 +1,5 @@
 ---
-# current R program versions as of November 2021
+# current R program versions as of March 2022
 
 # The packages contained in 'r-essentials' are not well documented.  
 # The following are known to be present:
@@ -15,5 +15,6 @@
 # need to add it to your pipeline's conda dependencies.
 
 dependencies:
-    - r-base=4.1.1
+    - r-base=4.1.2
     - r-essentials=4.1
+    - r-r.utils=2.11.0

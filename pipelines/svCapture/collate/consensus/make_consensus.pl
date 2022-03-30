@@ -98,8 +98,8 @@ sub makeConsensuses {
     # output file handles
     my $fqFile = "$CONSENSUS_PREFIX.$childN.fq.gz";
     open my $fqH, "|-", "gzip -c > $fqFile" or die "could not open $fqFile: $!\n";
-    my $nameMapFile = "$CONSENSUS_PREFIX.$childN.name_map.gz";
-    open my $nameMapH, "|-", "gzip -c > $nameMapFile" or die "could not open $nameMapFile: $!\n";
+    # my $nameMapFile = "$CONSENSUS_PREFIX.$childN.name_map.gz";
+    # open my $nameMapH, "|-", "gzip -c > $nameMapFile" or die "could not open $nameMapFile: $!\n";
 
     # run the read pairs
     my $readH = $readH[$childN];
@@ -165,11 +165,11 @@ sub makeConsensuses {
                 }  
             }
             
-            # save a table that correlates all primary bam QNAMEs to consensus molecule names
-            # format: molName QNAME1,QNAME2,QNAME3[,...]
-            print $nameMapH join("\t", $molName, join(",", map {
-                map { $$_[QNAME] } @{$readPairs[$_]}
-            } @strands)), "\n";
+            # # save a table that correlates all primary bam QNAMEs to consensus molecule names
+            # # format: molName QNAME1,QNAME2,QNAME3[,...]
+            # print $nameMapH join("\t", $molName, join(",", map {
+            #     map { $$_[QNAME] } @{$readPairs[$_]}
+            # } @strands)), "\n";
             
             # prepare for the next molecule
             @readPairs = ();
@@ -183,7 +183,7 @@ sub makeConsensuses {
     
     # finish thread
     close $fqH;
-    close $nameMapH;
+    # close $nameMapH;
     
     # print molecule counts
     printCount($nThreadMolecules, "nThreadMolecules-$childN", "total molecules processed in thread $childN");

@@ -23,4 +23,3 @@ slurp -s 250M -o $NAME_REALIGNED_BAM_FILE
 checkPipe
 
 echo "done"
-echo

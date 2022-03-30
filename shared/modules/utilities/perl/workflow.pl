@@ -109,4 +109,16 @@ sub runChildThreads_array {      # initialize children in parent
     }
 }
 
+#----------------------------------------------------------
+# file slurping
+#----------------------------------------------------------
+sub slurpFile {  # read the entire contents of a disk file into memory
+    my ($file) = @_;
+    local $/ = undef; 
+    open my $inH, "<", $file or die "could not open $file for reading: $!\n";
+    my $contents = <$inH>; 
+    close $inH;
+    return $contents;
+}
+
 1;

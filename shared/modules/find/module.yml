@@ -1,7 +1,6 @@
 ---
 version: v0.0.0 # optional, for internal tracking
 action: # required
-    environment: svx-find
     condaFamilies:
         - base
         - genomex-mdi-tools//genome
@@ -15,6 +14,7 @@ action: # required
         - genomex-mdi-tools//read-merging           
         - sv-filtering
         - genomex-mdi-tools//target-region
+        - test
     resources:
         required:
             total-ram: 32G
@@ -23,5 +23,5 @@ action: # required
             ram-per-cpu: 4G
     job-manager:
         recommended:
-            time-limit: 24:00:00
+            time-limit: 2:00:00
     description: "scan name-sorted reads for anomalous molecules and make SV calls"

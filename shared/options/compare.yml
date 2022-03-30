@@ -1,0 +1,10 @@
+---
+# options used during SV finding algorithms
+options: 
+    split-allowance: 
+        order: 1
+        short: W
+        type: integer
+        required: false
+        default: 5
+        description: "allow INN_POS of matching sequenced junctions to differ by this many bp
