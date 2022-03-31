@@ -11,7 +11,7 @@ actions:
         module: genomex-mdi-tools//align/dna-paired-end  
     collate:
         order: 2
-        condaFamilies: # matches align to share an environment
+        condaFamilies: # matches 'align' to share an environment
             - genomex-mdi-tools//base
             - genomex-mdi-tools//bwa
         optionFamilies: # these options apply to all actions
@@ -53,10 +53,10 @@ package:
             targetsBed:
                 type: bed
                 file: $TARGETS_BED          
-            environment: # TODO: probably replace this by printing READ_LEN MAX_TLEN or what have you to logs, carried into package automatically
-                type: json 
-                file: $FIND_PREFIX.environment.json
-            structuralVariants:
+            # environment: # TODO: probably replace this by printing READ_LEN MAX_TLEN or what have you to logs, carried into package automatically
+            #     type: json 
+            #     file: $FIND_PREFIX.environment.json
+            structuralVariants: # TODO: support read a glob of files, not just a single file path
                 type: tab-delimited
                 file: $FIND_PREFIX.structural_variants.gz
             allNodes:

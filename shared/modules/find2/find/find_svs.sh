@@ -2,21 +2,17 @@
 #     create node file indices used during SV event recontruction
 # expects:
 #     source $GENOMEX_MODULES_DIR/scan/set_genome_vars.sh
-#     source $GENOMEX_MODULES_DIR/scan/set_alignment_vars.sh
 #     extract/extract_nodes.sh
 #     compile/compile_nodes.sh
 # outputs:
-#     $FIND_PREFIX.find.all_nodes.txt
 #     $FIND_PREFIX.structural_variants.gz
+#     $FIND_PREFIX.find.junction_molecules.txt
 
 #-----------------------------------------------------------------
 # define common actions
 #-----------------------------------------------------------------
-SORT_RAM_INT=`echo $TOTAL_RAM_INT | awk '{print int(($1 - 2000000000) / 2)}'`
 SLURP_GZ="slurp -s 100M pigz -p $N_CPU -dc"
 SORT="sort --parallel=$N_CPU -T $TMP_DIR_WRK -S $SORT_RAM_INT""b"
-PERL_COMPILE="perl $ACTION_DIR/compile"
-RSCRIPT_COMPILE="Rscript $ACTION_DIR/compile"
 
 #-----------------------------------------------------------------
 # node/junction columns
@@ -55,9 +51,15 @@ OUT_POS_1=25
 OUT_POS_2=26
 #---------------
 SAMPLE=27
-#---------------
+#===============
 NODE_2=28
 # ...
+#-----------------------------------------------------------------
+# node classes
+#-----------------------------------------------------------------
+GAP=0
+SPLIT=1
+OUTER_CLIP=2
 #-----------------------------------------------------------------
 JXN_NODES='$'$NODE_CLASS'!='$OUTER_CLIP'&&$'$JXN_TYPE'!="P"'
 
@@ -66,12 +68,12 @@ JXN_NODES='$'$NODE_CLASS'!='$OUTER_CLIP'&&$'$JXN_TYPE'!="P"'
 echo "setting find mode"
 #-----------------------------------------------------------------
 export FIND_MODE=find
-export JUNCTION_FILES=`ls -1 $TASK_DIR/*compile.junction_edges.gz 2>/dev/null`
-export LIBRARY_STAT_FILES=`ls -1 $TASK_DIR/*extract.library_stats.yml 2>/dev/null`
+export LIBRARY_STAT_FILES=`ls -1 $EXTRACT_PREFIX.library_stats.yml 2>/dev/null`
+export JUNCTION_FILES=`ls -1 $COMPILE_PREFIX.junction_edges.gz 2>/dev/null`
 if [ "$JUNCTION_FILES" = "" ]; then
     export FIND_MODE=compare
-    export JUNCTION_FILES=`ls -1 $TASK_DIR/*/*compile.junction_edges.gz 2>/dev/null`
-    export LIBRARY_STAT_FILES=`ls -1 $TASK_DIR/*/*extract.library_stats.yml 2>/dev/null`
+    export LIBRARY_STAT_FILES=`ls -1 $EXTRACT_GLOB_PREFIX.library_stats.yml 2>/dev/null`    
+    export JUNCTION_FILES=`ls -1 $COMPILE_GLOB_PREFIX.junction_edges.gz 2>/dev/null`
     if [ "$JUNCTION_FILES" = "" ]; then
         echo "could not find junction file(s) in:"
         echo "    $TASK_DIR"
@@ -103,24 +105,22 @@ fi
 #-----------------------------------------------------------------
 source $MODULES_DIR/utilities/shell/create_shm_dir.sh
 rm -f $SHM_DIR_WRK/*
-
-# #   indexed nodes
-# function load_nodes {
-#     echo "loading $1 into RAM"
-#     cp $COMPILE_PREFIX.$1.txt       $SHM_DIR_WRK/$1.txt
-#     cp $COMPILE_PREFIX.$1.txt.index $SHM_DIR_WRK/$1.txt.index
-# }
-# # load_nodes nodes_by_proximity
-# load_nodes outer_clips
-
-#   genome
-echo "loading $GENOME into RAM"
-export SHM_GENOME_FASTA=$SHM_DIR_WRK/$GENOME.fa
-cp $GENOME_FASTA     $SHM_GENOME_FASTA
-cp $GENOME_FASTA.fai $SHM_GENOME_FASTA.fai
+# # #   indexed nodes
+# # function load_nodes {
+# #     echo "loading $1 into RAM"
+# #     cp $COMPILE_PREFIX.$1.txt       $SHM_DIR_WRK/$1.txt
+# #     cp $COMPILE_PREFIX.$1.txt.index $SHM_DIR_WRK/$1.txt.index
+# # }
+# # # load_nodes nodes_by_proximity
+# # load_nodes outer_clips
+# #   genome
+# echo "loading $GENOME into RAM"
+# export SHM_GENOME_FASTA=$SHM_DIR_WRK/$GENOME.fa
+# cp $GENOME_FASTA     $SHM_GENOME_FASTA
+# cp $GENOME_FASTA.fai $SHM_GENOME_FASTA.fai
 
 #-----------------------------------------------------------------
-# break junctions in to continuity groups and parse to called SVs
+# break junctions into continuity groups and parse to called SVs
 echo "aggregating junction molecules into SV calls"
 #-----------------------------------------------------------------
 $SLURP_GZ $JUNCTION_FILES | 
@@ -131,6 +131,10 @@ awk 'BEGIN{OFS="\t"}'$TARGET_CLASS_FILTER'{
 }' |
 $SORT -k1,1 -k2,2n | 
 perl $ACTION_DIR/find/group_junctions.pl | 
+
+##################
+awk '$NF<=2500' | 
+
 Rscript $ACTION_DIR/find/call_svs.R
 
 exit 1

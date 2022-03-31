@@ -5,11 +5,10 @@ if [[ "$ON_TARGET" =  "" || "$ON_TARGET" =  "null" ]]; then export ON_TARGET=0; 
 export GENOMEX_MODULES_DIR=$SUITES_DIR/genomex-mdi-tools/shared/modules
 source $GENOMEX_MODULES_DIR/genome/set_genome_vars.sh
 source $MODULES_DIR/files/set_svx_paths.sh
-# source $MODULES_DIR/library/set_library_vars.sh
 
 # set the sort parameters
 source $MODULES_DIR/utilities/shell/create_temp_dir.sh
-# SORT_RAM_PER_CPU_INT=$(($RAM_PER_CPU_INT - 1000000000))
+SORT_RAM_INT=`echo $TOTAL_RAM_INT | awk '{print int(($1 - 2000000000) / 2)}'`
 
 # find structural variants across extracted nodes and molecules
 runWorkflowStep 1 find find/find_svs.sh

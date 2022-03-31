@@ -5,20 +5,11 @@
 #----------------------------------------------------------------------
 # types
 #----------------------------------------------------------------------
-edgeTypes <- list(
-    junction    = 'J',
-    alignment   = 'A',
-    termination = 'T'
-)
 nodeClasses <- list(
     GAP           = 0, # SV evidence type codes, i.e., node classes
     SPLIT         = 1,
     OUTER_CLIP    = 2,
     RECONSTRUCTED = 3
-)
-edgeClasses <- list(
-    sequenced = nodeClasses$SPLIT,
-    gap       = nodeClasses$GAP
 )
 junctionClasses <- list( # i.e., when two nodes have been aggregated
     GAP   = paste(nodeClasses$GAP,   nodeClasses$GAP,   sep = ","),
@@ -38,35 +29,26 @@ junctionTypes <- list(
 # compile file columns
 #----------------------------------------------------------------------
 compile <- list(
-    edges = list(
+    junctions = list(
+        'NODE_1'           = 'character', # node-level data
+        'CLIP_LEN_1'       = 'integer',
+        'CLIP_SEQ_1'       = 'character',
+        #---------------
+        'FLAG_1'           = 'integer', # alignment-level data
+        'POS_1'            = 'integer',
+        'MAPQ_1'           = 'integer',
+        'CIGAR_1'          = 'character',
+        'SEQ_1'            = 'character',
+        'ALN_N_1'          = 'integer',        
+        #---------------
+        'UMI_1'            = 'integer',
+        #===============        
         'NODE_CLASS'     = 'integer',
-        'NODE1'          = 'character',
-        'NODE2'          = 'character',
-        'JXN_TYPE'       = 'character',
-        'TARGET_CLASS'   = 'character',
-        'MOL_IDS'        = 'character',
-        'COUNT'          = 'integer',
-        'COUNT_DISTINCT' = 'integer' 
-    ),
-    nodes = list(
-        'NODE'           = 'character', # node-level data
-        'CLIP_LEN'       = 'integer',
-        'CLIP_SEQ'       = 'character',
-        'NODE_CLASS'     = 'integer',
-        'PARTNER'        = 'character',
         #---------------
         'JXN_TYPE'       = 'character', # edge/junction-level data
         'JXN_N'          = 'integer',
         #---------------
-        'FLAG'           = 'integer', # alignment-level data
-        'POS'            = 'integer',
-        'MAPQ'           = 'integer',
-        'CIGAR'          = 'character',
-        'SEQ'            = 'character',
-        'ALN_N'          = 'integer',
-        #---------------
         'MOL_ID'         = 'integer', # molecule-level data 
-        'UMI'            = 'integer',
         'IS_MERGED'      = 'integer',
         'IS_DUPLEX'      = 'integer',
         'STRAND_COUNT1'  = 'integer',
@@ -77,10 +59,30 @@ compile <- list(
         'IS_OUTER_CLIP2' = 'integer',
         'TARGET_CLASS'   = 'character',
         'SHARED_PROPER'  = 'integer',
+        #---------------
         'OUT_POS1'       = 'integer',
-        'OUT_POS2'       = 'integer'
-    )
+        'OUT_POS2'       = 'integer',
+        #---------------
+        'SAMPLE'   = 'character',
+        #===============   
+        'NODE_2'           = 'character', # node-level data
+        'CLIP_LEN_2'       = 'integer',
+        'CLIP_SEQ_2'       = 'character',
+        #---------------
+        'FLAG_2'           = 'integer', # alignment-level data
+        'POS_2'            = 'integer',
+        'MAPQ_2'           = 'integer',
+        'CIGAR_2'          = 'character',
+        'SEQ_2'            = 'character',
+        'ALN_N_2'          = 'integer',        
+        #---------------
+        'UMI_2'            = 'integer'
+    )  
 )
+compile$working <- c(compile$junctions, list(
+    'groupIndex' = 'integer'
+))
+
 
 #----------------------------------------------------------------------
 # find file columns

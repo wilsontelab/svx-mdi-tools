@@ -11,7 +11,7 @@ export CONSENSUS_PREFIX=$DATA_GENOME_PREFIX.consensus
 # extract
 export EXTRACT_PREFIX=$DATA_GENOME_PREFIX.extract
 export COMPILE_PREFIX=$DATA_GENOME_PREFIX.compile
-export EXTRACT_GLOB_PREFIX=$TASK_DIR/*/*.$GENOME.extract
+export EXTRACT_GLOB_PREFIX=$TASK_DIR/*/*.$GENOME.extract # for multi-sample find
 export COMPILE_GLOB_PREFIX=$TASK_DIR/*/*.$GENOME.compile
 
 # find

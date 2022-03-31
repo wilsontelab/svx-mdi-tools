@@ -18,73 +18,11 @@ getFractionMatchingBases <- function(seq1, seq2, fixedLength = NULL, side = NULL
     }
     sum(mapply('==', strsplit(seq1, ''), strsplit(seq2, ''))) / fixedLength
 }
-#-------------------------------------------------------------------------------------
-# examine a set of SV-nominating molecules for nearly-identical molecule spans
-# aggregate presumed duplicate molecules to prevent them from appearing as falsely independent evidence
-purgeDuplicateMolecules <- function(nodes){
-
-    # collect information on two identifying outer positions per molecule-junction, one position per node
-    x <- nodes[, .(
-        MOL_ID   = MOL_ID[1],
-        OUT_POS1 = OUT_POS1[1],
-        OUT_POS2 = OUT_POS2[1],
-        N_SEED_NODE   = sum(IS_SEED_NODE), # for determining which molecules to keep
-        STRAND_COUNT1 = STRAND_COUNT1[1],
-        STRAND_COUNT2 = STRAND_COUNT2[1]
-    ), by = "junctionKey"]  
-    setkey(x, junctionKey)       
-
-    # use the euclidean distance between the endpoints of each pair of molecules to find collisions
-    pairs <- as.data.table(t(combn(x[, junctionKey], 2)), stringsAsFactors = FALSE)
-    setnames(pairs, c('junctionKey1', 'junctionKey2'))        
-    pairs <- cbind(
-        pairs, 
-        x[pairs[,junctionKey1], .(OUT_POS1_1 = OUT_POS1, OUT_POS2_1 = OUT_POS2)], 
-        x[pairs[,junctionKey2], .(OUT_POS1_2 = OUT_POS1, OUT_POS2_2 = OUT_POS2)]
-    )
-    collisionIs <- pairs[, .I[sqrt((OUT_POS1_1 - OUT_POS1_2) ** 2 + 
-                                   (OUT_POS2_1 - OUT_POS2_2) ** 2) < env$PURGE_DISTANCE]]
-
-    # for all colliding pairs, keep the molecule with the best read evidence and add other molecules to its counts
-    if(length(collisionIs) > 0){
-        remappedJunctionKeys <- list()
-        rejectedMoleculeIds <- integer()
-        for(i in collisionIs){     
-
-            # determine which molecule of the colliding pair to keep
-            pair <- x[pairs[i, c(junctionKey1, junctionKey2)]][order(-(1e4 * N_SEED_NODE + STRAND_COUNT1 + STRAND_COUNT2))]
-            bestJunctionKey  <- pair[1, junctionKey]
-            worstJunctionKey <- pair[2, junctionKey]
-
-            # ascend up any prior chain to the best of a set of colliding molecules
-            while(!is.null(remappedJunctionKeys[[bestJunctionKey]])) {
-                bestJunctionKey <- remappedJunctionKeys[[bestJunctionKey]]
-            }
-            remappedJunctionKeys[[worstJunctionKey]] <- bestJunctionKey # the molecule that holds a rejected molecule's counts # nolint
-
-            # add the worst strand counts to the best molecule and count how often we did this
-            worstCount1 <- pair[2, STRAND_COUNT1]
-            worstCount2 <- pair[2, STRAND_COUNT2]
-            nodes[junctionKey == bestJunctionKey, ':='(
-                STRAND_COUNT1 = STRAND_COUNT1 + worstCount1,
-                STRAND_COUNT2 = STRAND_COUNT2 + worstCount2,
-                N_COLLAPSED   = N_COLLAPSED + 1
-            )]
-
-            # add to the list of rejected molecules
-            rejectedMoleculeIds <- append(rejectedMoleculeIds, pair[2, MOL_ID])
-        }   
-
-        # finally, completely purge the presumed duplicate _molecules_ from the nodes list
-        nodes <- nodes[!(MOL_ID %in% rejectedMoleculeIds)]
-    }
-    nodes
-}
 
 #-------------------------------------------------------------------------------------
     # initialize a blank/null junction
 #-------------------------------------------------------------------------------------
-characterizeSVJunction <- function(nodes){ # junction nodes (no clips) pre-sorted by NODE_N
+characterizeSVJunction <- function(svIdx){ # junction nodes (no clips) pre-sorted by NODE_N
     call <- list(
         rejected = FALSE,
         JXN_TYPE = "",
@@ -96,75 +34,70 @@ characterizeSVJunction <- function(nodes){ # junction nodes (no clips) pre-sorte
         refNodes = data.table(), # two nodes that guided construction of the call (whether real or reconstructed)
         nodes = data.table()     # all nodes, with our modifications/additions
     )
-    junctionKeys <- nodes[, unique(junctionKey)] # MOL_ID:JXN_N   
-    nodes[, N_COLLAPSED := 1] # when nothing is purged, every node represents 1 molecule
-    if(length(junctionKeys) > 1) nodes <- purgeDuplicateMolecules(nodes)
+    # call$JXN_TYPE <- refMol[1, JXN_TYPE]
 
-#-------------------------------------------------------------------------------------
+
     # select one molecule as a reference for characterizing the junction
-    # make sure it has the same signature as the original seed junction for the network
-#-------------------------------------------------------------------------------------
-    usableNodes <- nodes[, NODE_CLASS == nodeClasses$SPLIT] # splits can always completely sequence a junction, prefer them # nolint
-    if(!any(usableNodes)) usableNodes <- TRUE               # gaps can only approximately locate a junction
-    # for splits and gaps, prefer seed junctions, i.e., molecules of the type used to build the SV network    
-    # for splits, prefer longest clip on the shorter-clip side (promotes long molecules with central junctions)
-    # for gaps, prefer molecules with the longest clips on either side
-    minMaxFn <- if(nodes[usableNodes, NODE_CLASS[1]] == nodeClasses$SPLIT) min else max
-    bestJxnKey <- nodes[ 
-        usableNodes,
-        .(
-            N_SEED_NODE   = sum(IS_SEED_NODE),                
-            minMaxClipLen = minMaxFn(CLIP_LEN)
-        ), 
-        by = junctionKey
+    #   prefer splits, which can always completely sequence a junction  
+    #   for splits, prefer longest clip on the shorter-clip side (promotes long molecules with central junctions)
+    #   for gaps, prefer molecules with the longest clips on either side
+    jxnMols <- jxnMols[svIndex == svIdx]    
+    nodes <- rbind( # some actions act per-node, split them apart here
+        jxnMols[, .(jxnKey = jxnKey, NODE_N = 1, NODE_CLASS = NODE_CLASS, CLIP_LEN = CLIP_LEN_1)],
+        jxnMols[, .(jxnKey = jxnKey, NODE_N = 2, NODE_CLASS = NODE_CLASS, CLIP_LEN = CLIP_LEN_2)]
+    )
+    usable <- nodes[, NODE_CLASS == nodeClasses$SPLIT]
+    if(!any(usable)) usable <- TRUE
+    minMaxFn <- if(nodes[usable, NODE_CLASS[1] == nodeClasses$SPLIT]) min else max
+    refJxnKey <- nodes[ 
+        usable,
+        .(minMaxClipLen = minMaxFn(CLIP_LEN)), 
+        by = jxnKey
     ][
-      order(-N_SEED_NODE, -minMaxClipLen)
+      order(-minMaxClipLen)
     ][ 
        1,
-       junctionKey
+       jxnKey
     ]
-    refNodes <- nodes[junctionKey == bestJxnKey] # exactly two nodes that help build the call set 
-    call$JXN_TYPE <- refNodes[1, JXN_TYPE]
-    if(call$JXN_TYPE == junctionTypes$UNKNOWN) return(call)
+    refMol <- jxnMols[jxnKey == refJxnKey]
+    refNodes <- nodes[jxnKey == refJxnKey] # exactly two nodes that help build the call set 
+    if(refMol[1, JXN_TYPE] == junctionTypes$UNKNOWN) return(NULL)
 
-#-------------------------------------------------------------------------------------
-    # ensure that the reference nodes are properly paired and ordered
-#-------------------------------------------------------------------------------------
-    if(refNodes[, paste0(NODE_N, collapse = ",") != "1,2"]) {
-        return(list(rejected = TRUE, reason = rejectionReasons$tooFewRefNodes))
-    } 
+    #########################
+    return(refMol)
 
-#-------------------------------------------------------------------------------------
+
     # add any outer clips that match inner clips at the reference nodes (whether reference in a split or a gap)
-#-------------------------------------------------------------------------------------
-    nodes[, IS_RC := 0] # whether or not characterizeSVJunction applied RC to node sequences
-    isInversion <- refNodes[1, side] == refNodes[2, side]
-    flipNode    <- if(refNodes[1, side] == 'R') 1L else 2L
+    # TODO: is this correct for both svCapture and svWGS? probably need to track IS_COLLATED
+    isInversion <- refMol[, side1 == side2] 
+    flipNode    <- if(refMol[, side1 == 'R']) 1L else 2L
     for(i in 1:2){
         if(refNodes[i, CLIP_LEN == 0]) next # unclipped gap nodes aren't informative for outer clip matching
+
+        # TODO: need to mount all samples for fast reading of clips, do this for sample in SAMPLES
         outerClipNodes <- getNodes('outer_clips', refNodes[i, NODE], unpackNodeNames = TRUE)
         if(is.null(outerClipNodes)) next
         outerClipNodes[, ':='(
+            jxnKey = paste(MOL_ID, JXN_N, sep = ":"),            
             NODE_N = i,
-            junctionKey = paste(MOL_ID, JXN_N, sep = ":"),
-            IS_SEED_NODE = 0,
-            N_COLLAPSED = 1,
-            IS_RC = 0
+            N_COLLAPSED = 1
         )]
-        if(nrow(outerClipNodes) > 1) outerClipNodes <- purgeDuplicateMolecules(outerClipNodes)
+
+        # TODO: simplify this check - only check duplication at the outer clip end
+        # will tend to artifactually collapse some truly different molecules but effect on outcomes is negligible
+        # if(nrow(outerClipNodes) > 1) outerClipNodes <- purgeDuplicateMolecules(outerClipNodes)
 
         # flip inversion outer clips as needed to also put them on the canonical strand
         if(isInversion && flipNode == i){        
             outerClipNodes[, ':='(
                 SEQ      = rc(SEQ),
                 CLIP_SEQ = rc(CLIP_SEQ),
-                CIGAR    = rc_cigar(CIGAR),
-                IS_RC    = 1
+                CIGAR    = rc_cigar(CIGAR)
             )]
         } 
 
         # merge inner and outer node evidence
-        nodes <- rbind(nodes, outerClipNodes) # TODO: sort clips in by NODE_N ??
+        nodes <- rbind(nodes, outerClipNodes)
     }
 
 #-------------------------------------------------------------------------------------

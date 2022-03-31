@@ -1,16 +1,12 @@
 ---
 version: v0.0.0 # optional, for internal tracking
 action: # required
-    condaFamilies:
+    condaFamilies: # matches 'extract' to share an environment
         - base
         - genomex-mdi-tools//genome
         - r-4.1
     optionFamilies: # these options apply to all actions
         - genomex-mdi-tools//genome
-        # - genomex-mdi-tools//name-bam-file
-        # - genomex-mdi-tools//bam-format
-        # - genomex-mdi-tools//illumina-type
-        # - genomex-mdi-tools//read-filtering
         - genomex-mdi-tools//read-merging     
         # - clip
         - sv-filtering
