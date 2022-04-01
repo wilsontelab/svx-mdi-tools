@@ -29,7 +29,7 @@ junctionTypes <- list(
 # compile file columns
 #----------------------------------------------------------------------
 compile <- list(
-    junctions = list(
+    nodes = list(
         'NODE_1'           = 'character', # node-level data
         'CLIP_LEN_1'       = 'integer',
         'CLIP_SEQ_1'       = 'character',
@@ -61,7 +61,11 @@ compile <- list(
         'SHARED_PROPER'  = 'integer',
         #---------------
         'OUT_POS1'       = 'integer',
-        'OUT_POS2'       = 'integer',
+        'OUT_POS2'       = 'integer'   
+    )
+)
+compile$junctions <- c(compile$nodes, 
+    list(
         #---------------
         'SAMPLE'   = 'character',
         #===============   
@@ -82,7 +86,21 @@ compile <- list(
 compile$working <- c(compile$junctions, list(
     'groupIndex' = 'integer'
 ))
-
+compile$working2 <- c(compile$working, list(
+    'AMBIGUOUS' = 'integer',
+    'N_COLLAPSED' = 'integer',
+    'jxnName' = 'character',
+    'jxnKey' = 'character',
+    'chrom1' = 'integer',
+    'side1' = 'character',
+    'pos1' = 'integer',
+    'chrom2' = 'integer',
+    'side2' = 'character',
+    'pos2' = 'integer',
+    'svIndex' = 'character',
+    'sampleSvIndex' = 'character',
+    'IS_REFERENCE' = 'integer'
+))
 
 #----------------------------------------------------------------------
 # find file columns
@@ -150,19 +168,3 @@ find$all_nodes <- c(find$all_nodes, compile$nodes)
 
 # the node columns that uniquely identify a specific node-molecule instance
 molNodeCols <- c('NODE', 'ALN_N', 'MOL_ID')
-
-#----------------------------------------------------------------------
-# compare file columns
-#----------------------------------------------------------------------
-compare <- list(
-    additional = list(
-        N_MATCHES    = "integer",  # total number of other SVs matching this SV
-        MATCHING_SVS = "character" # comma-delimited list of other SAMPLE:SV_ID that match this SV; '.' if none
-    ),
-    working = list( # used by compare.R
-        svKey      = "character", # SAMPLE:SV_ID
-        groupIndex = "integer"    # continuity group marked by makeGroups.pl
-    )
-)
-compare$structural_variants <- c(find$structural_variants, compare$additional)
-compare$working <- c(find$structural_variants, compare$additional, compare$working)

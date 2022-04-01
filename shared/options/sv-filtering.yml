@@ -36,15 +36,22 @@ options:
         required: false
         default: 5
         description: "presume molecule duplicates when OUT_POS euclidean distance < --purge-distance"
-    min-coverage:
+    purge-limit: 
         order: 6
-        short: V
+        short: l
+        type: integer
+        required: false
+        default: 100
+        description: "randomly downsample evidence molecules to --purge-limit prior to duplicate purging"
+    min-coverage:
+        order: 7
+        short: c
         type: integer
         required: false
         default: 1
         description: "require at least this many independent molecules over all samples to call an SV"        
     on-target:
-        order: 7
+        order: 8
         short: e
         type: integer
         required: false

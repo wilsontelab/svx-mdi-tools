@@ -18,7 +18,9 @@ checkEnvVars(list(
         'DATA_NAME',
         'ACTION_DIR',
         'MODULES_DIR',
+        'COMPILE_PREFIX',
         'FIND_PREFIX',
+        'FIND_MODE',
         'SHM_DIR_WRK',
         'SAMPLES',
         'MAX_TLENS',
@@ -35,6 +37,7 @@ checkEnvVars(list(
         'SV_SIZE_FACTOR',
 
         'PURGE_DISTANCE',
+        'PURGE_LIMIT',
         'MIN_COVERAGE',
         'MIN_MERGE_OVERLAP'
     ),
@@ -56,7 +59,7 @@ sourceScripts(file.path(rUtilDir, 'sequence'),   c('general', 'IUPAC', 'smith_wa
 sourceScripts(file.path(rUtilDir, 'genome'),     c('general', 'chroms', 'faidx'))
 sourceScripts(file.path(env$ACTION_DIR, 'find'), c(
     'column_definitions', 'node_retrieval', 
-    'parse_groups', 'purge_duplicates', 'analyze_junctions'
+    'parse_groups', 'purge_duplicates', 'assign_references', 'get_outer_clips', 'analyze_junctions'
 ))
 # , 'network'
 #-------------------------------------------------------------------------------------
@@ -125,20 +128,59 @@ if(env$MIN_SV_SIZE > 0) jxnMols <- jxnMols[JXN_TYPE == "T" | abs(pos2 - pos1) >=
 ##############################
 tmpFile <- paste(env$FIND_PREFIX, "DEVELOP.RDS", sep=".")
 # saveRDS(jxnMols, file = tmpFile)
+# jxnMols <- readRDS(tmpFile)
+
+# #=====================================================================================
+# # assign one molecule as the reference molecule for further characterization of each SV junction
+# #-------------------------------------------------------------------------------------
+# message("assigning SV reference molecules")
+# jxnMols <- do.call(rbind, mclapply(jxnMols[, unique(svIndex)], assignReferenceMolecule, mc.cores = env$N_CPU))
+# # jxnMols <- do.call(rbind, lapply(jxnMols[, unique(svIndex)[1:1000]], assignReferenceMolecule))
+
+# ##############################
+# # saveRDS(jxnMols, file = tmpFile)
+# jxnMols <- readRDS(tmpFile)
+
+# refMols <- jxnMols[, IS_REFERENCE == 1]
+# refNodes <- printReferenceNodes()
+# # #=====================================================================================
+
+# #=====================================================================================
+# # add out clip nodes as SV evidence, one sample at a time with internal parallel actions
+# #-------------------------------------------------------------------------------------
+# message("adding outer clip nodes")
+# flipGuidance <- jxnMols[refMols, .(
+#     svIndex     = svIndex,
+#     isInversion = side1 == side2, # correct for svCaptur, is it correct for svWGS
+#     flipNode    = ifelse(side1 == 'R', 1L, 2L)
+# )]
+# setkey(flipGuidance, svIndex)
+# jxnMols <- rbind(jxnMols, do.call(rbind, getOuterClipEvidence()))
+# #=====================================================================================
+
+tmpFile <- paste(env$FIND_PREFIX, "DEVELOP.WITH_CLIPS.RDS", sep=".")
+# saveRDS(jxnMols, file = tmpFile)
 jxnMols <- readRDS(tmpFile)
 
 #=====================================================================================
-# add clip evidence and characterize the SV junction
+# assemble and characterize final junction calls
 #-------------------------------------------------------------------------------------
-message("adding clip evidence and characterizing the SV junctions")
-jxnMols <- do.call(rbind, mclapply(jxnMols[, unique(svIndex)], characterizeSVJunction, mc.cores = env$N_CPU))
-# jxnMols <- do.call(rbind, lapply(jxnMols[, unique(svIndex)], characterizeSVJunction))
-str(jxnMols)
-message(nrow(jxnMols))
+message("characterizing SV junctions")
+jxnMols[IS_REFERENCE == 1, ':='(
+    JXN_SEQ = ifelse(NODE_CLASS == nodeClasses$SPLIT, SEQ_1, NA),
+    MERGE_LEN = 0,
+    RECONSTRUCTED = 0
+)]
+# setkey(jxnMols, svIndex)
+jxnMols <- do.call(rbind, mclapply(jxnMols[, unique(svIndex)], mergeGapJunctions, mc.cores = env$N_CPU))
+# jxnMols <- do.call(rbind, lapply(jxnMols[, unique(svIndex)[1:1000]], mergeGapJunctions))
+
+str(jxnMols[RECONSTRUCTED != 0])
+stop("ccc  XXXXXXXXXXXXXXXXX")
 #=====================================================================================
 
 
-stop("XXXXXXXXXXXXXXXXX")
+
 
 #=====================================================================================
 # save results and print some summary statistics

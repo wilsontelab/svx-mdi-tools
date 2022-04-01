@@ -3,10 +3,16 @@
 # aggregate presumed duplicate molecules to prevent them from appearing as falsely independent evidence
 #-------------------------------------------------------------------------------------
 purgeDuplicateMolecules <- function(smpSvIdx){
+    purgeDuplicateMolecules_(jxnMols[sampleSvIndex == smpSvIdx])
+}
+purgeDuplicateMolecules_ <- function(jxnMols){
 
     # check if singleton-molecule call
-    jxnMols <- jxnMols[sampleSvIndex == smpSvIdx]
     if(nrow(jxnMols) == 1) return(jxnMols)
+
+    # randomly downsample junctions with extreme coverage for time efficiency
+    # this will still allow robust SV calling, but does impair accurate coverage determination
+    if(nrow(jxnMols) > env$PURGE_LIMIT) jxnMols <- jxnMols[sample(.N, env$PURGE_LIMIT)]
 
     # use the euclidean distance between the endpoints of each pair of molecules to find collisions
     setkey(jxnMols, jxnKey)

@@ -103,16 +103,26 @@ fi
 #-----------------------------------------------------------------
 # load files into shared memory for rapid access
 #-----------------------------------------------------------------
-source $MODULES_DIR/utilities/shell/create_shm_dir.sh
-rm -f $SHM_DIR_WRK/*
-# # #   indexed nodes
-# # function load_nodes {
-# #     echo "loading $1 into RAM"
-# #     cp $COMPILE_PREFIX.$1.txt       $SHM_DIR_WRK/$1.txt
-# #     cp $COMPILE_PREFIX.$1.txt.index $SHM_DIR_WRK/$1.txt.index
-# # }
-# # # load_nodes nodes_by_proximity
-# # load_nodes outer_clips
+# source $MODULES_DIR/utilities/shell/create_shm_dir.sh
+# rm -f $SHM_DIR_WRK/*
+
+export SHM_DIR_WRK=$TMP_DIR_WRK
+
+# #   indexed nodes
+# CMP_PFX=$COMPILE_PREFIX
+# function load_nodes {
+#     for SAMPLE in $SAMPLES; do
+#         echo "loading $SAMPLE $1 into RAM"    
+#         if [ "$FIND_MODE" = "compare" ]; then
+#             CMP_PFX=$TASK_DIR/$SAMPLE/$SAMPLE.$GENOME.compile
+#             mkdir -p $SHM_DIR_WRK/$SAMPLE
+#         fi
+#         cp $CMP_PFX.$1.txt       $SHM_DIR_WRK/$SAMPLE/$1.txt
+#         cp $CMP_PFX.$1.txt.index $SHM_DIR_WRK/$SAMPLE/$1.txt.index    
+#     done
+# }
+# # load_nodes nodes_by_proximity
+# load_nodes outer_clips
 # #   genome
 # echo "loading $GENOME into RAM"
 # export SHM_GENOME_FASTA=$SHM_DIR_WRK/$GENOME.fa
@@ -129,6 +139,10 @@ awk 'BEGIN{OFS="\t"}'$TARGET_CLASS_FILTER'{
     split($'$NODE_2', n2, ":");
     print n2[1]":"n2[2]":"n1[1]":"n1[2], n1[3], n2[3], $0;
 }' |
+
+################
+head -n 1000 | 
+
 $SORT -k1,1 -k2,2n | 
 perl $ACTION_DIR/find/group_junctions.pl | 
 

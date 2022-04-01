@@ -34,7 +34,7 @@ getMatchingNodes <- function(nodeName, otherNodeName, nodeN, nodeClass){
     nodeData      <- unpackNodeNames(nodeName)
     otherNodeData <- unpackNodeNames(otherNodeName)
     indexName <- paste(nodeName, otherNodeData[[1]], otherNodeData[[2]], sep=":") # node:partner
-    nodes <- getNodes('nodes_by_proximity', indexName, unpackNodeNames = TRUE)
+    nodes <- getNodes('nodes_by_proximity', indexName)
     if(is.null(nodes)) return(NULL)
     nodes[, NODE_N := ..nodeN]
 
