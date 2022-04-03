@@ -4,11 +4,23 @@
 #-------------------------------------------------------------------------------------
 
 # label and return the junction molecules that are evidence of a single SV call
-commitJxnMols <- function(jxnMols, svI){
+commitJxnMols <- function(jxnMols, svJ){
+
+    # apply the SV coverage filter
     if(nrow(jxnMols) < env$MIN_COVERAGE) return(NULL)
+
+    # enforce the SV-level MAPQ filter (generally higher than the original molecule-level filter)
+    maxMapQ1 <- jxnMols[, max(MAPQ_1)]
+    maxMapQ2 <- jxnMols[, max(MAPQ_2)]
+    if(jxnMols[, # filter is applied to the _best_ gap or split in the molecule set
+        !(maxMapQ1 >= env$MIN_MAPQ_BOTH && maxMapQ2 >= env$MIN_MAPQ_BOTH) ||
+        !(maxMapQ1 >= env$MIN_MAPQ_ONE  || maxMapQ2 >= env$MIN_MAPQ_ONE)    
+    ]) return(NULL)
+
+    # all filters passed, set SV ids and return
     jxnMols[, ':='(
-        svIndex = paste(groupIndex, svI, sep = ":"),
-        sampleSvIndex = paste(SAMPLES[SAMPLE], groupIndex, svI, sep = ":")
+        svIndex = paste(groupIndex, svJ, sep = ":"),
+        sampleSvIndex = paste(SAMPLES[SAMPLE], groupIndex, svJ, sep = ":")
     )] 
     jxnMols
 }
@@ -18,15 +30,13 @@ checkHalfSequenced <- function(delta, side) { # delta must be calculated as SPLI
     if(side == "L") delta >= -env$PURGE_DISTANCE && delta <= MAX_MAX_TLEN
                else delta >= -MAX_MAX_TLEN && delta <= env$PURGE_DISTANCE  
 }
-
 # determine if edges in different molecules appear to be the same SV on one side of the junction
 isNodeMatch <- function(IS_SPLIT_J1, IS_SPLIT_J2, POS_J1, POS_J2, side){
          if( IS_SPLIT_J1 &&  IS_SPLIT_J2) abs(POS_J1 - POS_J2) <= env$PURGE_DISTANCE
-    else if(!IS_SPLIT_J1 && !IS_SPLIT_J2) abs(POS_J1 - POS_J2) <= MAX_MAX_TLEN # TODO: track samples to be more precise on MAX_TLEN?
+    else if(!IS_SPLIT_J1 && !IS_SPLIT_J2) abs(POS_J1 - POS_J2) <= MAX_MAX_TLEN # TODO: use sample-specific MAX_TLEN?
     else if(IS_SPLIT_J1) checkHalfSequenced(POS_J1 - POS_J2, side)
                     else checkHalfSequenced(POS_J2 - POS_J1, side)
 }
-
 # determine which jxnMols match a seed junction
 addMatches <- function(matches, jxnTypes, seedJxnType, side1, side2){
     SEED_IS_SPLIT <- jxnTypes[seedJxnType, NODE_CLASS == nodeClasses$SPLIT]
@@ -45,7 +55,7 @@ addMatches <- function(matches, jxnTypes, seedJxnType, side1, side2){
             POS1,
             side1
         ) & 
-        mapply( # position collison on side1
+        mapply( # position collison on side2
             isNodeMatch, 
             SEED_IS_SPLIT, 
             IS_SPLIT, 
@@ -53,7 +63,7 @@ addMatches <- function(matches, jxnTypes, seedJxnType, side1, side2){
             POS2,
             side2
         ) & 
-        abs(SEED_POS1 - POS1) + abs(SEED_POS2 - POS2) <= MAX_MAX_TLEN # ensure inferred gap molecule size would not be too large
+        abs(SEED_POS1 - POS1) + abs(SEED_POS2 - POS2) <= MAX_MAX_TLEN # ensure inferred gap molecule size is not be too large
     )
 }
 
@@ -67,17 +77,18 @@ parseContinuityGroup <- function(grpIdx){
 
     # collapse junction molecules across multiple samples to junction types = NODE_CLASS:NODE_1:NODE_2
     jxnTypes <- jxnMols[, .(
-        jxnType = paste(NODE_CLASS, jxnName, sep=":"),
-        pos1 = pos1[1], # all junctions with the same junction name have the same node positions
-        pos2 = pos2[1],
-        STRAND_COUNT = sum(STRAND_COUNT1 + STRAND_COUNT2), # total read-pairs over all samples and node-pairs
-        jxnKeys = list(jxnKey)
+        jxnType      = paste(NODE_CLASS[1], jxnName[1], sep=":"),
+        jxnKeys      = list(jxnKey), # keep track of all sources molecules with this jxnType        
+        pos1         = pos1[1], # all junctions with the same junction name have the same node positions
+        pos2         = pos2[1],
+        STRAND_COUNT = sum(STRAND_COUNT1 + STRAND_COUNT2), # total _read-pair_ count over all samples
+        MOL_COUNT    = .N, # total _molecule_ count over all samples (for uncollated inputs)
+        MAPQ         = max(MAPQ_1 + MAPQ_2) # additional tie-breaking based on MAPQ for picking seed junctions
     ), by = c('NODE_CLASS', 'jxnName')]
     setkey(jxnTypes, jxnType)    
 
-    # pick a seed junction, preferring splits > gaps, higher net coverage
-    seedJxnType <- jxnTypes[order(-NODE_CLASS, -STRAND_COUNT)][1, jxnType[1]]
-    # seedJxnTypes <- list(seedJxnType)
+    # pick a seed junction, preferring splits > gaps, higher coverage, higher map quality
+    seedJxnType <- jxnTypes[order(-NODE_CLASS, -STRAND_COUNT, -MOL_COUNT, -MAPQ)][1, jxnType]
 
     # mark matches to seed
     matches <- data.table()
@@ -90,8 +101,7 @@ parseContinuityGroup <- function(grpIdx){
     # pick the next best seed from the unmatched junction types, iterate until all types match a seed
     matchedJxnTypes <- apply(matches, 1, any)
     while(!all(matchedJxnTypes)){
-        seedJxnType <- jxnTypes[matchedJxnTypes == FALSE][order(-NODE_CLASS, -STRAND_COUNT)][1, jxnType[1]]
-        # seedJxnTypes <- c(seedJxnTypes, list(seedJxnType))
+        seedJxnType <- jxnTypes[matchedJxnTypes == FALSE][order(-NODE_CLASS, -STRAND_COUNT, -MOL_COUNT, -MAPQ)][1, jxnType]
         matches <- addMatches(matches, jxnTypes, seedJxnType, 
                               jxnMols[1, side1], jxnMols[1, side2])
         matchedJxnTypes <- apply(matches, 1, any)
@@ -111,14 +121,12 @@ parseContinuityGroup <- function(grpIdx){
         cols <- which(unlist(matches[row]))[1:2] # identify two columns (seed junctions) with a split collision ...
         matches[[cols[1]]] <- matches[[cols[1]]] | matches[[cols[2]]]
         matches[[cols[2]]] <- NULL # ... and merge them
-        # seedJxnTypes[[cols[1]]] <- c(seedJxnTypes[[cols[1]]], seedJxnTypes[[cols[2]]])
-        # seedJxnTypes[[cols[2]]] <- NULL
         ambiguousJxnTypes <- apply(matches, 1, sum) > 1
     }
 
-    # commit every seed junction group as an SV; ambiguous molecules will be present multiple times
-    do.call(rbind, lapply(1:ncol(matches), function(i){
-        jxnKeys <- unlist( jxnTypes[matches[[i]] == TRUE, jxnKeys] )
-        commitJxnMols(jxnMols[jxnKey %in% jxnKeys], i)
+    # commit every (merged) seed junction group as an SV; ambiguous molecules will be committed multiple times
+    do.call(rbind, lapply(1:ncol(matches), function(j){
+        jxnKeys <- unlist( jxnTypes[matches[[j]], jxnKeys] )
+        commitJxnMols(jxnMols[jxnKey %in% jxnKeys], j)
     }))
 }

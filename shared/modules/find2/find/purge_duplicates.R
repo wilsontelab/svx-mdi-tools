@@ -3,16 +3,19 @@
 # aggregate presumed duplicate molecules to prevent them from appearing as falsely independent evidence
 #-------------------------------------------------------------------------------------
 purgeDuplicateMolecules <- function(smpSvIdx){
-    purgeDuplicateMolecules_(jxnMols[sampleSvIndex == smpSvIdx])
+    purgeDuplicateMolecules_(jxnMols[smpSvIdx])
 }
 purgeDuplicateMolecules_ <- function(jxnMols){
 
     # check if singleton-molecule call
     if(nrow(jxnMols) == 1) return(jxnMols)
 
-    # randomly downsample junctions with extreme coverage for time efficiency
+    # randomly downsample junctions with extreme coverage for processing efficiency
     # this will still allow robust SV calling, but does impair accurate coverage determination
-    if(nrow(jxnMols) > env$PURGE_LIMIT) jxnMols <- jxnMols[sample(.N, env$PURGE_LIMIT)]
+    if(nrow(jxnMols) > env$PURGE_LIMIT){
+        jxnMols <- jxnMols[sample(.N, env$PURGE_LIMIT)]
+        jxnMols[, DOWNSAMPLED := 1]
+    }
 
     # use the euclidean distance between the endpoints of each pair of molecules to find collisions
     setkey(jxnMols, jxnKey)
@@ -32,10 +35,10 @@ purgeDuplicateMolecules_ <- function(jxnMols){
     # for all colliding pairs, keep the molecule with the best read evidence and add other molecules to its counts
     remappedJxnKeys <- list()
     rejectedMolIds <- integer()
-    for(i in collisionIs){  
+    for(i in collisionIs){ 
 
         # determine which molecule of the colliding pair to keep
-        pair <- jxnMols[pairs[i, c(jxnKey1, jxnKey2)]][order(-NODE_CLASS, -(STRAND_COUNT1 + STRAND_COUNT2))]
+        pair <- jxnMols[pairs[i, c(jxnKey1, jxnKey2)]][order(-NODE_CLASS, -(STRAND_COUNT1 + STRAND_COUNT2), -(MAPQ_1 + MAPQ_2))]
         bestJxnKey  <- pair[1, jxnKey]
         worstJxnKey <- pair[2, jxnKey]
 

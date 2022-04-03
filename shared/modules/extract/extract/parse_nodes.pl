@@ -390,10 +390,10 @@ sub printOuterEndpoints {
     my ($outAln1, $outAln2, $outData1, $outData2) = @_; 
 
     # generate two identifying outer positions per source molecule
-    # does not have to be accurate, just sufficiently identifying for further duplicate purging downstream
+    # these are what the node position would have been had any outer clip been aligned
     @outerPos = (
-        $$outData1[_POS] + $$outData1[_CLIP],
-        $$outData2[_POS] + $$outData2[_CLIP],
+        $$outData1[_POS] + ($$outData1[_SIDE] eq 'L' ? 1 : -1) * $$outData1[_CLIP],
+        $$outData2[_POS] + ($$outData2[_SIDE] eq 'L' ? 1 : -1) * $$outData2[_CLIP],
     );
 
     # prepare for setting SHARED_PROPER downstream
@@ -460,7 +460,7 @@ sub printNode {
        $mol[MOL_CLASS] eq IS_PROPER # all nodes on SV molecules are printed, even unclipped outer
     ){ return } # don't print anything for unclipped proper molecules
     my $alnN = $mol[MOL_CLASS] eq IS_PROPER ? 0 : $$aln[ALN_N]; # even unmerged proper molecules connect their outer nodes
-    print $nodesH join("\t", 
+    print $nodesH join("\t", # nodeN (1,2) can be inferred from order in the nodes file
         #------------------------------------------- # below this line is (potentially) unique to each node
         @$node[_NODE, _CLIP, _SEQ],                  # node-level data
         @$aln[FLAG, POS, MAPQ, CIGAR, SEQ], $alnN,   # alignment-level data
@@ -469,7 +469,7 @@ sub printNode {
         $nodeClass,                                  # node-level data
         $jxnType, $jxnN,                             # edge/junction-level data 
         @mol[MOL_ID, IS_MERGED..SHARED_PROPER],      # molecule-level data
-        @outerPos
+        @outerPos # first OUT_POS matches the first clip node in the file as written
     ), "\n";
 }
 #===================================================================================================

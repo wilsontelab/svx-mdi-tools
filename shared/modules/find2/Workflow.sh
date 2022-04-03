@@ -22,4 +22,4 @@ rm -fr $TMP_DIR_WRK
 # rm -f  $COMPILE_PREFIX.junction_edges.gz
 # rm -f  $COMPILE_PREFIX.matchedProper.gz
 # rm -f  $COMPILE_PREFIX.nodes_by_proximity.txt*
-# rm -f  $COMPILE_PREFIX.outer_clips.txt*
+# rm -f  $COMPILE_PREFIX.outer_clips.gz

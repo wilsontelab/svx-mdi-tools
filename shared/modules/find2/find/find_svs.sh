@@ -6,7 +6,9 @@
 #     compile/compile_nodes.sh
 # outputs:
 #     $FIND_PREFIX.structural_variants.gz
-#     $FIND_PREFIX.find.junction_molecules.txt
+#     $FIND_PREFIX.junction_molecules.gz
+#     $FIND_PREFIX.sample_data.yml
+#     $FIND_PREFIX.target_regions.bed
 
 #-----------------------------------------------------------------
 # define common actions
@@ -18,17 +20,17 @@ SORT="sort --parallel=$N_CPU -T $TMP_DIR_WRK -S $SORT_RAM_INT""b"
 # node/junction columns
 #-----------------------------------------------------------------
 NODE_1=1 # node-level data
-CLIP_LEN=2
-CLIP_SEQ=3
+CLIP_LEN_1=2
+CLIP_SEQ_1=3
 #---------------
-FLAG=4 # alignment-level data
-POS=5
-MAPQ=6
-CIGAR=7
-SEQ=8
-ALN_N=9
+FLAG_1=4 # alignment-level data
+POS_1=5
+MAPQ_1=6
+CIGAR_1=7
+SEQ_1=8
+ALN_N_1=9
 #---------------
-UMI=10
+UMI_1=10
 #---------------
 NODE_CLASS=11
 #---------------
@@ -54,14 +56,6 @@ SAMPLE=27
 #===============
 NODE_2=28
 # ...
-#-----------------------------------------------------------------
-# node classes
-#-----------------------------------------------------------------
-GAP=0
-SPLIT=1
-OUTER_CLIP=2
-#-----------------------------------------------------------------
-JXN_NODES='$'$NODE_CLASS'!='$OUTER_CLIP'&&$'$JXN_TYPE'!="P"'
 
 #-----------------------------------------------------------------
 # determine if this is a single-sample find or a multi-sample compare
@@ -75,7 +69,7 @@ if [ "$JUNCTION_FILES" = "" ]; then
     export LIBRARY_STAT_FILES=`ls -1 $EXTRACT_GLOB_PREFIX.library_stats.yml 2>/dev/null`    
     export JUNCTION_FILES=`ls -1 $COMPILE_GLOB_PREFIX.junction_edges.gz 2>/dev/null`
     if [ "$JUNCTION_FILES" = "" ]; then
-        echo "could not find junction file(s) in:"
+        echo "could not find junction_edges file(s) in:"
         echo "    $TASK_DIR"
         exit 1
     fi
@@ -88,9 +82,11 @@ echo "collecting library stats"
 #-----------------------------------------------------------------
 export SAMPLES=`cat $LIBRARY_STAT_FILES | grep SAMPLE | sed 's/SAMPLE:\s//'`
 export MAX_TLENS=`cat $LIBRARY_STAT_FILES | grep MAX_TLEN | sed 's/MAX_TLEN:\s//'`
+echo "SAMPLES: $SAMPLES" > $FIND_PREFIX.sample_data.yml
+echo "MAX_TLENS: $MAX_TLENS" >> $FIND_PREFIX.sample_data.yml
 
 #-----------------------------------------------------------------
-# begin to apply SV filters as possible
+# begin to apply SV filters
 #-----------------------------------------------------------------
 if [ "$ON_TARGET" = "2" ]; then 
     TARGET_CLASS_FILTER='$'$TARGET_CLASS'!~/-/'
@@ -101,33 +97,14 @@ else
 fi
 
 #-----------------------------------------------------------------
-# load files into shared memory for rapid access
+# load genome into shared memory for rapid access
 #-----------------------------------------------------------------
-# source $MODULES_DIR/utilities/shell/create_shm_dir.sh
-# rm -f $SHM_DIR_WRK/*
-
-export SHM_DIR_WRK=$TMP_DIR_WRK
-
-# #   indexed nodes
-# CMP_PFX=$COMPILE_PREFIX
-# function load_nodes {
-#     for SAMPLE in $SAMPLES; do
-#         echo "loading $SAMPLE $1 into RAM"    
-#         if [ "$FIND_MODE" = "compare" ]; then
-#             CMP_PFX=$TASK_DIR/$SAMPLE/$SAMPLE.$GENOME.compile
-#             mkdir -p $SHM_DIR_WRK/$SAMPLE
-#         fi
-#         cp $CMP_PFX.$1.txt       $SHM_DIR_WRK/$SAMPLE/$1.txt
-#         cp $CMP_PFX.$1.txt.index $SHM_DIR_WRK/$SAMPLE/$1.txt.index    
-#     done
-# }
-# # load_nodes nodes_by_proximity
-# load_nodes outer_clips
-# #   genome
 # echo "loading $GENOME into RAM"
-# export SHM_GENOME_FASTA=$SHM_DIR_WRK/$GENOME.fa
-# cp $GENOME_FASTA     $SHM_GENOME_FASTA
-# cp $GENOME_FASTA.fai $SHM_GENOME_FASTA.fai
+source $MODULES_DIR/utilities/shell/create_shm_dir.sh
+rm -f $SHM_DIR_WRK/*
+export SHM_GENOME_FASTA=$SHM_DIR_WRK/$GENOME.fa
+cp $GENOME_FASTA     $SHM_GENOME_FASTA
+cp $GENOME_FASTA.fai $SHM_GENOME_FASTA.fai
 
 #-----------------------------------------------------------------
 # break junctions into continuity groups and parse to called SVs
@@ -141,45 +118,17 @@ awk 'BEGIN{OFS="\t"}'$TARGET_CLASS_FILTER'{
 }' |
 
 ################
-head -n 1000 | 
+# head -n 1000 | 
 
 $SORT -k1,1 -k2,2n | 
 perl $ACTION_DIR/find/group_junctions.pl | 
 
 ##################
-awk '$NF<=2500' | 
+# awk '$NF<=2500' | 
 
 Rscript $ACTION_DIR/find/call_svs.R
 
 exit 1
-
-# #-----------------------------------------------------------------
-# echo "indexing SV junction nodes by coordinate proximity" # used to collect junction-flanking evidence
-# #-----------------------------------------------------------------
-# $SLURP_NODES |
-# awk 'BEGIN{OFS="\t"}'$JXN_NODES'{
-#     split($'$NODE', x, ":");
-#     print $0, x[1]":"x[2], x[3];
-# }' |
-# $SORT -k$PARTNER,$PARTNER -k$CHROM_STRAND,$CHROM_STRAND -k$POSITION,$POSITION"n" |  
-# $MASK_NODES | 
-# $PERL_COMPILE/index_proximity.pl
-# checkPipe
-
-
-
-
-# filter molecules and find junctions
-Rscript $ACTION_DIR/find/find_junctions.R
-checkPipe
-
-# add a mark to SV nodes that were also claimed by an earlier numbered SV
-ALL_NODES_FILE=$FIND_PREFIX.all_nodes.txt
-ALL_NODES_TMP=$ALL_NODES_FILE.tmp
-mv -f $ALL_NODES_FILE $ALL_NODES_TMP
-slurp -s 100M $ALL_NODES_TMP |
-perl $ACTION_DIR/find/mark_molecule_repeats.pl |
-slurp -s 100M -o $ALL_NODES_FILE
 checkPipe
 
 # clean up

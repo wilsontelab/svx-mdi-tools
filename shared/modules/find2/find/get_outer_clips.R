@@ -3,7 +3,7 @@
 #-------------------------------------------------------------------------------------
 clipFilterScript <- file.path(env$ACTION_DIR, 'find', 'filter_clips.pl')
 getOuterClipEvidence <- function(){
-    lapply(env$SAMPLES, function(sample){ # work one sample at a time (slow steps parallelized below)
+    lapply(env$SAMPLES, function(sample){ # work one sample at a time (slow steps are parallelized below)
         message(paste(" ", sample))
 
         # set the input and script files
@@ -13,10 +13,10 @@ getOuterClipEvidence <- function(){
         } else {
             env$COMPILE_PREFIX
         }
-        clipsFile <- paste(compilePrefix, 'outer_clips', 'txt', sep = ".") # TODO: change this to non-indexed gz file
+        clipsFile <- paste(compilePrefix, 'outer_clips', 'gz', sep = ".")
 
-        # load data from the filtering pipe as assembled node molecules
-        pipe <- paste("cat", clipsFile, "|", "perl", clipFilterScript, sample, refNodes$file)
+        # load data from the filtering pipe as assembled single-node molecules
+        pipe <- paste("zcat", clipsFile, "|", "perl", clipFilterScript, sample, refNodesFile)
         clipMols <- fread(
             cmd = pipe,
             sep = "\t",        
@@ -28,10 +28,10 @@ getOuterClipEvidence <- function(){
         if(nrow(clipMols) == 0) return(NULL)
 
         # process the clips molecules for duplicates and inversion flipping
-        clipMols <- do.call(rbind, mclapply(clipMols[, unique(svIndex)], function(svIdx){ 
-            flipInversionClips(svIdx, purgeDuplicateMolecules_(clipMols[svIndex == svIdx]) )
+        setkey(clipMols, svIndex)
+        do.call(rbind, mclapply(clipMols[, unique(svIndex)], function(svIdx){ 
+            flipInversionClips(svIdx, purgeDuplicateMolecules_(clipMols[svIdx]) )
         }, mc.cores = env$N_CPU))
-        clipMols
     })
 }
 #-------------------------------------------------------------------------------------
@@ -77,22 +77,40 @@ getFractionMatchingBases <- function(seq1, seq2, fixedLength = NULL, side = NULL
     }
     sum(mapply('==', strsplit(seq1, ''), strsplit(seq2, ''))) / fixedLength
 }
-purgeInvalidClips <- function(seq1, seq2, fixedLength = NULL, side = NULL){
-    clipIs <- nodes[, .I[NODE_CLASS == nodeClasses$OUTER_CLIP]]
-    if(length(clipIs) > 0){
-        discardClipIs <- if(is.na(call$JXN_SEQ)){
-            clipIs # result therefore leaves only gap molecules
-        } else {
-            na.omit(sapply(clipIs, function(i){
-                nodeN <- nodes[i, NODE_N]
-                x <- getFractionMatchingBases(nodes[i, CLIP_SEQ],
-                                              refNodes[nodeN, CLIP_SEQ],
-                                              side = refNodes[nodeN, side])
-                if(x < env$MIN_MERGE_DENSITY) i else NA
-            }))
-        }       
-        if(length(discardClipIs) > 0) {
-            nodes <- nodes[!(MOL_ID %in% nodes[discardClipIs, unique(MOL_ID)])] # remove clips as evidence
-        }
-    }
+purgeInvalidClips <- function(svIdx){
+
+    # check for something to do
+    jxnMols <- jxnMols[svIdx] 
+    clipIs <- jxnMols[, .I[NODE_CLASS == nodeClasses$OUTER_CLIP]]    
+    if(length(clipIs) == 0) return(jxnMols)
+
+    # if not a split or reconstructed gap, purge all clips, their accuracy cannot be checked
+    refMol <- jxnMols[IS_REFERENCE == 1]
+    discardClipIs <- if(refMol[, JXN_SEQ == "*"]){
+        clipIs # result therefore leaves only gap molecules
+
+    # otherwise, check clip sequences against the reference node's clip
+    } else {
+        na.omit(sapply(clipIs, function(i){
+            nodeN <- jxnMols[i, if(NODE_1 == "*") 2 else 1]
+            x <- if(nodeN == 1){
+                getFractionMatchingBases(
+                    jxnMols[i, CLIP_SEQ_1],
+                    refMol[  , CLIP_SEQ_1],
+                    side = refMol[, side1]
+                )
+            } else {
+                getFractionMatchingBases(
+                    jxnMols[i, CLIP_SEQ_2],
+                    refMol[  , CLIP_SEQ_2],
+                    side = refMol[, side2]
+                )
+            }
+            if(x < env$MIN_MERGE_DENSITY) i else NA
+        }))
+    }       
+
+    # remove invalid/untrustworthy clips as evidence
+    if(length(discardClipIs) > 0) jxnMols <- jxnMols[-discardClipIs] 
+    jxnMols
 }

@@ -8,9 +8,8 @@
 # input:
 #     $EXTRACT_PREFIX.nodes.*.gz
 # outputs:
-#     $DATA_FILE_PREFIX.junction_edges.*
-#     $DATA_FILE_PREFIX.nodes_by_proximity.*
-#     $DATA_FILE_PREFIX.outer_clips.*
+#     $COMPILE_PREFIX.junction_edges.gz
+#     $COMPILE_PREFIX.outer_clips.gz
 
 #-----------------------------------------------------------------
 # define common actions
@@ -75,14 +74,6 @@ EP_MOL_CLASS=3 # P or V
 GAP=0
 SPLIT=1
 OUTER_CLIP=2
-#-----------------------------------------------------------------
-# molecule classes
-#-----------------------------------------------------------------
-IS_PROPER='P'
-IS_SV='V'
-#-----------------------------------------------------------------
-JXN_NODES='$'$NODE_CLASS'!='$OUTER_CLIP'&&$'$JXN_TYPE'!="P"'
-CLIP_NODES='$'$NODE_CLASS'=='$OUTER_CLIP'&&$'$CLIP_LEN'>='$MIN_CLIP
 
 # some calculations only apply to collated molecules, i.e., svCapture
 if [ "$IS_COLLATED" != "" ]; then
@@ -123,66 +114,27 @@ fi
 
 
 #-----------------------------------------------------------------
-echo "declaring SV junction edges"
+echo "parsing and printing SV junction edges"
 #-----------------------------------------------------------------
 $SLURP_NODES |
-awk $JXN_NODES |
+awk '$'$NODE_CLASS'!='$OUTER_CLIP'&&$'$JXN_TYPE'!="P"' |
 $MASK_NODES | 
 $PERL_COMPILE/collapse_junctions.pl |
 $PIGZ |
 $SLURP_OUT $COMPILE_PREFIX.junction_edges.gz
 checkPipe
-# cut -f $NODE,$NODE_CLASS,$JXN_TYPE,$JXN_N,$MOL_ID |    
-# $SORT -k5,5n -k4,4n -k1,1 |
-# $GROUP_BY -g 4,5 -c 1,2,3 -o collapse,first,first | # group by molId+jxnN
-# sed 's/,/\t/g' |
-# $PERL_COMPILE/set_junction_target_class.pl | # returns: nodeClass, node1, node2, jxnType, targetClass, molId
-# $SORT -k1,1nr -k2,5 -k6,6n | # sort splits first
-# $GROUP_BY -g 1,2,3,4,5 -c 6,6,6 -o collapse,count,count_distinct | # aggregate molId by node pair
-# $PIGZ |
-# $SLURP_OUT $COMPILE_PREFIX.junction_edges.gz
-# checkPipe
-
-# #-----------------------------------------------------------------
-# echo "indexing SV junction nodes by coordinate proximity" # used to collect junction-flanking evidence
-# #-----------------------------------------------------------------
-# $SLURP_NODES |
-# awk 'BEGIN{OFS="\t"}'$JXN_NODES'{
-#     split($'$NODE', x, ":");
-#     print $0, x[1]":"x[2], x[3];
-# }' |
-# $SORT -k$PARTNER,$PARTNER -k$CHROM_STRAND,$CHROM_STRAND -k$POSITION,$POSITION"n" |  
-# $MASK_NODES | 
-# $PERL_COMPILE/index_proximity.pl
-# checkPipe
 
 #-----------------------------------------------------------------
-echo "indexing outer clip nodes by name" # used to add outer clips as SV evidence
+echo "printing outer clip nodes" # used to add outer clips as SV evidence
 #-----------------------------------------------------------------
 $SLURP_NODES |
-awk $CLIP_NODES |
-$MASK_NODES | 
-$SORT -k$NODE,$NODE | 
-$PERL_COMPILE/index_clips.pl
+awk '$'$NODE_CLASS'=='$OUTER_CLIP | # must be three separate awk steps, do not combine
+awk '{ print $0"\t"((NR - 1) % 2 + 1) }' | # add nodeN to clips for use by filter_clips.pl
+awk '$'$CLIP_LEN'>='$MIN_CLIP |
+$MASK_NODES |
+$PIGZ |
+$SLURP_OUT $COMPILE_PREFIX.outer_clips.gz
 checkPipe
-
-# #-----------------------------------------------------------------
-# echo "indexing outer clip nodes by molecule" # used to suppress molecule duplicates as unique SV evidence
-# #-----------------------------------------------------------------
-# $SLURP_NODES |
-# awk $CLIP_NODES'&&$'$MOL_CLASS'=="'$IS_SV'"' |
-# $SORT -k$MOL_ID,$MOL_ID"n" | 
-# $PERL_COMPILE/index_clips.pl 'molecule'
-# checkPipe
-
-# #-----------------------------------------------------------------
-# echo "indexing SV nodes by molecule"
-# #-----------------------------------------------------------------
-# $SLURP_NODES | # include all nodes in SV molecules, even unclipped outer
-# $SORT -k$MOL_ID,$MOL_ID"n" | 
-# $MASK_NODES |
-# $PERL_COMPILE/index_molecule_nodes.pl
-# checkPipe
 
 # clean up
 rm -r $TMP_DIR_WRK
