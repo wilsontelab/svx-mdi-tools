@@ -40,45 +40,22 @@ actions:
     find:
         order: 4
         module: find2
-    # find:
-    #     order: 3
-    #     module: find  
-    # compare:
-    #     order: 4
-    #     module: compare
 package:
     find: # the pipeline action after which a data package should assembled
         uploadType: svCapture # a signal to the Stage 2 framework regarding the package contents
         files:
+            metadata:
+                type: yml
+                file: $FIND_PREFIX.metadata.yml
             targetsBed:
                 type: bed
-                file: $TARGETS_BED          
-            # environment: # TODO: probably replace this by printing READ_LEN MAX_TLEN or what have you to logs, carried into package automatically
-            #     type: json 
-            #     file: $FIND_PREFIX.environment.json
-            structuralVariants: # TODO: support read a glob of files, not just a single file path
+                file: $FIND_PREFIX.target_regions.bed
+            structuralVariants:
                 type: tab-delimited
                 file: $FIND_PREFIX.structural_variants.gz
-            allNodes:
+            junctionMolecules:
                 type: tab-delimited
-                file: $FIND_PREFIX.all_nodes.txt
-            # manifestFile: # a sample manifest
-            #     type: manifest-file
-            #     manifestType: xxxx
-            #     file: $XXXX.xxxx   
-# package:
-#     compare: # the pipeline action after which a data package should assembled
-#         uploadType: svCapture # a signal to the Stage 2 framework regarding the package contents
-#         files:
-#             targetsBed:
-#                 type: bed
-#                 file: $TARGETS_BED          
-#             environment: # TODO: probably replace this by printing READ_LEN MAX_TLEN or what have you to logs, carried into package automatically
-#                 type: json 
-#                 file: $COMPARE_PREFIX.environment.json
-#             structuralVariants:
-#                 type: tab-delimited
-#                 file: $COMPARE_PREFIX.structural_variants.gz
+                file: $FIND_PREFIX.junction_molecules.gz
 container:
     supported: false    # set to true if you maintain a container registry for this pipeline [false]
     registry:  ghcr.io  # domain name of your OCI-compatible, oras-accessible, container registry [ghcr.io]

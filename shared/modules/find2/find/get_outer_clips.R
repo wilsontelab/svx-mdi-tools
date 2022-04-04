@@ -22,8 +22,8 @@ getOuterClipEvidence <- function(){
             sep = "\t",        
             header = FALSE,
             stringsAsFactors = FALSE,
-            col.names = names(compile$working2),
-            colClasses = unname(unlist(compile$working2))
+            col.names = names(find$working2),
+            colClasses = unname(unlist(find$working2))
         )
         if(nrow(clipMols) == 0) return(NULL)
 

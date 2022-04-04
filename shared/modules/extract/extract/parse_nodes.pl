@@ -296,20 +296,31 @@ sub printJunction {
 # check to confirm that alignments truly do flank a SV and report its type
 sub getJxnType {
     my ($aln1, $aln2, $innData1, $innData2, $nodeClass) = @_;  
+
+    # simplest case, translocation = alignment to different chromosomes
     $$aln1[RNAME_INDEX] != $$aln2[RNAME_INDEX] and return TRANSLOCATION;
+
+    # inversions determined by unexpected read orientiations
     if($isFR and $nodeClass == GAP){
+        # special case of unmerged FR alignment pairs, expect two PDL alignments to be on opposite strands
         ($$aln1[FLAG] & _REVERSE) == ($$aln2[FLAG] & _REVERSE) and return INVERSION;
-    } else {
-        ($$aln1[FLAG] & _REVERSE) != ($$aln2[FLAG] & _REVERSE) and return INVERSION; # given that we expect FF or RR after for a sequenced junction or after collation
+    } else { 
+        # for a sequenced junction or after collation, two PDL alignments are expected to be from the same strand of the source molecule
+        ($$aln1[FLAG] & _REVERSE) != ($$aln2[FLAG] & _REVERSE) and return INVERSION;   
     }
-    my $dist = abs($$innData2[_POS] - $$innData1[_POS]);
+
+    # PDL are distinguish based on their position along the chromosome
+    my $dist = $$aln1[FLAG] & _REVERSE ? $$innData1[_POS] - $$innData2[_POS] : $$innData2[_POS] - $$innData1[_POS];
     if($nodeClass == GAP){ # based on TLEN=insertSize (since we lack a junction)
         $dist < $gapDupLimit and return DUPLICATION;
         $dist > $gapDelLimit and return DELETION;
     } else { # based on nodes that declare a sequenced junction
         $dist <= 0 and return DUPLICATION;
-        $dist > 1 and return DELETION;
+        $dist > 1  and return DELETION; # pos delta is 1 for a continuous alignment
     }
+
+    # override any aligner designations based on our chrom/strand/separation criteria
+    # i.e., we may call some things proper that the aligner did not
     return PROPER;
 }
 # assign a source strand to help track uncollated TruSeq strand duplicates of the same source molecule

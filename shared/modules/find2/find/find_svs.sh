@@ -5,10 +5,10 @@
 #     extract/extract_nodes.sh
 #     compile/compile_nodes.sh
 # outputs:
+#     $FIND_PREFIX.metadata.yml
+#     $FIND_PREFIX.target_regions.bed
 #     $FIND_PREFIX.structural_variants.gz
 #     $FIND_PREFIX.junction_molecules.gz
-#     $FIND_PREFIX.sample_data.yml
-#     $FIND_PREFIX.target_regions.bed
 
 #-----------------------------------------------------------------
 # define common actions
@@ -82,8 +82,8 @@ echo "collecting library stats"
 #-----------------------------------------------------------------
 export SAMPLES=`cat $LIBRARY_STAT_FILES | grep SAMPLE | sed 's/SAMPLE:\s//'`
 export MAX_TLENS=`cat $LIBRARY_STAT_FILES | grep MAX_TLEN | sed 's/MAX_TLEN:\s//'`
-echo "SAMPLES: $SAMPLES" > $FIND_PREFIX.sample_data.yml
-echo "MAX_TLENS: $MAX_TLENS" >> $FIND_PREFIX.sample_data.yml
+echo "SAMPLES: $SAMPLES" > $FIND_PREFIX.metadata.yml
+echo "MAX_TLENS: $MAX_TLENS" >> $FIND_PREFIX.metadata.yml
 
 #-----------------------------------------------------------------
 # begin to apply SV filters
@@ -97,11 +97,9 @@ else
 fi
 
 #-----------------------------------------------------------------
-# load genome into shared memory for rapid access
+# load genome into shared memory for rapid reference sequence lookup
 #-----------------------------------------------------------------
-# echo "loading $GENOME into RAM"
-source $MODULES_DIR/utilities/shell/create_shm_dir.sh
-rm -f $SHM_DIR_WRK/*
+echo "loading $GENOME into RAM"
 export SHM_GENOME_FASTA=$SHM_DIR_WRK/$GENOME.fa
 cp $GENOME_FASTA     $SHM_GENOME_FASTA
 cp $GENOME_FASTA.fai $SHM_GENOME_FASTA.fai
@@ -116,23 +114,16 @@ awk 'BEGIN{OFS="\t"}'$TARGET_CLASS_FILTER'{
     split($'$NODE_2', n2, ":");
     print n2[1]":"n2[2]":"n1[1]":"n1[2], n1[3], n2[3], $0;
 }' |
-
 ################
 # head -n 1000 | 
-
 $SORT -k1,1 -k2,2n | 
 perl $ACTION_DIR/find/group_junctions.pl | 
-
 ##################
 # awk '$NF<=2500' | 
-
 Rscript $ACTION_DIR/find/call_svs.R
-
-exit 1
 checkPipe
 
 # clean up
 rm -fr $SHM_DIR_WRK
-rm -f  $ALL_NODES_TMP
 
 echo "done"
