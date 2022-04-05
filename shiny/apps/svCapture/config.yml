@@ -19,7 +19,13 @@ description: "Analyze structural variants found in captured target regions"
 uploadTypes:
     svCapture: 
         contentFileTypes: # anything not listed will not be available to the app
-            structuralVariants:  
+            metadata:
+                required: true
+            targetsBed:
+                required: false
+            structuralVariants:
+                required: true
+            junctionMolecules:
                 required: true
 
 #----------------------------------------------------------------------
@@ -55,8 +61,8 @@ appSteps:
     #     #     analysisTypes:
     #     #         example:
     #     #             - example
-    targets:
-        module: targets
+    # targets:
+    #     module: targets
         # options:
         #     analysisTypes:
         #         example:

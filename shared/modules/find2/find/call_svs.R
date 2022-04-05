@@ -95,129 +95,100 @@ jxnMols[, ':='(
 )]
 #=====================================================================================
 
-# #=====================================================================================
-# # apply initial molecule-level filters
-# #-------------------------------------------------------------------------------------
-# message("applying SV size filter to junction molecules")
-# if(env$SV_SIZE_FACTOR > 0) env$MIN_SV_SIZE <- env$SV_SIZE_FACTOR * MAX_MAX_TLEN
-# if(env$MIN_SV_SIZE > 0) jxnMols <- jxnMols[JXN_TYPE == "T" | abs(pos2 - pos1) >= env$MIN_SV_SIZE]
-# #=====================================================================================
+#=====================================================================================
+# apply initial molecule-level filters
+#-------------------------------------------------------------------------------------
+message("applying SV size filter to junction molecules")
+if(env$SV_SIZE_FACTOR > 0) env$MIN_SV_SIZE <- env$SV_SIZE_FACTOR * MAX_MAX_TLEN
+if(env$MIN_SV_SIZE > 0) jxnMols <- jxnMols[JXN_TYPE == "T" | abs(pos2 - pos1) >= env$MIN_SV_SIZE]
+#=====================================================================================
 
-# #=====================================================================================
-# # break molecule continuity groups into SV calls
-# #-------------------------------------------------------------------------------------
-# message("parsing junction continuity groups into SVs")
-# jxnMols <- do.call(rbind, mclapply(jxnMols[, unique(groupIndex)], parseContinuityGroup, mc.cores = env$N_CPU))
-# # jxnMols <- do.call(rbind, lapply(jxnMols[, unique(groupIndex)[1:1000]], parseContinuityGroup))
+#=====================================================================================
+# break molecule continuity groups into SV calls
+#-------------------------------------------------------------------------------------
+message("parsing junction continuity groups into SVs")
+jxnMols <- do.call(rbind, mclapply(jxnMols[, unique(groupIndex)], parseContinuityGroup, mc.cores = env$N_CPU))
 
-# message("marking ambiguous source molecules")
-# setkey(jxnMols, jxnKey)
-# ambiguousJxnKeys <- jxnMols[, .N, by = jxnKey][N > 1, jxnKey]
-# jxnMols[ambiguousJxnKeys, AMBIGUOUS := 1L]
-# #=====================================================================================
+message("marking ambiguous source molecules")
+setkey(jxnMols, jxnKey)
+ambiguousJxnKeys <- jxnMols[, .N, by = jxnKey][N > 1, jxnKey]
+jxnMols[ambiguousJxnKeys, AMBIGUOUS := 1L]
+#=====================================================================================
 
-# #=====================================================================================
-# # purge duplicates from within the molecules for each SV in each sample
-# #-------------------------------------------------------------------------------------
-# message("aggregating source molecule duplicates")
-# setkey(jxnMols, sampleSvIndex)
-# jxnMols <- do.call(rbind, mclapply(jxnMols[, unique(sampleSvIndex)], purgeDuplicateMolecules, mc.cores = env$N_CPU))
-# # jxnMols <- do.call(rbind, lapply(jxnMols[, unique(sampleSvIndex)[1:1000]], purgeDuplicateMolecules))
-# #=====================================================================================
+#=====================================================================================
+# purge duplicates from within the molecules for each SV in each sample
+#-------------------------------------------------------------------------------------
+message("aggregating source molecule duplicates")
+setkey(jxnMols, sampleSvIndex)
+jxnMols <- do.call(rbind, mclapply(jxnMols[, unique(sampleSvIndex)], purgeDuplicateMolecules, mc.cores = env$N_CPU))
+#=====================================================================================
 
-# ##############################
-# tmpFile <- paste(env$FIND_PREFIX, "DEVELOP_1.RDS", sep=".")
-# saveRDS(jxnMols, file = tmpFile)
-# # jxnMols <- readRDS(tmpFile)
+#=====================================================================================
+# assign one molecule as the reference molecule for further characterization of each SV junction
+#-------------------------------------------------------------------------------------
+message("assigning SV reference molecules")
+setkey(jxnMols, svIndex)
+jxnMols <- do.call(rbind, mclapply(jxnMols[, unique(svIndex)], assignReferenceMolecule, mc.cores = env$N_CPU))
+#=====================================================================================
 
-# #=====================================================================================
-# # assign one molecule as the reference molecule for further characterization of each SV junction
-# #-------------------------------------------------------------------------------------
-# message("assigning SV reference molecules")
-# setkey(jxnMols, svIndex)
-# jxnMols <- do.call(rbind, mclapply(jxnMols[, unique(svIndex)], assignReferenceMolecule, mc.cores = env$N_CPU))
-# # jxnMols <- do.call(rbind, lapply(jxnMols[, unique(svIndex)[1:1000]], assignReferenceMolecule))
-# #=====================================================================================
+#=====================================================================================
+# add reliable outer clip nodes as SV evidence and use to knit together gap junctions
+#-------------------------------------------------------------------------------------
+message("collecting candidate matching outer clipped nodes")
+refNodesFile <- printReferenceNodes()
+setkey(jxnMols, svIndex) # key does not persist after do.call(rbind, mclapply...
+flipGuidance <- jxnMols[IS_REFERENCE == 1, .(
+    svIndex     = svIndex,
+    isInversion = side1 == side2, 
+    flipNode    = ifelse(side1 == 'R', 1L, 2L)
+)]
+jxnMols <- rbind(jxnMols, do.call(rbind, getOuterClipEvidence())) # one sample at a time with internal parallel actions 
+unlink(refNodesFile)
 
-# ##############################
-# tmpFile <- paste(env$FIND_PREFIX, "DEVELOP_2.RDS", sep=".")
-# saveRDS(jxnMols, file = tmpFile)
-# # jxnMols <- readRDS(tmpFile)
+message("attempting to merge gap junctions using clipped nodes")
+jxnMols[IS_REFERENCE == 1, ':='(
+    JXN_SEQ = ifelse(NODE_CLASS == nodeClasses$SPLIT, SEQ_1, "*"),
+    MERGE_LEN = 0L
+)]
+setkey(jxnMols, svIndex)
+jxnMols <- do.call(rbind, mclapply(jxnMols[, unique(svIndex)], mergeGapJunctions, mc.cores = env$N_CPU))
 
-# #=====================================================================================
-# # add reliable outer clip nodes as SV evidence and use to knit together gap junctions
-# #-------------------------------------------------------------------------------------
-# message("collecting candidate matching outer clipped nodes")
-# refNodesFile <- printReferenceNodes()
-# setkey(jxnMols, svIndex) # key does not persist after do.call(rbind, mclapply...
-# flipGuidance <- jxnMols[IS_REFERENCE == 1, .(
-#     svIndex     = svIndex,
-#     isInversion = side1 == side2, 
-#     flipNode    = ifelse(side1 == 'R', 1L, 2L)
-# )]
-# jxnMols <- rbind(jxnMols, do.call(rbind, getOuterClipEvidence())) # one sample at a time with internal parallel actions 
-# unlink(refNodesFile)
+message("purging invalid/untrustworthy clip evidence")
+setkey(jxnMols, svIndex)
+jxnMols <- do.call(rbind, mclapply(jxnMols[, unique(svIndex)], purgeInvalidClips, mc.cores = env$N_CPU))
+#=====================================================================================
 
-# message("attempting to merge gap junctions using clipped nodes")
-# jxnMols[IS_REFERENCE == 1, ':='(
-#     JXN_SEQ = ifelse(NODE_CLASS == nodeClasses$SPLIT, SEQ_1, "*"),
-#     MERGE_LEN = 0L
-# )]
-# setkey(jxnMols, svIndex)
-# jxnMols <- do.call(rbind, mclapply(jxnMols[, unique(svIndex)], mergeGapJunctions, mc.cores = env$N_CPU))
-# # jxnMols <- do.call(rbind, lapply(jxnMols[, unique(svIndex)[1:1000]], mergeGapJunctions))
+#=====================================================================================
+# characterize the final set of SV junctions and prepare for app
+#-------------------------------------------------------------------------------------
+# initialize genome
+message("initializing genome sequence retrieval")
+setCanonicalChroms()
+write(
+    paste0('CHROMS: ', paste(canonicalChroms, collapse = " ")), 
+    file = paste(env$FIND_PREFIX, "metadata", "yml", sep="."),
+    append = TRUE
+)
+loadFaidx(env$SHM_DIR_WRK)
+faidx_padding <- round(MAX_MAX_TLEN * 1.2, 0) # sufficient to contain any source molecule span
 
-# message("purging invalid/untrustworthy clip evidence")
-# setkey(jxnMols, svIndex)
-# jxnMols <- do.call(rbind, mclapply(jxnMols[, unique(svIndex)], purgeInvalidClips, mc.cores = env$N_CPU))
-# # jxnMols <- do.call(rbind, lapply(jxnMols[, unique(svIndex)[1:1000]], purgeInvalidClips))
-# #=====================================================================================
+# initialize and store parsed target regions (if any)
+loadTargetRegions()
+write.table(
+    if(!is.null(targetRegions)) targetRegions$bed else "NA", 
+    paste(env$FIND_PREFIX, "target_regions", "bed", sep="."), 
+    quote = FALSE, 
+    sep = "\t",
+    row.names = FALSE,
+    col.names = TRUE
+)
 
-# ##############################
-# tmpFile <- paste(env$FIND_PREFIX, "DEVELOP_3.RDS", sep=".")
-# saveRDS(jxnMols, file = tmpFile)
-# # jxnMols <- readRDS(tmpFile)
+message("characterizing final SV junction calls")
+setkey(jxnMols, svIndex)
+svCalls <- do.call(rbind, mclapply(jxnMols[, unique(svIndex)], characterizeSvJunction, mc.cores = env$N_CPU))
 
-# #=====================================================================================
-# # characterize the final set of SV junctions and prepare for app
-# #-------------------------------------------------------------------------------------
-# # initialize genome
-# message("initializing genome sequence retrieval")
-# setCanonicalChroms()
-# write(
-#     paste0('CHROMS: ', paste(canonicalChroms, collapse = " ")), 
-#     file = paste(env$FIND_PREFIX, "metadata", "yml", sep="."),
-#     append = TRUE
-# )
-# loadFaidx(env$SHM_DIR_WRK)
-# faidx_padding <- round(MAX_MAX_TLEN * 1.2, 0) # sufficient to contain any source molecule span
-
-# # initialize and store parsed target regions (if any)
-# loadTargetRegions()
-# write.table(
-#     if(!is.null(targetRegions)) targetRegions$bed else "NA", 
-#     paste(env$FIND_PREFIX, "target_regions", "bed", sep="."), 
-#     quote = FALSE, 
-#     sep = "\t",
-#     row.names = FALSE,
-#     col.names = TRUE
-# )
-
-# message("characterizing final SV junction calls")
-# setkey(jxnMols, svIndex)
-# svCalls <- do.call(rbind, mclapply(jxnMols[, unique(svIndex)], characterizeSvJunction, mc.cores = env$N_CPU))
-# # svCalls <- do.call(rbind, lapply(jxnMols[, unique(svIndex)[1:1000]], characterizeSvJunction))
-
-# message("counting SVs by sample")
-# svCalls <- merge(svCalls, dcast(jxnMols, svIndex ~ SAMPLE, length), by.x = 'SV_ID', by.y = "svIndex")
-
-##############################
-jxnMolsFile <- paste(env$FIND_PREFIX, "DEVELOP_4_jxnMols.RDS", sep=".")
-svCallsFile <- paste(env$FIND_PREFIX, "DEVELOP_4_svCalls.RDS", sep=".")
-# saveRDS(jxnMols, file = jxnMolsFile)
-# saveRDS(svCalls, file = svCallsFile)
-jxnMols <- readRDS(jxnMolsFile)
-svCalls <- readRDS(svCallsFile)
+message("counting SVs by sample")
+svCalls <- merge(svCalls, dcast(jxnMols, svIndex ~ SAMPLE, length), by.x = 'SV_ID', by.y = "svIndex")
 
 message("setting SV molecule plot positions")
 jxnMols[, TARGET_POS_1 := mcmapply(getTargetRegionI, chrom1, OUT_POS1, mc.cores = env$N_CPU)]
