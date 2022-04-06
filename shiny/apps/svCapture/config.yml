@@ -27,7 +27,10 @@ uploadTypes:
                 required: true
             junctionMolecules:
                 required: true
-
+            manifestFile:
+                required: true
+            distributionsZip:
+                required: false
 #----------------------------------------------------------------------
 # labels and definitions for all sequential analysis steps shown in sidebar
 #----------------------------------------------------------------------
