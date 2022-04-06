@@ -58,30 +58,13 @@ NODE_2=28
 # ...
 
 #-----------------------------------------------------------------
-# determine if this is a single-sample find or a multi-sample compare
-echo "setting find mode"
-#-----------------------------------------------------------------
-export FIND_MODE=find
-export LIBRARY_STAT_FILES=`ls -1 $EXTRACT_PREFIX.library_stats.yml 2>/dev/null`
-export JUNCTION_FILES=`ls -1 $COMPILE_PREFIX.junction_edges.gz 2>/dev/null`
-if [ "$JUNCTION_FILES" = "" ]; then
-    export FIND_MODE=compare
-    export LIBRARY_STAT_FILES=`ls -1 $EXTRACT_GLOB_PREFIX.library_stats.yml 2>/dev/null`    
-    export JUNCTION_FILES=`ls -1 $COMPILE_GLOB_PREFIX.junction_edges.gz 2>/dev/null`
-    if [ "$JUNCTION_FILES" = "" ]; then
-        echo "could not find junction_edges file(s) in:"
-        echo "    $TASK_DIR"
-        exit 1
-    fi
-fi
-echo "  $FIND_MODE"
-
-#-----------------------------------------------------------------
 # parse the library names and MAX_TLEN values
 echo "collecting library stats"
 #-----------------------------------------------------------------
 export SAMPLES=`cat $LIBRARY_STAT_FILES | grep SAMPLE | sed 's/SAMPLE:\s//'`
 export MAX_TLENS=`cat $LIBRARY_STAT_FILES | grep MAX_TLEN | sed 's/MAX_TLEN:\s//'`
+export SAMPLES=`echo "$SAMPLES" | tr '\n' ' '`
+export MAX_TLENS=`echo "$MAX_TLENS" | tr '\n' ' '`
 echo "SAMPLES: $SAMPLES" > $FIND_PREFIX.metadata.yml
 echo "MAX_TLENS: $MAX_TLENS" >> $FIND_PREFIX.metadata.yml
 

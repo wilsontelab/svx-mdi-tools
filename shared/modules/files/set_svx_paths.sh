@@ -18,5 +18,5 @@ export COMPILE_GLOB_PREFIX=$TASK_DIR/*/*.$GENOME.compile
 export FIND_PREFIX=$DATA_GENOME_PREFIX.find
 export FIND_GLOB_PREFIX=$TASK_DIR/*/*.$GENOME.find
 
-# compare
-export COMPARE_PREFIX=$DATA_GENOME_PREFIX.compare
+# manifest
+export MANIFEST_PREFIX=$DATA_GENOME_PREFIX.manifest

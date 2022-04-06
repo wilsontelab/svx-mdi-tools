@@ -56,6 +56,14 @@ package:
             junctionMolecules:
                 type: tab-delimited
                 file: $FIND_PREFIX.junction_molecules.gz
+            manifestFile:
+                type: comma-delimited
+                manifestType: simple
+                file: $MANIFEST_PREFIX.sample_manifest.csv
+            distributionsZip:
+                type: zip-file
+                file: $MANIFEST_PREFIX.distribution_plots.zip
+
 container:
     supported: false    # set to true if you maintain a container registry for this pipeline [false]
     registry:  ghcr.io  # domain name of your OCI-compatible, oras-accessible, container registry [ghcr.io]

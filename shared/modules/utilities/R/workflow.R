@@ -1,4 +1,3 @@
-
 # load, parse and save environment variables
 # expects that calling script has executed:
 #   env <- as.list(Sys.getenv())
@@ -28,7 +27,20 @@ sourceScripts <- function(dir, scripts){
     }
 }
 
-# report summary values
+# report and retrieve summary values
 reportStat <- function(value, message){
     message(paste(value, message, sep = "\t"))
+}
+getStatValue <- function(projectDir, sample, action, scriptId, statName, pipeline = NULL){
+    if(is.null(pipeline)) pipeline <- env$PIPELINE_NAME
+    dir <- file.path(projectDir, sample, pipeline, action, 'logs')
+    if(!dir.exists(dir)) return(NA)
+    fileName <- paste(sample, scriptId, "log", "txt", sep = ".")
+    statsFile <- file.path(dir, fileName)
+    if(!file.exists(statsFile)) return(NA)
+    stats <- fread(statsFile, sep = "\t", header = FALSE, stringsAsFactors = FALSE)
+    if(nrow(stats) == 0) return(NA)
+    names(stats) <- c('scriptId_', 'value_', 'statName_', 'description_')
+    row <- stats[, last(.I[statName_ == statName])]
+    if(length(row) == 0) NA else stats[row, value_]
 }
