@@ -19,37 +19,75 @@ settings <- stepSettingsServer( # display settings not stored in the UI, exposed
     id = 'settings',
     parentId = id
 )
-sampleSet <- sampleSetSourceServer( # selectors to pick a sample set
+sampleSet <- sampleSetServer( # selectors to pick a sample set
     id = 'sampleSet',
     parentId = id
 )
-outcomes <- reactiveValues() # outcomes[[sourceId]][i] <- TRUE if library i failed
+outcomes <- reactiveValues() # logical failure vectors keyed as [[sampleSet]]
 
-# #----------------------------------------------------------------------
-# # cascade from selected dataSource to its QC files
-# #----------------------------------------------------------------------
-# libraryMetrics <- reactive({
-#     startSpinner(session, 'libraryMetrics')
-#     sourceId <- sampleSet$input$dataSource
-#     req(sourceId)
-#     file <- getSourceFilePath(sourceId, 'sampleSummary')
-#     dt <- fread(file)
-#     sn1 <- getSampleNames(sampleIds = dt$sampleName) # hacky way to deal with inconsistent sample/library names in manifests # nolint
-#     sn2 <- getSampleNames(sampleIds = dt$libraryName)
-#     dt$insertSizesKey <- dt$sampleName
-#     if(sum(is.na(sn1)) > sum(is.na(sn2))){
-#         dt$Sample_ID <- dt$libraryName
-#         dt$sampleName <- sn2
-#     } else {
-#         dt$Sample_ID <- dt$sampleName
-#         dt$sampleName <- sn1
-#     }
-#     dt$efficiency <- dt$grouped / dt$readPairs
-#     stopSpinner(session, 'libraryMetrics')
-#     dt
-# })
-# insertSizes <- reactive({
-#     startSpinner(session, 'insertSizes')
+#----------------------------------------------------------------------
+# cascade from selected dataSource to its QC files
+#----------------------------------------------------------------------
+sourceIds <- reactive({
+    req(sampleSet$assignments())
+    startSpinner(session, 'libraryMetrics')
+# sampleSet$assignments
+# Classes 'data.table' and 'data.frame':  6 obs. of  5 variables:
+#  $ Source_ID: chr  "6741c8f40c01f6ed4760406898b1607c" "6741c8f40c01f6ed4760406898b1607c" "6741c8f40c01f6ed4760406898b1607c" "6741c8f40c01f6ed4760406898b1607c" ...
+#  $ Project  : chr  "high_APH_040422" "high_APH_040422" "high_APH_040422" "high_APH_040422" ...
+#  $ Sample_ID: chr  "HCT_0.2APH_2APH_M" "HCT_0.2APH_G2" "HCT_0.2APH__M" "HCT_2APH_M" ...
+#  $ Category1: int  2 1 2 2 1 2
+#  $ Category2: int  4 2 2 3 1 1
+    unique(sampleSet$assignments()$Source_ID)
+})
+libraryMetrics <- reactive({
+    req(sourceIds())
+    dt <- do.call(rbind, lapply(sourceIds(), function(sourceId){
+        manifestFile <- getSourceFilePath(sourceId, "manifestFile")
+        x <- fread(manifestFile)
+        x[, ':='(
+            Source_ID = sourceId,
+            Sample_Name = paste(Project, Sample_ID, sep = ":"),
+            efficiency = nSourceMolecules / nReadPairs
+        )]
+        x
+    }))
+    stopSpinner(session, 'libraryMetrics')
+    dt
+})
+
+observeEvent(libraryMetrics(), {
+# libraryMetrics()
+# Classes 'data.table' and 'data.frame':  6 obs. of  12 variables:
+#  $ Project          : chr  "high_APH_040422" "high_APH_040422" "high_APH_040422" "high_APH_040422" ...
+#  $ Sample_ID        : chr  "HCT_0.2APH_2APH_M" "HCT_0.2APH_G2" "HCT_0.2APH__M" "HCT_2APH_M" ...
+#  $ Description      : chr  "HCT_0.2APH_2APH_M" "HCT_0.2APH_G2" "HCT_0.2APH__M" "HCT_2APH_M" ...
+#  $ maxTLen          : int  790 844 716 762 840 843
+#  $ nReadPairs       : int  134723261 103110289 173540492 162222559 182287552 167856108
+#  $ nSourceMolecules : int  9018381 8339919 16452974 9553548 10312938 11943757
+#  $ onTargetCoverage : num  2444 2275 2623 2540 2602 ...
+#  $ offTargetCoverage: num  0.096 0.096 0.598 0.111 0.147 0.237
+#  $ enrichment       : num  25462 23695 4386 22883 17702 ...
+#  $ nSvs             : int  5053 3887 5822 4755 4378 4864
+#  $ Yield            : int  134723261 103110289 173540492 162222559 182287552 167856108
+#  $ sourceId         : chr  "6741c8f40c01f6ed4760406898b1607c" "6741c8f40c01f6ed4760406898b1607c" "6741c8f40c01f6ed4760406898b1607c" "6741c8f40c01f6ed4760406898b1607c" ...
+    dstr(libraryMetrics())
+})
+
+# insertSizeFiles <- reactive({
+#     req(sourceIds())
+#     dt <- do.call(rbind, lapply(sourceIds(), function(sourceId){
+#         distributionsZip <- getSourceFilePath(sourceId, "distributionsZip")
+#         fread(manifestFile)
+#     }))
+
+
+#     dt <- do.call(rbind, lapply(sourceIds, function(sourceId){
+#         manifestFile <- getSourceFilePath(sourceId, "manifestFile")
+#         fread(manifestFile)
+#     }))
+
+
 #     sourceId <- sampleSet$input$dataSource
 #     req(sourceId)
 #     file <- getSourceFilePath(sourceId, 'insertSizes')
@@ -59,23 +97,26 @@ outcomes <- reactiveValues() # outcomes[[sourceId]][i] <- TRUE if library i fail
 #     x
 # })
 
-# #----------------------------------------------------------------------
-# # cascade to determine which sample are marked as failed, with initial defaults
-# #----------------------------------------------------------------------
-# failedStatus <- reactive({
-#     libraryMetrics <- libraryMetrics()
-#     req(libraryMetrics)  
-#     sourceId <- sampleSet$input$dataSource
-#     if(is.null(outcomes[[sourceId]])) outcomes[[sourceId]] <- rep(FALSE, nrow(libraryMetrics))
-#     names(outcomes[[sourceId]]) <- libraryMetrics$Sample_ID
-#     outcomes[[sourceId]]
-# })
-# output$nFailedLibraries <- renderText({
-#     failed <- failedStatus()
-#     req(!is.null(failed) && length(failed) > 0)
-#     paste(sum(failed),    'of', 
-#           length(failed), 'libraries marked as failed')
-# })
+#----------------------------------------------------------------------
+# cascade to determine which sample are marked as failed, with initial defaults
+#----------------------------------------------------------------------
+failedStatus <- reactive({
+    libraryMetrics <- libraryMetrics()
+    req(libraryMetrics) 
+    ss <- sampleSet$input$sampleSet
+    if(is.null(outcomes[[ss]])){
+        outcomes[[ss]] <- rep(FALSE, nrow(libraryMetrics))
+        names(outcomes[[ss]]) <- libraryMetrics$Sample_Name
+    }
+    libraryMetrics()[, failed := outcomes[[ss]]]
+    outcomes[[ss]]
+})
+output$nFailedLibraries <- renderText({
+    failed <- unlist(failedStatus())
+    req(!is.null(failed) && length(failed) > 0)
+    paste(sum(failed),    'of', 
+          length(failed), 'libraries marked as failed')
+})
 
 # #----------------------------------------------------------------------
 # # systematically set and clear failure outcomes over many samples
@@ -101,51 +142,126 @@ outcomes <- reactiveValues() # outcomes[[sourceId]][i] <- TRUE if library i fail
 #     invalidateTable( invalidateTable() + 1 )
 # })
 
-# #----------------------------------------------------------------------
-# # stacked barplots of various library QC metrics
-# #----------------------------------------------------------------------
-# libraryMetricTypes <- list(
-#     readPairs  = "# Input Read Pairs",
-#     filtered   = "# Filtered Read Pairs",
-#     grouped    = "# Unique Read Pairs",    
-#     alignRate  = "Alignment Rate",
-#     dupRate    = "Duplication Rate",
-#     efficiency = "Library Efficiency"
-# )
-# isReadPairCount <- endsWith(unlist(libraryMetricTypes), "Read Pairs")
-# libraryMetricsPlotData <- reactive({
-#     startSpinner(session, 'libraryMetricsPlotData')
-#     failed <- failedStatus() 
-#     req(length(failed) > 0) 
-#     libraryMetrics <- libraryMetrics()
-#     d <- lapply(names(libraryMetricTypes), function(col){
-#         d <- libraryMetrics[[col]]
-#         names(d) <- libraryMetrics$libraryName
-#         d[!failed]  
-#     })
-#     names(d) <- libraryMetricTypes
-#     stopSpinner(session, 'libraryMetricsPlotData')
-#     d
-# })  
-# getPlotRange <- function(d, i){
-#     if(!isReadPairCount[i]) return( c(0, 1) ) # fractional quality metrics
-#     max <- min(max(d), median(d) * settings$Plot_Limits()$Read_Count_Fold_Median$value)
-#     c(0, max)
-# }
-# interactiveBarplotServer(
-#     'libraryMetricsPlot',
-#     libraryMetricsPlotData,
-#     orientation = 'vertical',
-#     shareAxis = list(x = TRUE),
-#     shareMargin = 0.01,
-#     lines = 'median',
-#     lineWidth = 1.5,
-#     range = getPlotRange
-# )
+#----------------------------------------------------------------------
+# stacked barplots of various library QC metrics
+#----------------------------------------------------------------------
+libraryMetricTypes <- list(
+    nReadPairs  = "# Input Read Pairs",
+    nSourceMolecules  = "# Source Molecules",
+    onTargetCoverage  = "On-Target Coverage",
+    offTargetCoverage  = "Off-Target Coverage",
+    enrichment  = "Capture Enrichment",
+    efficiency  = "Library Efficiency",
+    nSvs  = "# SV Junctions"
+)
 
-# #----------------------------------------------------------------------
-# # scatter traces of library insert sizes
-# #----------------------------------------------------------------------
+isReadPairCount <- endsWith(unlist(libraryMetricTypes), "Read Pairs")
+
+libraryMetricsPlotData <- reactive({
+    startSpinner(session, 'libraryMetricsPlotData')
+    req(length(failedStatus()) > 0) 
+    libraryMetrics <- libraryMetrics()[failed == FALSE]
+    d <- lapply(names(libraryMetricTypes), function(col){
+        d <- libraryMetrics[[col]]
+        names(d) <- libraryMetrics$Sample_ID
+        d
+    })
+    names(d) <- libraryMetricTypes
+    stopSpinner(session, 'libraryMetricsPlotData')
+    d
+})  
+getPlotRange <- function(d, i){
+    # if(!is.integer(d)) return( c(0, 1) ) # fractional quality metrics
+    # if(!isReadPairCount[i]) return( c(0, 1) ) # fractional quality metrics
+    max <- min(max(d), median(d) * settings$Plot_Limits()$Read_Count_Fold_Median$value)
+    c(0, max)
+}
+interactiveBarplotServer(
+    'libraryMetricsPlot',
+    libraryMetricsPlotData,
+    orientation = 'vertical',
+    shareAxis = list(x = TRUE),
+    shareMargin = 0.01,
+    lines = 'median',
+    lineWidth = 1.5,
+    range = getPlotRange
+)
+
+#----------------------------------------------------------------------
+# scatter plot to explore metric relationships
+#----------------------------------------------------------------------
+metricRelationshipsData <- reactive({
+    req(libraryMetrics()) 
+    req(length(failedStatus()) > 0) 
+    d <- libraryMetrics()[, .SD, .SDcols = c(input$xAxisMetric, input$yAxisMetric, 'failed')]
+    names(d) <- c('x', 'y', 'failed')
+    d
+})
+metricRelationshipsOverplotData <- reactive({ # nolint
+    req(metricRelationshipsData())
+    metricRelationshipsData()[failed == TRUE]
+})
+interactiveScatterplotServer(
+    'metricRelationshipsPlot',
+    metricRelationshipsData, 
+    xtitle = reactive({ input$xAxisMetric }),
+    ytitle = reactive({ input$yAxisMetric }),
+    pointSize = 5, 
+    overplot = metricRelationshipsOverplotData,
+    overplotColor = "red",
+    overplotPointSize = 5
+)
+
+# ----------------------------------------------------------------------
+# summary table of all samples with FAILURE flag checkboxes
+# ----------------------------------------------------------------------
+invalidateTable <- reactiveVal(0)
+bufferedTableServer(
+    id = 'librariesTable',
+    parentId = id,
+    parentInput = input,
+    selection = 'none',
+    tableData = reactive({ # construct the table data
+        invalidateTable() # respond to table-external failure actions    
+        startSpinner(session, 'bufferedTableServer')
+        SDcols <- c('Sample_ID', names(libraryMetricTypes))
+        lm <- libraryMetrics()[, .SD, .SDcols = c(SDcols, 'failed')]
+        lm[, ':='(
+            FAILED = tableCheckboxes(ns('libraryFailed'), failed ),
+            Failed = failed,
+            nReadPairs = commify(nReadPairs),
+            nSourceMolecules = commify(nSourceMolecules),
+            onTargetCoverage = commify(round(onTargetCoverage, 0)),
+            offTargetCoverage = round(offTargetCoverage, 3),
+            enrichment = commify(round(enrichment, 0)),
+            efficiency = round(efficiency, 3),
+            nSvs = commify(nSvs)
+        )]
+        stopSpinner(session, 'bufferedTableServer')
+        lm[, .SD, .SDcols = c('FAILED', 'Failed', SDcols)]
+    }),
+    editBoxes = list( # handle the libraryFailed checkbox
+        libraryFailed = list(
+            type = 'checkbox',
+            boxColumn = 1,
+            rawColumn = 2,
+            handler = function(checked){ # enter the new failure value into our outcomes
+                ss <- sampleSet$input$sampleSet
+                failed <- outcomes[[ss]]
+                failed[checked$selectedRow] <- checked$newValue
+                outcomes[[ss]] <- failed # must replace the entire value for outcomes invalidation
+                checked
+            }
+        )
+    )
+)
+
+#----------------------------------------------------------------------
+# scatter traces of library insert size and family size distributions
+#----------------------------------------------------------------------
+
+
+
 # insertSizesPlotData <- reactive({
 #     startSpinner(session, 'insertSizesPlotData')
 #     failed <- failedStatus() 
@@ -183,80 +299,15 @@ outcomes <- reactiveValues() # outcomes[[sourceId]][i] <- TRUE if library i fail
 #     lineWidth = 1
 # )
 
-# #----------------------------------------------------------------------
-# # summary table of all samples with FAILURE flag checkboxes
-# #----------------------------------------------------------------------
-# invalidateTable <- reactiveVal(0)
-# bufferedTableServer(
-#     id = 'librariesTable',
-#     parentId = id,
-#     parentInput = input,
-#     selection = 'none',
-#     tableData = reactive({ # construct the table data
-#         startSpinner(session, 'bufferedTableServer')
-#         SDcols <- c('libraryName', 'sampleName', names(libraryMetricTypes))
-#         lm <- libraryMetrics()[, .SD, .SDcols = SDcols]
-#         invalidateTable() # respond to table-external failure actions
-#         lm[, ':='(
-#             FAILED = tableCheckboxes(ns('libraryFailed'), isolate({ failedStatus() }) ),
-#             Failed = isolate({ failedStatus() }),
-#             alignRate  = round(alignRate, 3),
-#             dupRate    = round(dupRate, 3),
-#             efficiency = round(efficiency, 3)
-#         )]
-#         stopSpinner(session, 'bufferedTableServer')
-#         lm[, .SD, .SDcols = c('FAILED', 'Failed', SDcols)]
-#     }),
-#     editBoxes = list( # handle the libraryFailed checkbox
-#         libraryFailed = list(
-#             type = 'checkbox',
-#             boxColumn = 1,
-#             rawColumn = 2,
-#             handler = function(checked){ # enter the new failure value into our outcomes
-#                 sourceId <- sampleSet$input$dataSource
-#                 failed <- outcomes[[sourceId]]
-#                 failed[checked$selectedRow] <- checked$newValue
-#                 outcomes[[sourceId]] <- failed # must replace the entire value for outcomes invalidation
-#                 checked
-#             }
-#         )
-#     )
-# )
-
-# #----------------------------------------------------------------------
-# # scatter plot to explore metric relationships
-# #----------------------------------------------------------------------
-# metricRelationshipsData <- reactive({
-#     req(libraryMetrics()) 
-#     d <- libraryMetrics()[, .SD, .SDcols = c(input$xAxisMetric, input$yAxisMetric)]
-#     names(d) <- c('x', 'y')
-#     d$failed <- failedStatus()
-#     d
-# })
-# metricRelationshipsOverplotData <- reactive({ # nolint
-#     req(metricRelationshipsData())
-#     metricRelationshipsData()[failed == TRUE]
-# })
-# interactiveScatterplotServer(
-#     'metricRelationshipsPlot',
-#     metricRelationshipsData, 
-#     xtitle = reactive({ input$xAxisMetric }),
-#     ytitle = reactive({ input$yAxisMetric }),
-#     pointSize = 5, 
-#     overplot = metricRelationshipsOverplotData,
-#     overplotColor = "red",
-#     overplotPointSize = 5
-# )
-
-#----------------------------------------------------------------------
+# ----------------------------------------------------------------------
 # define bookmarking actions
-#----------------------------------------------------------------------
-# observe({
-#     bm <- getModuleBookmark(id, module, bookmark, locks)
-#     req(bm)
-#     settings$replace(bm$settings)
-#     if(!is.null(bm$outcomes)) outcomes <<- listToReactiveValues(bm$outcomes)
-# })
+# ----------------------------------------------------------------------
+observe({
+    bm <- getModuleBookmark(id, module, bookmark, locks)
+    req(bm)
+    settings$replace(bm$settings)
+    if(!is.null(bm$outcomes)) outcomes <<- listToReactiveValues(bm$outcomes)
+})
 
 #----------------------------------------------------------------------
 # set return values as reactives that will be assigned to app$data[[stepName]]
@@ -273,27 +324,3 @@ list(
 #----------------------------------------------------------------------
 })}
 #----------------------------------------------------------------------
-
- #$ sampleN    : int  1 2 4 5 6 7 8 9 10 11 ...
- #$ sampleName : chr  "Sample_2251-LK-1" "Sample_2251-LK-2" "Sample_2251-LK-4" "Sample_2251-LK-5" ...
- #$ libraryName: chr  "2251-LK-1" "2251-LK-2" "2251-LK-4" "2251-LK-5" ...
- #$ cellName   : chr  "A1" "A2" "A4" "A5" ...
- #$ readPairs  : int  42380054 39037083 43699421 52921618 39102952 57393068 35436119 26553676 38667390 27447735 ...
- #$ filtered   : int  25704872 37102069 41310818 25952192 36460833 51499848 32529602 15185875 36615012 18491883 ...
- #$ grouped    : int  9236255 30787214 15085938 3837137 29360292 39219556 25104300 1090324 28183620 2303900 ...
- #$ alignRate  : num  0.607 0.95 0.945 0.49 0.932 ...
- #$ dupRate    : num  0.641 0.17 0.635 0.852 0.195 ...
- 
- #$ sampleN    : int  1 2 3 4 5 6 7 8 9 10 ...
- #$ sampleName : chr  "Sample_1443-LK-1" "Sample_1443-LK-2" "Sample_1443-LK-3" "Sample_1443-LK-4" ...
- #$ libraryName: chr  "1443-LK-1" "1443-LK-2" "1443-LK-3" "1443-LK-4" ...
- #$ cellName   : logi  NA NA NA NA NA NA ...
- #$ readPairs  : int  7791719 9213974 7101140 8437780 8552801 9087751 7574990 8803321 12977043 10904835 ...
- #$ filtered   : int  344641 7108399 6407760 6892844 6818714 7397255 5895197 7049865 10341647 7892697 ...
- #$ grouped    : int  187900 6831362 6177410 6664854 6595123 7144605 5688860 6793934 9920731 7578402 ...
- #$ alignRate  : num  0.0442 0.7715 0.9024 0.8169 0.7972 ...
- #$ dupRate    : num  0.4548 0.039 0.0359 0.0331 0.0328 ...
-
- #$ insSize          : int  1 2 3 4 5 6 7 8 9 10 ...
- #$ Sample_1443-LK-10: num  0.00 5.28e-07 1.72e-06 1.85e-06 1.85e-06 ...
- #$ Sample_1443-LK-11: num  0.00 2.56e-07 2.56e-07 6.41e-07 2.56e-07 ...

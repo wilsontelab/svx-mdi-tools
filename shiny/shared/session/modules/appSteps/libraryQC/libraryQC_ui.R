@@ -22,14 +22,16 @@ libraryQCUI <- function(id, options) {
 
     # the available QC metrics
     libraryMetricTypes <- c(
-        "readPairs",
-        "filtered",
-        "grouped",    
-        "alignRate",
-        "dupRate",
-        "efficiency"
+        "maxTLen",
+        "nReadPairs",
+        "nSourceMolecules",
+        "onTargetCoverage",
+        "offTargetCoverage",
+        "enrichment",
+        "efficiency",
+        "nSvs"
     )
-    
+
     # return the UI contents
     standardSequentialTabItem(
         HTML(paste( options$longLabel, stepSettingsUI(ns('settings')) )),
@@ -41,7 +43,7 @@ libraryQCUI <- function(id, options) {
             width = 12,
             column(
                 width = 12,
-                sampleSetSourceUI(ns('sampleSet'))
+                sampleSetUI(ns('sampleSet'))
             ),
             column(
                 width = 12,
@@ -53,7 +55,7 @@ libraryQCUI <- function(id, options) {
             )
         ) ),
         
-        # box with QC plots
+        # examination of quality metrics
         fluidRow(
             column(
                 width = 6,
@@ -66,29 +68,6 @@ libraryQCUI <- function(id, options) {
             column(
                 width = 6,
                 style = unpad,
-                box(width = 12,
-                    title = "InsertSizes",
-                    interactiveBarplotUI(ns('insertSizesPlot'), height = '400px')
-                )
-            )
-        ),
-        
-        # box with sortable table of samples with FAILED checkboxes
-        fluidRow(
-            column(
-                width = 12,
-                style = unpad,
-                box(width = 12,
-                    bufferedTableUI(ns('librariesTable'))
-                )
-            )
-        ),
-
-        # box with plot to explore QC metric relationships
-        fluidRow(
-            column(
-                width = 8,
-                offset = 2,
                 box(
                     width = 12,
                     title = "Metric Relationships",
@@ -114,6 +93,37 @@ libraryQCUI <- function(id, options) {
                     )            
                 )
             )
+        ),
+        
+        # box with sortable table of samples with FAILED checkboxes
+        fluidRow(
+            column(
+                width = 12,
+                style = unpad,
+                box(width = 12,
+                    bufferedTableUI(ns('librariesTable'))
+                )
+            )
+        ),
+
+        # explore individual sample distributions
+        fluidRow(
+            column(
+                width = 6,
+                style = unpad,
+                box(width = 12,
+                    title = "Insert Sizes",
+                    interactiveBarplotUI(ns('insertSizesPlot'), height = '400px')
+                )
+            ),
+            column(
+                width = 6,
+                style = unpad,
+                box(width = 12,
+                    title = "Strand Family Sizes",
+                    interactiveBarplotUI(ns('familySizesPlot'), height = '400px')
+                )
+            ) 
         )
     )    
 }

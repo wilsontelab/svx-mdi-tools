@@ -49,6 +49,7 @@ appSteps:
     assign: # usually the 2nd step of every app
         module: assignSamples        
         options:
+            allowEmptyCells: true
             categories:
                 column: 
                     singular: Column
@@ -58,8 +59,8 @@ appSteps:
                     singular: Row
                     plural: Rows
                     nLevels: 1:10
-    # libraryQC:
-    #     module: libraryQC
+    libraryQC:
+        module: libraryQC
     # compare:
     #     module: compareSVs
     #     # options:
