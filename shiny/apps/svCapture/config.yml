@@ -46,18 +46,20 @@ uploadTypes:
 appSteps:
     upload: # nearly always the 1st step of every app
         module: sourceFileUpload
-    # assign: # usually the 2nd step of every app
-    #     module: assignSamples        
-    #     options:
-    #         categories:
-    #             example1: # category1
-    #                 singular: Example
-    #                 plural: Examples
-    #                 nLevels: 1:10
-    #             example2: # category2
-    #                 singular: Example
-    #                 plural: Examples
-    #                 nLevels: 1:10
+    assign: # usually the 2nd step of every app
+        module: assignSamples        
+        options:
+            categories:
+                column: 
+                    singular: Column
+                    plural: Columns
+                    nLevels: 1:10            
+                row: 
+                    singular: Row
+                    plural: Rows
+                    nLevels: 1:10
+    # libraryQC:
+    #     module: libraryQC
     # compare:
     #     module: compareSVs
     #     # options:
