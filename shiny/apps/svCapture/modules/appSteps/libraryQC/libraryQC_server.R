@@ -30,18 +30,11 @@ outcomes <- reactiveValues() # logical failure vectors keyed as [[sampleSet]]
 #----------------------------------------------------------------------
 sourceIds <- reactive({
     req(sampleSet$assignments())
-    startSpinner(session, 'libraryMetrics')
-# sampleSet$assignments
-# Classes 'data.table' and 'data.frame':  6 obs. of  5 variables:
-#  $ Source_ID: chr  "6741c8f40c01f6ed4760406898b1607c" "6741c8f40c01f6ed4760406898b1607c" "6741c8f40c01f6ed4760406898b1607c" "6741c8f40c01f6ed4760406898b1607c" ...
-#  $ Project  : chr  "high_APH_040422" "high_APH_040422" "high_APH_040422" "high_APH_040422" ...
-#  $ Sample_ID: chr  "HCT_0.2APH_2APH_M" "HCT_0.2APH_G2" "HCT_0.2APH__M" "HCT_2APH_M" ...
-#  $ Category1: int  2 1 2 2 1 2
-#  $ Category2: int  4 2 2 3 1 1
     unique(sampleSet$assignments()$Source_ID)
 })
 libraryMetrics <- reactive({
     req(sourceIds())
+    startSpinner(session, 'libraryMetrics')    
     dt <- do.call(rbind, lapply(sourceIds(), function(sourceId){
         manifestFile <- getSourceFilePath(sourceId, "manifestFile")
         x <- fread(manifestFile)
@@ -55,47 +48,6 @@ libraryMetrics <- reactive({
     stopSpinner(session, 'libraryMetrics')
     dt
 })
-
-observeEvent(libraryMetrics(), {
-# libraryMetrics()
-# Classes 'data.table' and 'data.frame':  6 obs. of  12 variables:
-#  $ Project          : chr  "high_APH_040422" "high_APH_040422" "high_APH_040422" "high_APH_040422" ...
-#  $ Sample_ID        : chr  "HCT_0.2APH_2APH_M" "HCT_0.2APH_G2" "HCT_0.2APH__M" "HCT_2APH_M" ...
-#  $ Description      : chr  "HCT_0.2APH_2APH_M" "HCT_0.2APH_G2" "HCT_0.2APH__M" "HCT_2APH_M" ...
-#  $ maxTLen          : int  790 844 716 762 840 843
-#  $ nReadPairs       : int  134723261 103110289 173540492 162222559 182287552 167856108
-#  $ nSourceMolecules : int  9018381 8339919 16452974 9553548 10312938 11943757
-#  $ onTargetCoverage : num  2444 2275 2623 2540 2602 ...
-#  $ offTargetCoverage: num  0.096 0.096 0.598 0.111 0.147 0.237
-#  $ enrichment       : num  25462 23695 4386 22883 17702 ...
-#  $ nSvs             : int  5053 3887 5822 4755 4378 4864
-#  $ Yield            : int  134723261 103110289 173540492 162222559 182287552 167856108
-#  $ sourceId         : chr  "6741c8f40c01f6ed4760406898b1607c" "6741c8f40c01f6ed4760406898b1607c" "6741c8f40c01f6ed4760406898b1607c" "6741c8f40c01f6ed4760406898b1607c" ...
-    dstr(libraryMetrics())
-})
-
-# insertSizeFiles <- reactive({
-#     req(sourceIds())
-#     dt <- do.call(rbind, lapply(sourceIds(), function(sourceId){
-#         distributionsZip <- getSourceFilePath(sourceId, "distributionsZip")
-#         fread(manifestFile)
-#     }))
-
-
-#     dt <- do.call(rbind, lapply(sourceIds, function(sourceId){
-#         manifestFile <- getSourceFilePath(sourceId, "manifestFile")
-#         fread(manifestFile)
-#     }))
-
-
-#     sourceId <- sampleSet$input$dataSource
-#     req(sourceId)
-#     file <- getSourceFilePath(sourceId, 'insertSizes')
-#     req(file)
-#     x <- fread(file)
-#     stopSpinner(session, 'insertSizes')
-#     x
-# })
 
 #----------------------------------------------------------------------
 # cascade to determine which sample are marked as failed, with initial defaults
@@ -151,12 +103,10 @@ libraryMetricTypes <- list(
     onTargetCoverage  = "On-Target Coverage",
     offTargetCoverage  = "Off-Target Coverage",
     enrichment  = "Capture Enrichment",
-    efficiency  = "Library Efficiency",
-    nSvs  = "# SV Junctions"
+    efficiency  = "Library Efficiency"
+    # ,
+    # nSvs  = "# SV Junctions"
 )
-
-isReadPairCount <- endsWith(unlist(libraryMetricTypes), "Read Pairs")
-
 libraryMetricsPlotData <- reactive({
     startSpinner(session, 'libraryMetricsPlotData')
     req(length(failedStatus()) > 0) 
@@ -171,9 +121,7 @@ libraryMetricsPlotData <- reactive({
     d
 })  
 getPlotRange <- function(d, i){
-    # if(!is.integer(d)) return( c(0, 1) ) # fractional quality metrics
-    # if(!isReadPairCount[i]) return( c(0, 1) ) # fractional quality metrics
-    max <- min(max(d), median(d) * settings$Plot_Limits()$Read_Count_Fold_Median$value)
+    max <- min(max(d), median(d) * settings$Plot_Limits()$Max_Fold_Median$value)
     c(0, max)
 }
 interactiveBarplotServer(
@@ -216,11 +164,11 @@ interactiveScatterplotServer(
 # summary table of all samples with FAILURE flag checkboxes
 # ----------------------------------------------------------------------
 invalidateTable <- reactiveVal(0)
-bufferedTableServer(
+librariesTable <- bufferedTableServer(
     id = 'librariesTable',
     parentId = id,
     parentInput = input,
-    selection = 'none',
+    selection = 'single',
     tableData = reactive({ # construct the table data
         invalidateTable() # respond to table-external failure actions    
         startSpinner(session, 'bufferedTableServer')
@@ -234,8 +182,9 @@ bufferedTableServer(
             onTargetCoverage = commify(round(onTargetCoverage, 0)),
             offTargetCoverage = round(offTargetCoverage, 3),
             enrichment = commify(round(enrichment, 0)),
-            efficiency = round(efficiency, 3),
-            nSvs = commify(nSvs)
+            efficiency = round(efficiency, 3)
+            # ,
+            # nSvs = commify(nSvs)
         )]
         stopSpinner(session, 'bufferedTableServer')
         lm[, .SD, .SDcols = c('FAILED', 'Failed', SDcols)]
@@ -259,45 +208,39 @@ bufferedTableServer(
 #----------------------------------------------------------------------
 # scatter traces of library insert size and family size distributions
 #----------------------------------------------------------------------
-
-
-
-# insertSizesPlotData <- reactive({
-#     startSpinner(session, 'insertSizesPlotData')
-#     failed <- failedStatus() 
-#     req(length(failed) > 0) 
-#     libraryMetrics <- libraryMetrics()
-#     insertSizes <- insertSizes()
-#     req(insertSizes)
-#     i <- 1
-#     x <- do.call(rbind, lapply(libraryMetrics$insertSizesKey[!failed], function(sampleId){
-#         dt <- data.table(
-#             x = insertSizes$insSize,
-#             y = insertSizes[[sampleId]]
-#         )
-#         if(i %% 2) dt <- dt[order(-x)]
-#         i <<- i + 1
-#         dt
-#     })) 
-#     stopSpinner(session, 'insertSizesPlotData')
-#     x
-# })
-# insertSizeRange <- reactive({ # attempt to focus on the peak of the insert size distribution
-#     d <- insertSizesPlotData()
-#     d <- d[, .(y = sum(y)), keyby = x]
-#     cum <- cumsum(d$y) / sum(d$y, na.rm = TRUE)
-#     c(0, which.max(d$x[cum <= 0.99]))
-# })
-# interactiveScatterplotServer(
-#     'insertSizesPlot',
-#     insertSizesPlotData, 
-#     xtitle = "InsertSize",
-#     ytitle = "Frequency",
-#     xrange = insertSizeRange,
-#     yrange = range_pad,
-#     mode = 'lines',
-#     lineWidth = 1
-# )
+getDistributionFilePath <- function(row, type){
+    libraryMetrics <- libraryMetrics()
+    req(libraryMetrics)
+    fileName <- paste(libraryMetrics[row, Sample_ID], type, 'png', sep = ".")
+    filePath <- expandSourceFilePath(libraryMetrics[row, Source_ID], fileName)
+    if(!file.exists(filePath)){
+        distributionsZip <- getSourceFilePath(libraryMetrics[row, Source_ID], 'distributionsZip')
+        unzip(distributionsZip, exdir = dirname(distributionsZip))
+    }
+    filePath 
+}
+output$insertSizesPlot <- renderImage(
+    {
+        row <- librariesTable$rows_selected()
+        req(row)
+        list(
+            src = getDistributionFilePath(row, 'insertSizes'),
+            width = "100%"
+        )
+    }, 
+    deleteFile = FALSE
+)
+output$familySizesPlot <- renderImage(
+    {
+        row <- librariesTable$rows_selected()
+        req(row)
+        list(
+            src = getDistributionFilePath(row, 'family_sizes'),
+            width = "100%"
+        )
+    }, 
+    deleteFile = FALSE
+)
 
 # ----------------------------------------------------------------------
 # define bookmarking actions

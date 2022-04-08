@@ -47,10 +47,10 @@ libraryQCUI <- function(id, options) {
             ),
             column(
                 width = 12,
-                bsButton(ns('applyFailedFilters'), 'Apply Failure Settings',  style = "warning"), 
-                HTML('&nbsp;'),
-                bsButton(ns('clearFailedMarks'),   'Clear All Failure Marks', style = "success"),
-                HTML('&nbsp;'),
+                # bsButton(ns('applyFailedFilters'), 'Apply Failure Settings',  style = "warning"), 
+                # HTML('&nbsp;'),
+                # bsButton(ns('clearFailedMarks'),   'Clear All Failure Marks', style = "success"),
+                # HTML('&nbsp;'),
                 textOutput(ns('nFailedLibraries'), inline = TRUE)           
             )
         ) ),
@@ -113,7 +113,7 @@ libraryQCUI <- function(id, options) {
                 style = unpad,
                 box(width = 12,
                     title = "Insert Sizes",
-                    interactiveBarplotUI(ns('insertSizesPlot'), height = '400px')
+                    plotOutput(ns('insertSizesPlot'), height = '400px')
                 )
             ),
             column(
@@ -121,7 +121,7 @@ libraryQCUI <- function(id, options) {
                 style = unpad,
                 box(width = 12,
                     title = "Strand Family Sizes",
-                    interactiveBarplotUI(ns('familySizesPlot'), height = '400px')
+                    plotOutput(ns('familySizesPlot'), height = '400px')
                 )
             ) 
         )

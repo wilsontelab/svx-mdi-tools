@@ -61,16 +61,5 @@ appSteps:
                     nLevels: 1:10
     libraryQC:
         module: libraryQC
-    # compare:
-    #     module: compareSVs
-    #     # options:
-    #     #     analysisTypes:
-    #     #         example:
-    #     #             - example
-    # targets:
-    #     module: targets
-        # options:
-        #     analysisTypes:
-        #         example:
-        #             - example
-
+    svExplorer:
+        module: svExplorer

@@ -1,0 +1,36 @@
+#----------------------------------------------------------------------
+# ui
+#----------------------------------------------------------------------
+
+# label shown on dashboard menu 
+shortLabel: "SV Explorer"
+
+# description shown on the Overview page
+shortDescription: "Filter and examine SV locations and junction sequences."
+
+# label shown at top of appStep tab  
+longLabel: "Filter and examine SV locations and junction sequences"
+
+#----------------------------------------------------------------------
+# server
+#----------------------------------------------------------------------
+
+# names of the type(s) of this module ...
+types:
+    - svExplorer
+    
+# ... and of its dependencies
+sourceTypes:
+    - libraryQC
+
+#----------------------------------------------------------------------
+# settings: use camel case and '_' in names (it is replaced with a space in the UI)
+#----------------------------------------------------------------------
+settings:
+    SV_Filters:
+        xxxxx:
+            type:   numericInput
+            value:  2.5
+            min:    1.5
+            max:    10
+            step:   0.5
