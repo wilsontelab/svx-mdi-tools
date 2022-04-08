@@ -34,15 +34,16 @@ sourceIds <- reactive({
 })
 libraryMetrics <- reactive({
     req(sourceIds())
-    startSpinner(session, 'libraryMetrics')    
+    startSpinner(session, 'libraryMetrics')   
     dt <- do.call(rbind, lapply(sourceIds(), function(sourceId){
         manifestFile <- getSourceFilePath(sourceId, "manifestFile")
         x <- fread(manifestFile)
         x[, ':='(
             Source_ID = sourceId,
-            Sample_Name = paste(Project, Sample_ID, sep = ":"),
+            Sample_Unique_ID = paste(Project, Sample_ID, sep = ":"),
             efficiency = nSourceMolecules / nReadPairs
         )]
+        x[, Sample_Name := getSampleNames(sampleUniqueIds = Sample_Unique_ID)]
         x
     }))
     stopSpinner(session, 'libraryMetrics')
@@ -58,7 +59,7 @@ failedStatus <- reactive({
     ss <- sampleSet$input$sampleSet
     if(is.null(outcomes[[ss]])){
         outcomes[[ss]] <- rep(FALSE, nrow(libraryMetrics))
-        names(outcomes[[ss]]) <- libraryMetrics$Sample_Name
+        names(outcomes[[ss]]) <- libraryMetrics$Sample_Unique_ID
     }
     libraryMetrics()[, failed := outcomes[[ss]]]
     outcomes[[ss]]
@@ -113,7 +114,7 @@ libraryMetricsPlotData <- reactive({
     libraryMetrics <- libraryMetrics()[failed == FALSE]
     d <- lapply(names(libraryMetricTypes), function(col){
         d <- libraryMetrics[[col]]
-        names(d) <- libraryMetrics$Sample_ID
+        names(d) <- libraryMetrics$Sample_Name
         d
     })
     names(d) <- libraryMetricTypes
@@ -172,7 +173,7 @@ librariesTable <- bufferedTableServer(
     tableData = reactive({ # construct the table data
         invalidateTable() # respond to table-external failure actions    
         startSpinner(session, 'bufferedTableServer')
-        SDcols <- c('Sample_ID', names(libraryMetricTypes))
+        SDcols <- c('Sample_Name', names(libraryMetricTypes))
         lm <- libraryMetrics()[, .SD, .SDcols = c(SDcols, 'failed')]
         lm[, ':='(
             FAILED = tableCheckboxes(ns('libraryFailed'), failed ),
