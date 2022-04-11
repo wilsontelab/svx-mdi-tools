@@ -41,7 +41,8 @@ svExplorerUI <- function(id, options) {
                 style = unpad,
                 box(width = 12,
                     title = "SV Locations",
-                    interactiveScatterplotUI(ns('svLocationsPlot'), height = '400px')
+                    # interactiveScatterplotUI(ns('svLocationsPlot'), height = '400px')
+                    plotOutput(ns('svLocationsPlot'))
                 )
             ),
             column(
