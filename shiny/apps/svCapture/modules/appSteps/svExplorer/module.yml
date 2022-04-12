@@ -26,11 +26,67 @@ sourceTypes:
 #----------------------------------------------------------------------
 # settings: use camel case and '_' in names (it is replaced with a space in the UI)
 #----------------------------------------------------------------------
+# most of the default settings are fairly promiscuous to show ~all SVs
+#----------------------------------------------------------------------
 settings:
+    Target_Filters:
+        Target_Class:
+            type:   checkboxGroupInput
+            choices:
+                - TT
+                - TA
+                - AA
+                - tt
+                - ta
+                - aa
+                - t-
+                - a-
+                - --
+            selected:
+                - TT
+                - TA
+                - AA
+                - tt
+                - ta
+                - aa
+            inline: TRUE     
+        # Target_Region:
+        #     type: textInput
+        #     value: null
     SV_Filters:
-        xxxxx:
+        SV_Type:
+            type:   checkboxGroupInput
+            choices:
+                - Del
+                - Dup
+                - Inv
+                - Trans
+            selected:
+                - Del
+                - Dup
+                - Inv
+            inline: TRUE    
+        Min_SV_Size:
             type:   numericInput
-            value:  2.5
-            min:    1.5
-            max:    10
-            step:   0.5
+            value:  0
+            min:    0
+            max:    1000000
+            step:   1000
+        Min_Read_Count:
+            type:   numericInput
+            value:  1
+            min:    1
+            max:    100
+            step:   1          
+        Min_Samples_With_SV:
+            type:   numericInput
+            value:  1
+            min:    1
+            max:    100
+            step:   1   
+        Max_Samples_With_SV:
+            type:   numericInput
+            value:  100
+            min:    1
+            max:    100
+            step:   1  

@@ -5,24 +5,28 @@
 #----------------------------------------------------------------------
 # types
 #----------------------------------------------------------------------
-nodeClasses <- list(
+SVX <- list()
+SVX$nodeClasses <- list(
     GAP           = 0, # SV evidence type codes, i.e., node classes
     SPLIT         = 1,
     OUTER_CLIP    = 2,
     RECONSTRUCTED = 3
 )
-junctionClasses <- list( # i.e., when two nodes have been aggregated
-    GAP   = paste(nodeClasses$GAP,   nodeClasses$GAP,   sep = ","),
-    SPLIT = paste(nodeClasses$SPLIT, nodeClasses$SPLIT, sep = ","),
-    OUTER_CLIP = as.character(nodeClasses$OUTER_CLIP)
+SVX$jxnTypeName <- list(
+    "D" = "Dup",
+    "L" = "Del",
+    "I" = "Inv",
+    "T" = "Trans",
+    "P" = "Prop",
+    "?" = "?"
 )
-junctionTypes <- list(
-    TRANSLOCATION = "T", # edge/junction types (might be several per source molecule)
-    INVERSION     = "I",
-    DUPLICATION   = "D",
-    DELETION      = "L",
-    UNKNOWN       = "?",
-    PROPER        = 'P'    
+SVX$jxnTypeKey <- list(
+    "Dup"   = "D",
+    "Del"   = "L",
+    "Inv"   = "I",
+    "Trans" = "T",
+    "Prop"  = "P",
+    "?"     = "?"
 )
 
 #----------------------------------------------------------------------
@@ -37,7 +41,7 @@ unpackNodeNames <- function(nodeNames){
     x[[3]] <- as.integer(x[[3]])
     x
 }
-compile <- list(nodes = list(
+SVX$compile <- list(nodes = list(
     'NODE_1'        = 'character', # node-level data
     'CLIP_LEN_1'    = 'integer',
     'CLIP_SEQ_1'    = 'character',
@@ -71,7 +75,7 @@ compile <- list(nodes = list(
     'OUT_POS1'      = 'integer',
     'OUT_POS2'      = 'integer'   
 ))
-compile$junctions <- c(compile$nodes, list(
+SVX$compile$junctions <- c(SVX$compile$nodes, list(
     'SAMPLE'        = 'character',
     #===============   
     'NODE_2'        = 'character', # node-level data
@@ -89,32 +93,10 @@ compile$junctions <- c(compile$nodes, list(
 ))
 
 #----------------------------------------------------------------------
-# working file columns (find's extensions of compiled junction molecules)
+# find output file columns
 #----------------------------------------------------------------------
-find <- list(working = c(compile$junctions, list(
-    'groupIndex'    = 'integer'
-)))
-find$working2 <- c(find$working, list(
-    'chrom1'        = 'integer',
-    'side1'         = 'character',
-    'pos1'          = 'integer',
-    'chrom2'        = 'integer',
-    'side2'         = 'character',
-    'pos2'          = 'integer',    
-    'jxnName'       = 'character',
-    'jxnKey'        = 'character', 
-    'svIndex'       = 'character',
-    'sampleSvIndex' = 'character',    
-    'AMBIGUOUS'     = 'integer',
-    'DOWNSAMPLED'   = 'integer',
-    'N_COLLAPSED'   = 'integer',
-    'IS_REFERENCE'  = 'integer'
-))
-
-#----------------------------------------------------------------------
-# finde output file columns
-#----------------------------------------------------------------------
-find$structural_variants <- list( # FOR REFERENCE ONLY; last columns are sample-specific, not standarized
+SVX$find <- list()
+SVX$find$structural_variants <- list( # FOR REFERENCE ONLY; last columns are sample-specific, not standarized
     'SV_ID'     =  'character',  # this column has a changed order relative to analyze_junctions.R:characterizeSvJunction() due to sample count merge
     #---------------
     'MAPQ_1'    =  'character', # order of these columns generally mirrors junction_molecules
@@ -173,7 +155,7 @@ find$structural_variants <- list( # FOR REFERENCE ONLY; last columns are sample-
     #---------------
     # plus one additional integer column per sample with N_TOTAL for that sample for each SV 
 )
-find$junction_molecules <- c(compile$junctions, list(
+SVX$find$junction_molecules <- c(SVX$compile$junctions, list(
     'SV_ID'         =  'character', # for relating this table to find$structural_variants
     #---------------
     'AMBIGUOUS'     = 'integer', # added to compile$junctions by find, per molecule

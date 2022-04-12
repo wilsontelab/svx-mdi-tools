@@ -27,44 +27,40 @@ outcomes <- reactiveValues() # logical failure vectors keyed as [[sampleSet]]
 #----------------------------------------------------------------------
 # generate the list of all filtered SVs from all selected samples
 #----------------------------------------------------------------------
-
-# TODO: move cache to server level, not session
-cache <- reactiveValues(svs = list(), molecules = list())
-
 workingSvs <- reactive({
-    assignments <- sampleSelector$selectedAssignments()
+    assignments <- sampleSelector$selectedAssignments() # Source_ID	Project	Sample_ID	Category1	Category2	uniqueId
     req(assignments)
     req(nrow(assignments) > 0)
     startSpinner(session, 'workingSvs')
-    activeSvFiles <- list()
+    tf  <- settings$Target_Filters()
+    svf <- settings$SV_Filters()
     x <- do.call(rbind, lapply(assignments[, unique(Source_ID)], function(sourceId){
         svFile <- getSourceFilePath(sourceId, "structuralVariants")
-        reportProgress(svFile)
-        activeSvFiles[[svFile]] <<- TRUE        
-        if(is.null(cache$svs[[svFile]])) cache$svs[[svFile]] <- fread(svFile)
+        fillSvxCache(sourceId, 'svs', svFile) 
 
-
-
-        # TODO: implement SV filters via Settings
-        # and sample filters via selected assignments
-
-        cache$svs[[svFile]][uniqueId %in% ]
+        # TODO: sample filters via selected assignments
+        
+        svxCache$svs[[svFile]][
+            TARGET_CLASS %in% tf$Target_Class$value &
+            JXN_TYPE %in% unlist(SVX$jxnTypeKey[svf$SV_Type$value]) &
+            (JXN_TYPE == "T" | SV_SIZE >= svf$Min_SV_Size$value) &
+            STRAND_COUNT >= svf$Min_Read_Count$value &
+            N_SAMPLES >= svf$Min_Samples_With_SV$value &
+            N_SAMPLES <= svf$Max_Samples_With_SV$value & 
+            TRUE
+            , .SD,
+           .SDcols = names(SVX$find$structural_variants) 
+        ]
     }))
-    
-    for(svFile in names(cache$svs)){
-        if(is.null(activeSvFiles[[svFile]])) cache$svs[[svFile]] <- NULL
-    }
     stopSpinner(session, 'workingSvs')
     x
-    # Source_ID	Project	Sample_ID	Category1	Category2	uniqueId
 })
 
 output$svLocationsPlot <- renderPlot({
-    svs <- workingSvs()[JXN_TYPE == "T", .(TARGET_POS_1, TARGET_POS_2)]
+    svs <- workingSvs()[, .(TARGET_POS_1, TARGET_POS_2)]
     plot(svs$TARGET_POS_1, svs$TARGET_POS_2, pch = ".")
     abline(0, 1)
 })
-
 
 # ----------------------------------------------------------------------
 # summary table of all filtered SVs from all selected samples
@@ -75,10 +71,45 @@ svsTable <- bufferedTableServer(
     parentId = id,
     parentInput = input,
     selection = 'single',
+    tableData = reactive({
+        invalidateTable()
+        workingSvs()[, .(
+            svId = SV_ID,
+            #---------------
+            type = unlist(SVX$jxnTypeName[JXN_TYPE]),
+            class = TARGET_CLASS,
+            target = TARGET_REGION,
+            #---------------
+            nSmp = N_SAMPLES,
+            nTot = N_TOTAL,
+            nGap = N_GAPS,
+            nJxn = N_SPLITS,
+            nClip = paste0('(', N_OUTER_CLIPS, ')'),
+            nDpx = paste0(N_DUPLEX_GS, '(', N_DUPLEX, ')'),
+            count = paste0(STRAND_COUNT_GS, '(', STRAND_COUNT, ')'),
 
-    # TODO: parse the information required for the table
-    tableData = workingSvs #sampleSelector$selectedAssignments
 
+            #---------------
+            chr1 = CHROM_1,
+            pos1 = POS_1,
+            chr2 = CHROM_2,
+            pos2 = POS_2,
+            #---------------
+            uHom = MICROHOM_LEN,
+            jxnSeq = JXN_BASES,
+            svSize = SV_SIZE
+        )]
+    })
+ 
+    # 'STRAND_COUNT1' =  'integer',
+    # 'STRAND_COUNT2' =  'integer',
+    # 'TARGET_CLASS'  =  'character',
+    # 'SHARED_PROPER' =  'double',
+    # 'SHARED_PROPER_GS'  =  'double',
+    # #---------------
+    # 'N_AMBIGUOUS'   =  'integer',
+    # 'N_DOWNSAMPLED' =  'integer',
+    # 'N_COLLAPSED'   =  'integer',
     # tableData = reactive({ # construct the table data
     #     invalidateTable() # respond to table-external failure actions    
     #     startSpinner(session, 'bufferedTableServer')
@@ -123,7 +154,11 @@ observe({
     bm <- getModuleBookmark(id, module, bookmark, locks)
     req(bm)
     settings$replace(bm$settings)
-    if(!is.null(bm$outcomes)) outcomes <<- listToReactiveValues(bm$outcomes)
+    sampleSelector$setSampleSet(bm$input[['sampleSelector-sampleSet']]) 
+    if(!is.null(bm$outcomes)) {
+        outcomes <<- listToReactiveValues(bm$outcomes)
+        sampleSelector$setSelectedSamples(bm$outcomes$samples)
+    }
 })
 
 #----------------------------------------------------------------------
@@ -132,7 +167,11 @@ observe({
 list(
     input = input,
     settings = settings$all_,
-    outcomes = reactive({ reactiveValuesToList(outcomes) }),
+    samples  = sampleSelector$selectedSamples,
+    # outcomes = reactive({ reactiveValuesToList(outcomes) }),
+    outcomes = reactive({ list(
+        samples = sampleSelector$selectedSamples()
+    ) }),
     isReady  = reactive({ getStepReadiness(options$source, outcomes) })
 )
 
