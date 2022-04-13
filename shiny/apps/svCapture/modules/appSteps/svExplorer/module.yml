@@ -29,7 +29,7 @@ sourceTypes:
 # most of the default settings are fairly promiscuous to show ~all SVs
 #----------------------------------------------------------------------
 settings:
-    Target_Filters:
+    SV_Filters:
         Target_Class:
             type:   checkboxGroupInput
             choices:
@@ -42,7 +42,7 @@ settings:
                 - t-
                 - a-
                 - --
-            selected:
+            value:
                 - TT
                 - TA
                 - AA
@@ -50,10 +50,6 @@ settings:
                 - ta
                 - aa
             inline: TRUE     
-        # Target_Region:
-        #     type: textInput
-        #     value: null
-    SV_Filters:
         SV_Type:
             type:   checkboxGroupInput
             choices:
@@ -61,7 +57,7 @@ settings:
                 - Dup
                 - Inv
                 - Trans
-            selected:
+            value:
                 - Del
                 - Dup
                 - Inv
@@ -72,6 +68,12 @@ settings:
             min:    0
             max:    1000000
             step:   1000
+        Max_SV_Size:
+            type:   numericInput
+            value:  10000000
+            min:    0
+            max:    1000000000
+            step:   100000
         Min_Read_Count:
             type:   numericInput
             value:  1

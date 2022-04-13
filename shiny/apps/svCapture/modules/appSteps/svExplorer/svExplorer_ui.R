@@ -50,7 +50,8 @@ svExplorerUI <- function(id, options) {
                 style = unpad,
                 box(width = 12,
                     title = "SV Properties",
-                    interactiveScatterplotUI(ns('svPropertiesPlot'), height = '400px')
+                    # interactiveScatterplotUI(ns('svPropertiesPlot'), height = '400px')
+                    plotOutput(ns('svPropertiesPlot'))
                 )
             )
         ),
