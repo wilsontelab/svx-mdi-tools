@@ -3,13 +3,13 @@
 #----------------------------------------------------------------------
 
 # label shown on dashboard menu 
-shortLabel: "SV Explorer"
+shortLabel: "Aggregate Plots"
 
 # description shown on the Overview page
-shortDescription: "Filter and examine SV locations and junction sequences."
+shortDescription: "Plot summary results over all selected samples."
 
 # label shown at top of appStep tab  
-longLabel: "Filter and examine SV locations and junction sequences"
+longLabel: "Plot summary results over all selected samples"
 
 #----------------------------------------------------------------------
 # server
@@ -17,7 +17,7 @@ longLabel: "Filter and examine SV locations and junction sequences"
 
 # names of the type(s) of this module ...
 types:
-    - svExplorer
+    - aggregatePlots
     
 # ... and of its dependencies
 sourceTypes:

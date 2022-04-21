@@ -63,3 +63,5 @@ appSteps:
         module: libraryQC
     svExplorer:
         module: svExplorer
+    aggregatePlots:
+        module: aggregatePlots

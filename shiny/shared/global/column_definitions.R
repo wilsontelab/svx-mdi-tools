@@ -12,21 +12,36 @@ SVX$nodeClasses <- list(
     OUTER_CLIP    = 2,
     RECONSTRUCTED = 3
 )
-SVX$jxnTypeName <- list(
-    "D" = "Dup",
-    "L" = "Del",
-    "I" = "Inv",
-    "T" = "Trans",
-    "P" = "Prop",
-    "?" = "?"
+SVX$jxnTypes <- data.table(
+    code = c(
+        "D",
+        "L",
+        "I",
+        "T",
+        "P",
+        "?"
+    ),
+    name = c(
+        "Dup",
+        "Del",
+        "Inv",
+        "Trans",
+        "Prop",
+        "?"
+    ),
+    color = c(
+        CONSTANTS$plotlyColors$green,
+        CONSTANTS$plotlyColors$blue,
+        CONSTANTS$plotlyColors$red,
+        CONSTANTS$plotlyColors$orange,
+        NA,
+        NA
+    )
 )
-SVX$jxnTypeKey <- list(
-    "Dup"   = "D",
-    "Del"   = "L",
-    "Inv"   = "I",
-    "Trans" = "T",
-    "Prop"  = "P",
-    "?"     = "?"
+SVX$targetClasses <- list(
+    "both on target" = c("TT", "TA", "AA"),
+    "one on target"  = c("TT", "TA", "AA", "tt", "ta", "aa"),
+    "all SVs"        = c("TT", "TA", "AA", "tt", "ta", "aa", "t-", "a-", "--")
 )
 
 #----------------------------------------------------------------------
@@ -97,7 +112,7 @@ SVX$compile$junctions <- c(SVX$compile$nodes, list(
 #----------------------------------------------------------------------
 SVX$find <- list()
 SVX$find$structural_variants <- list( # FOR REFERENCE ONLY; last columns are sample-specific, not standarized
-    'SV_ID'     =  'character',  # this column has a changed order relative to analyze_junctions.R:characterizeSvJunction() due to sample count merge
+    'SV_ID'     =  'character',  # this column has a changed order relative to analyze_junctions.R:characterizeSvJunction() due to sample count merge # nolint
     #---------------
     'MAPQ_1'    =  'character', # order of these columns generally mirrors junction_molecules
     'UMI_1'     =  'character',  # see analyze_junctions.R:characterizeSvJunction() for the exact content of each column

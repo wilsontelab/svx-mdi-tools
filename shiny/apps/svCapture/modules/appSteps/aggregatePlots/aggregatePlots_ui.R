@@ -1,15 +1,15 @@
 #----------------------------------------------------------------------
-# static components to filter and examine SV locations and junction sequences
+# static components to plot summary results over all selected samples
 #----------------------------------------------------------------------
 
 # module ui function
-svExplorerUI <- function(id, options) {
+aggregatePlotsUI <- function(id, options) {
 
     # initialize namespace
     ns <- NS(id)    
 
     # override missing options to defaults
-    options <- setDefaultOptions(options, stepModuleInfo$svExplorer)
+    options <- setDefaultOptions(options, stepModuleInfo$aggregatePlots)
 
     # incorporate options text into templates
     leaderText <- tagList(
@@ -34,48 +34,22 @@ svExplorerUI <- function(id, options) {
         # composite views of all filtered SVs
         fluidRow(
             staticPlotBoxUI(
-                ns('svLocations'),
+                ns('svRates'),
                 width = 6,
-                title = "SV Locations"
-            ),
-            staticPlotBoxUI(
-                ns('svProperties'),
-                width = 6,
-                title = "SV Properties"
+                title = "SV Rates"
             )
         ),
         
-        # box with sortable table of SVs
+        # table of plotted values
         fluidRow(
             column(
                 width = 12,
                 style = unpad,
                 box(
                     width = 12,
-                    bufferedTableUI(ns('svsTable'))
+                    bufferedTableUI(ns('ratesTable'))
                 )
             )
         )
-        # ,
-
-        # # explore individual sample distributions
-        # fluidRow(
-        #     column(
-        #         width = 6,
-        #         style = unpad,
-        #         box(width = 12,
-        #             title = "Insert Sizes",
-        #             plotOutput(ns('insertSizesPlot'), height = '400px')
-        #         )
-        #     ),
-        #     column(
-        #         width = 6,
-        #         style = unpad,
-        #         box(width = 12,
-        #             title = "Strand Family Sizes",
-        #             plotOutput(ns('familySizesPlot'), height = '400px')
-        #         )
-        #     ) 
-        # )
     )    
 }

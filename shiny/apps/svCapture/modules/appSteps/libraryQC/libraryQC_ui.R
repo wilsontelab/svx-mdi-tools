@@ -34,7 +34,7 @@ libraryQCUI <- function(id, options) {
 
     # return the UI contents
     standardSequentialTabItem(
-        HTML(paste( options$longLabel, stepSettingsUI(ns('settings')) )),
+        HTML(paste( options$longLabel, settingsUI(ns('settings')) )),
         # HTML(options$longLabel),
         leaderText,
 
