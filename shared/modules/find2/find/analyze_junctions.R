@@ -98,12 +98,12 @@ characterizeSvJunction <- function(svIdx){
         ]
 
         # parse microhomology vs. inserted bases
-        jxnMols[refMolI, ':='(
-            MICROHOM_LEN = readPos1 - readPos2 + 1,
-            JXN_BASES = if(MICROHOM_LEN > 0) substr(JXN_SEQ, readPos2, readPos1)         # microhomology
-                   else if(MICROHOM_LEN < 0) substr(JXN_SEQ, readPos1 + 1, readPos2 - 1) # inserted bases
-                   else "" # a blunt joint
-        )]     
+        jxnMols[refMolI, MICROHOM_LEN := readPos1 - readPos2 + 1]  
+        jxnMols[refMolI, 
+            JXN_BASES := if(MICROHOM_LEN > 0) substr(JXN_SEQ, readPos2, readPos1)         # microhomology
+                    else if(MICROHOM_LEN < 0) substr(JXN_SEQ, readPos1 + 1, readPos2 - 1) # inserted bases
+                    else "" # a blunt joint
+        ]   
     }
 
     # aggregate SV-level information
