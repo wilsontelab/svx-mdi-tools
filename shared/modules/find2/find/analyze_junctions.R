@@ -114,7 +114,7 @@ characterizeSvJunction <- function(svIdx){
         N_TOTAL         = .N,
         N_GAPS          = sum(NODE_CLASS == nodeClasses$GAP),
         N_SPLITS        = sum(NODE_CLASS == nodeClasses$SPLIT),
-        N_OUTER_CLIPS   = sum(NODE_CLASS == nodeClasses$CLIP),
+        N_OUTER_CLIPS   = sum(NODE_CLASS == nodeClasses$OUTER_CLIP),
         #-------------
         JXN_TYPE        = JXN_TYPE[refMolI],
         #-------------

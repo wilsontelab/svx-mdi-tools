@@ -17,7 +17,10 @@ aggregatePlotsServer <- function(id, options, bookmark, locks) {
 settings <- settingsServer( # display settings not stored in the UI, exposed by gear icon click
     id = 'settings',
     parentId = id,
-    template = c(file.path(app$sources$suiteGlobalDir, "sv_filters.yml")),
+    templates = list(
+        file.path(app$sources$suiteGlobalDir, "sv_filters.yml"),
+        id
+    ),
     fade = FALSE
 )
 sampleSelector <- sampleSelectorServer( # selectors to pick one or more samples from a sample set
@@ -47,8 +50,13 @@ svRates <- reactive({
     req(nrow(assignments) > 0)   
 
     # order by group/category
-    assignments[, originalOrder := 1:.N]    
-    assignments <- assignments[order(Category1, Category2, originalOrder)]
+    assignments[, originalOrder := 1:.N]
+    transpose <- settings$Data()$Transpose$value
+    assignments <- if(transpose){
+        assignments[order(Category2, Category1, originalOrder)]
+    } else {
+        assignments[order(Category1, Category2, originalOrder)]
+    }
 
     # count the number of SVs assigned to each sample
     # depending on filters, an SV could be assigned to multiple samples
@@ -73,7 +81,11 @@ svRates <- reactive({
     isCategory1 <- assignments[, length(unique(Category1)) > 1]
     isCategory2 <- assignments[, length(unique(Category2)) > 1]
     assignments[, group := if(isCategory1 && isCategory2){
-        paste(Category1Name, Category2Name, sep = "\n")
+        if(transpose){
+            paste(Category2Name, Category1Name, sep = "\n")
+        } else {
+            paste(Category1Name, Category2Name, sep = "\n")
+        }
     } else if(isCategory1){
         Category1Name
     } else if(isCategory2){
@@ -82,8 +94,6 @@ svRates <- reactive({
 
     assignments
 })
-
-
 
 #----------------------------------------------------------------------
 # SV rates plot
@@ -101,7 +111,7 @@ svRatesPlot <- staticPlotBoxServer(
         req(svRates)
 
         svRates[, groupFactor := factor(group, unique(group))]
-        dstr(svRates)
+        # dstr(svRates)
 
         # barplot(as.matrix(x), beside = TRUE, horiz = TRUE)
         par(mar = c(
@@ -135,9 +145,9 @@ svRatesPlot <- staticPlotBoxServer(
         )
         abline(h = c(0, xi) + 0.5, col = "grey80")
 
-        dstr(CONSTANTS$plotlyColors)
-        dstr(as.integer(factor(svRates$replicate)))
-        dstr(CONSTANTS$plotlyColors[as.integer(factor(svRates$replicate))])
+        # dstr(CONSTANTS$plotlyColors)
+        # dstr(as.integer(factor(svRates$replicate)))
+        # dstr(CONSTANTS$plotlyColors[as.integer(factor(svRates$replicate))])
         points(
             svRates$svRate,            
             jitter(xi, amount = 0.1),
@@ -174,6 +184,81 @@ svRatesPlot <- staticPlotBoxServer(
     }
 )
 
+#----------------------------------------------------------------------
+# Microhomology Length Distribution plot
+#----------------------------------------------------------------------
+svsByGroup <- reactive({
+    maxSamples <- settings$SV_Filters()$Max_Samples_With_SV$value
+    req(maxSamples == 1)
+    svRates <- svRates()
+    req(svRates)
+    setkey(svRates, uniqueId)        
+    svs <- workingSvs()[, .(
+        plotted = JXN_BASES != "*", # MICROHOM_LEN meaningless if not a sequenced junction
+        MICROHOM_LEN, 
+        SV_SIZE,
+        group = svRates[unlist(PROJECT_SAMPLES), group]
+    )]    
+})
+plotFrequencyDistribution <- function(
+    column, xlab, xlim, 
+    modifyData = function(...) NULL,  
+    modifyPlotBase = function(...) NULL
+){
+    svsByGroup <- svsByGroup()
+    req(svsByGroup)
+    modifyData(svsByGroup)
+    d <- svsByGroup[plotted == TRUE, .N, keyby = c("group", column)]
+    d[, Frequency := N / sum(N), keyby = group]
+    plot(
+        NA, NA, typ = "n",
+        xlim = xlim,
+        ylim = c(0, max(d$Frequency) * 1.1),
+        xlab = xlab,
+        ylab = "Frequency"
+    )
+    modifyPlotBase(d)
+    groups <- unique(d$group)
+    for(i in seq_along(groups)){
+        dd <- d[group == groups[i]]
+        lines(dd[[column]], dd$Frequency, col = CONSTANTS$plotlyColors[[i]])
+    }        
+}
+sizeDistribution <- staticPlotBoxServer(
+    'sizeDistribution',
+    legend = TRUE,
+    immediate = TRUE,
+    create = function(...){
+        plotFrequencyDistribution(
+            column = "SV_SIZE", 
+            xlab = "log10 SV Size (bp)",
+            xlim = log10(c(1000, 1e6)),
+            modifyData = function(svsByGroup) svsByGroup[, SV_SIZE := round(log10(SV_SIZE), 1)]
+            # ,
+            # modifyPlotBase = function(...){
+            #     abline(v = seq(-100, 100, 10), col = "grey60")
+            #     abline(v = 0)
+            # }
+        )
+    }
+)
+microhomologyDistribution <- staticPlotBoxServer(
+    'microhomologyDistribution',
+    legend = TRUE,
+    immediate = TRUE,
+    create = function(...){
+        plotFrequencyDistribution(
+            column = "MICROHOM_LEN", 
+            xlab = "Microhomology Length (bp)",
+            xlim = c(-20, 20),
+            modifyPlotBase = function(...){
+                abline(v = seq(-100, 100, 10), col = "grey60")
+                abline(v = 0)
+            }
+        )
+    }
+)
+
 # ----------------------------------------------------------------------
 # table of the plotted data
 # ----------------------------------------------------------------------
@@ -204,10 +289,11 @@ observe({
     bm <- getModuleBookmark(id, module, bookmark, locks)
     req(bm)
     settings$replace(bm$settings)
-    sampleSelector$setSampleSet(bm$input[['sampleSelector-sampleSet']]) 
+    sampleSet <- bm$input[['sampleSelector-sampleSet']]
+    sampleSelector$setSampleSet(sampleSet) 
     if(!is.null(bm$outcomes)) {
         outcomes <<- listToReactiveValues(bm$outcomes)
-        sampleSelector$setSelectedSamples(bm$outcomes$samples)
+        sampleSelector$setSelectedSamples(sampleSet, bm$outcomes$samples)
         svRatesPlot$settings$replace(bm$outcomes$svRatesPlotPlotSettings)
     }
 })

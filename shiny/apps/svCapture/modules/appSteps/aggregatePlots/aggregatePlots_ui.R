@@ -35,8 +35,18 @@ aggregatePlotsUI <- function(id, options) {
         fluidRow(
             staticPlotBoxUI(
                 ns('svRates'),
-                width = 6,
+                width = 8,
                 title = "SV Rates"
+            ),
+            staticPlotBoxUI(
+                ns('sizeDistribution'),
+                width = 6,
+                title = "SV Size Distribution"
+            ),
+            staticPlotBoxUI(
+                ns('microhomologyDistribution'),
+                width = 6,
+                title = "Microhomology Length Distribution"
             )
         ),
         

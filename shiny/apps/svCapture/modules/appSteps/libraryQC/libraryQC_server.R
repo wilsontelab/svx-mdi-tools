@@ -103,8 +103,9 @@ libraryMetricTypes <- list(
     nSourceMolecules  = "# Source Molecules",
     onTargetCoverage  = "On-Target Coverage",
     offTargetCoverage  = "Off-Target Coverage",
-    enrichment  = "Capture Enrichment",
-    efficiency  = "Library Efficiency"
+    enrichment  = "Capture Enrichment"
+    # ,
+    # efficiency  = "Library Efficiency"
     # ,
     # nSvs  = "# SV Junctions"
 )
@@ -182,8 +183,9 @@ librariesTable <- bufferedTableServer(
             nSourceMolecules = commify(nSourceMolecules),
             onTargetCoverage = commify(round(onTargetCoverage, 0)),
             offTargetCoverage = round(offTargetCoverage, 3),
-            enrichment = commify(round(enrichment, 0)),
-            efficiency = round(efficiency, 3)
+            enrichment = commify(round(enrichment, 0))
+            # ,
+            # efficiency = round(efficiency, 3)
             # ,
             # nSvs = commify(nSvs)
         )]

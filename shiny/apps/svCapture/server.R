@@ -36,7 +36,8 @@ getWorkingSvs <- function(settings, sampleSelector, parseSamples = FALSE){
             N_SAMPLES >= filters$Min_Samples_With_SV$value &
             N_SAMPLES <= filters$Max_Samples_With_SV$value &
             N_TOTAL >= filters$Min_Source_Molecules$value &
-            N_TOTAL <= filters$Max_Source_Molecules$value
+            N_TOTAL <= filters$Max_Source_Molecules$value & 
+            N_SPLITS >= filters$Min_Split_Reads$value
         ]
 
         # apply sample filters, unless showing all samples

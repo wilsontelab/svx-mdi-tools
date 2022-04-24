@@ -62,7 +62,9 @@ libraryQCUI <- function(id, options) {
                 style = unpad,
                 box(width = 12,
                     title = "Library Metrics",
-                    interactiveBarplotUI(ns('libraryMetricsPlot'), height = '400px')
+                    collapsible = TRUE,
+                    collapsed = FALSE,
+                    interactiveBarplotUI(ns('libraryMetricsPlot'), height = '500px')
                 )
             ),
             column(
@@ -76,7 +78,7 @@ libraryQCUI <- function(id, options) {
                     fluidRow(
                         column(
                             width = 8,
-                            interactiveScatterplotUI(ns('metricRelationshipsPlot'), height = '400px')
+                            interactiveScatterplotUI(ns('metricRelationshipsPlot'), height = '500px')
                         ),
                         column(
                             width = 4,

@@ -29,18 +29,7 @@ sourceTypes:
 # most of the default settings are fairly promiscuous to show ~all SVs
 #----------------------------------------------------------------------
 settings:
-    Plot_Settings:
-        Point_Size:
-            type:   numericInput
-            value:  1
-            min:    0.25
-            max:    2
-            step:   0.25 
-        Point_Color:
-            type: selectInput
-            choices:
-                - type
-                - sample
-                - duplex
-                - blue
-            value: type
+    Data:
+        Transpose:
+            type:   checkboxInput
+            value:  false

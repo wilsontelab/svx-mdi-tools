@@ -17,7 +17,7 @@ svExplorerServer <- function(id, options, bookmark, locks) {
 settings <- settingsServer( # display settings not stored in the UI, exposed by gear icon click
     id = 'settings',
     parentId = id,
-    template = c(file.path(app$sources$suiteGlobalDir, "sv_filters.yml"), id),
+    templates = list(file.path(app$sources$suiteGlobalDir, "sv_filters.yml"), id),
     fade = FALSE
 )
 sampleSelector <- sampleSelectorServer( # selectors to pick one or more samples from a sample set
@@ -59,6 +59,16 @@ svPointColors <- reactive({
                 label = samples
             )
         },
+        target = {
+            targets <- svs[!grepl(',', TARGET_REGION), sort(unique(TARGET_REGION))]
+            targetColors <- seq_along(targets)
+            names(targetColors) <- targets
+            list(
+                colors = svs[, ifelse(grepl(',', TARGET_REGION), "grey", targetColors[TARGET_REGION])],
+                color = targetColors,
+                label = targets
+            )
+        }, 
         duplex = list(
             colors = svs[, ifelse(N_DUPLEX_GS > 0, "green3",  "red3")],
             color = c("green3",  "red3"),
@@ -71,14 +81,15 @@ svPointColors <- reactive({
         )
     )
 })
-pointColorLegend <- function(stepSettings, plotSettings, svPointColors){
+pointColorLegend <- function(stepSettings, plotSettings, svPointColors, exclude = character()){
     if(is.null(svPointColors$label)) return()
+    is <- which(!(svPointColors$label %in% exclude))
     legend(
         plotSettings$get('Plot_Frame', 'Legend_Placement'),
-        svPointColors$label,
+        svPointColors$label[is],
         pch = 20, 
         pt.cex = stepSettings$Point_Size$value * 1.25,
-        col = svPointColors$color
+        col = svPointColors$color[is]
     )
 }
 
@@ -123,14 +134,17 @@ locationsPlot <- staticPlotBoxServer(
 
         # initialize the plot
         par(mar = c(4.1, 4.1, 0.1, 0.1))
+        xlim <- c(min(targets$paddedStartI), max(targets$paddedEndI))
+        ylim <- c(0, if(any(c("tt", "ta", "aa") %in% targetClasses())){
+            targets[, max(paddedEndI)]
+        } else {
+            targets[, .(x = endI - paddedStartI + 1), by = regionName][, max(x)]
+        })
+        
         plot(
             NA, NA, typ = "n",
-            xlim = c(min(targets$paddedStartI), max(targets$paddedEndI)),
-            ylim = c(0, if(any(c("tt", "ta", "aa") %in% targetClasses())){
-                targets[, max(paddedEndI)]
-            } else {
-                targets[, .(x = endI - paddedStartI + 1), by = regionName][, max(x)]
-            }),
+            xlim = xlim,
+            ylim = ylim,
             xlab = "SV Center (Mbp)",
             ylab = "SV Size (bp)",
             xaxs = "i", 
@@ -140,10 +154,16 @@ locationsPlot <- staticPlotBoxServer(
 
         # shade and demarcate the capture target regions
         targets[, {
+            xinc <- ylim[2] / 2
             polygon(
-                x = c(startI, centerI, endI, startI), 
-                y = c(0, size, 0, 0), 
-                border = NA, col = "grey50"
+                x = c(startI, startI + xinc, endI + xinc, endI, startI), 
+                y = c(ylim[1], ylim[2], ylim[2], ylim[1], ylim[1]), 
+                border = NA, col = "grey90"
+            )
+            polygon(
+                x = c(startI, startI - xinc, endI - xinc, endI, startI), 
+                y = c(ylim[1], ylim[2], ylim[2], ylim[1], ylim[1]), 
+                border = NA, col = "grey90"
             )
             mtext(paste(regionName, chrom, sep = ","), side = 1, line = 2.25, at = centerI, cex = 1)
             paddedSize <- paddedEndI - paddedStartI + 1
@@ -152,8 +172,8 @@ locationsPlot <- staticPlotBoxServer(
             axis(1, at = paddedStartI + at, labels = round((start - (startI - paddedStartI) + at) / 1e6, 2))
         }, by = regionName]    
         for(i in unlist(targets[, .(paddedStartI, startI, endI, paddedEndI)])){
-            abline(-i * 2,  2, col = "grey50")
-            abline( i * 2, -2, col = "grey50")
+            abline(-i * 2,  2, col = "grey60")
+            abline( i * 2, -2, col = "grey60")
         }
 
         # plot the SV points on top
@@ -164,6 +184,8 @@ locationsPlot <- staticPlotBoxServer(
             cex = stepSettings$Point_Size$value,
             col = svPointColors$colors
         )
+
+        # add a legend
         pointColorLegend(stepSettings, locationsPlot$settings, svPointColors)
     }
 )
@@ -178,31 +200,45 @@ propertiesPlot <- staticPlotBoxServer(
     create = function(...){
         filters <- settings$SV_Filters()
         stepSettings <- settings$Plot_Settings()   
+        svPointColors <- svPointColors()        
         svs <- workingSvs()[, .(
-            plotted = JXN_BASES != "*" & # MICROHOM_LEN meaningless if not a sequenced junction
-                    JXN_TYPE  != "T",  # SV_SIZE meaningless for translocations
+            plotted = JXN_BASES != "*", # MICROHOM_LEN meaningless if not a sequenced junction
+            color = svPointColors$colors,
             MICROHOM_LEN, 
-            SV_SIZE
+            SV_SIZE,
+            JXN_TYPE
         )]
-        svPointColors <- svPointColors()
+        svs[JXN_TYPE == "T", SV_SIZE := rnorm(.N, filters$Max_SV_Size$value, filters$Max_SV_Size$value / 10)]
         par(mar = c(4.1, 4.1, 0.1, 1.1))
+        xlim <- c(-40, 40)
+        # xlim <- c(-100, 100)
+        ylim <- log10(c(max(filters$Min_SV_Size$value, 1), filters$Max_SV_Size$value * 1.5))
         plot(
             NA, 
             NA,
             typ = "n",
-            xlim = c(-40, 40),
-            ylim = log10(c(max(filters$Min_SV_Size$value, 1), filters$Max_SV_Size$value)),
+            xlim = xlim,
+            ylim = ylim,
             xlab = "Microhomology Length (bp)",
             ylab = "log10 SV Size (bp)"
         )
+        abline(h = seq(0, 10, 1), col = "grey60")
+        abline(v = seq(-100, 100, 10), col = "grey60")
         abline(v = 0)
         points(
             jitter(svs[plotted == TRUE, MICROHOM_LEN]), 
             log10( svs[plotted == TRUE, SV_SIZE]), 
             pch = 20, 
             cex = stepSettings$Point_Size$value,
-            col = svPointColors$colors[svs[, plotted]]
+            col = svs[plotted == TRUE, color]
         )
+
+        # add text to denote microhomology vs. insertions
+        y <- ylim[1] + (ylim[2] - ylim[1]) * 0.035
+        text(xlim[1], y, "insertions", pos = 4, offset = 0.05, cex = 0.9)
+        text(xlim[2], y, "microhomologies", pos = 2, offset = 0.05, cex = 0.9)
+        
+        # add a legend
         pointColorLegend(stepSettings, propertiesPlot$settings, svPointColors)
     }
 )
@@ -228,7 +264,7 @@ svsTable <- bufferedTableServer(
             #---------------
             nSmp = N_SAMPLES,
             nTot = N_TOTAL,
-            nJxn = N_SPLITS,            
+            nSplit = N_SPLITS,            
             nGap = N_GAPS,
             nClip = N_OUTER_CLIPS,
             nDpx = N_DUPLEX_GS,
@@ -286,10 +322,11 @@ observe({
     bm <- getModuleBookmark(id, module, bookmark, locks)
     req(bm)
     settings$replace(bm$settings)
-    sampleSelector$setSampleSet(bm$input[['sampleSelector-sampleSet']]) 
+    sampleSet <- bm$input[['sampleSelector-sampleSet']]
+    sampleSelector$setSampleSet(sampleSet) 
     if(!is.null(bm$outcomes)) {
         outcomes <<- listToReactiveValues(bm$outcomes)
-        sampleSelector$setSelectedSamples(bm$outcomes$samples)
+        sampleSelector$setSelectedSamples(sampleSet, bm$outcomes$samples)
         locationsPlot$settings$replace(bm$outcomes$locationsPlotSettings)
         propertiesPlot$settings$replace(bm$outcomes$propertiesPlotSettings)
     }
