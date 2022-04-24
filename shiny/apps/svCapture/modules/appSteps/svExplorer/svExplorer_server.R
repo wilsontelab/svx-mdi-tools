@@ -96,18 +96,6 @@ pointColorLegend <- function(stepSettings, plotSettings, svPointColors, exclude 
 #----------------------------------------------------------------------
 # SV locations plot
 #----------------------------------------------------------------------
-#     Classes 'data.table' and 'data.frame':  2 obs. of  11 variables:
-#  $ chrom       : chr  "chr3" "chr16"
-#  $ start       : int  60300384 78456040
-#  $ end         : int  60700384 78856040
-#  $ regionName  : chr  "FHIT" "WWOX"
-#  $ chromI      : int  3 16
-#  $ paddedStartI: int  1 2000001
-#  $ startI      : int  800001 2800001
-#  $ centerI     : int  1000000 3000000
-#  $ endI        : int  1200000 3200000
-#  $ paddedEndI  : int  2000000 4000000
-#  $ size        : int  400000 400000
 locationsPlot <- staticPlotBoxServer(
     'svLocations', 
     legend = TRUE,
@@ -314,6 +302,104 @@ svsTable <- bufferedTableServer(
     #     )
     # )
 )
+
+# ----------------------------------------------------------------------
+# text-based zoom of a single selected junction
+# ----------------------------------------------------------------------
+zoomInfo <- reactive({
+    reportProgress('getZoomInfo')
+    rowI <- svsTable$rows_selected()
+    req(rowI)
+    svs <- workingSvs()
+    svs[rowI]
+    # smp  <- svTable[rowI,smp]
+    # svId <- svTable[rowI,svId]
+    # nodes <- getSvMoleculesFromList(smp, svId)
+    # nodes[,c('chrom','side','pos') := unpackNodeNames(NODE)]
+    # list(
+    #     smp  = smp,
+    #     svId = svId,
+    #     sv = sampleData[[smp]]$svTable[SV_ID == svId],
+    #     nodes = nodes[order(side,chrom,pos)] # thus, nodes are in canonical order
+    # )
+})
+isSequencedJunction <- function(sv) sv[, !is.na(JXN_SEQ)] # either sequenced or reconstructed
+isReconstructedJunction <- function(sv) sv[, !is.na(JXN_SEQ) & !is.na(MERGE_LEN)]
+output$junctionZoom <- renderText({
+    reportProgress('makeJunctionZoom')
+    zoom <- zoomInfo()
+    req(zoom)
+    req(zoom$JXN_BASES != "*")
+
+    return(zoom$JXN_SEQ)
+
+    # # determine the requested alignment type
+    # if(input$jxnDisplayType == "Genome"){
+    #     offset <- zoom$idx$ALIGNS_OFFSET
+    #     length <- zoom$idx$ALIGNS_LENGTH
+    # } else if(input$jxnDisplayType == "Genome+") {
+    #     offset <- zoom$idx$ALIGNS_PLUS_OFFSET
+    #     length <- zoom$idx$ALIGNS_PLUS_LENGTH
+    # } else if(input$jxnDisplayType == "Reads") {
+    #     offset <- zoom$idx$READS_OFFSET
+    #     length <- zoom$idx$READS_LENGTH        
+    # }
+    
+    # get the alignment data
+    data <- getSvIndexed(zoom$smp, zoom$svId, 'alignments', offset, length)
+    
+    # parse into readable rows
+    nLines <- length(data)
+    nChar <- nchar(data[1])
+    charPerLine <- 100 # as.numeric(input$charPerLine)
+    nChunks <- ceiling(nChar / charPerLine)
+    nCharLastLine <- nChar %% charPerLine
+    if(nCharLastLine == 0) nCharLastLine <- charPerLine
+    output <- character()
+    blueLines <- list( # junction lines to denote with highlight coloring
+        Genome = 3:4,
+        'Genome+' = 3:4,
+        Reads = 1  
+    )
+    for(i in 1:nChunks){
+        if(i > 1) output <- c(output, "<br>")        
+        start <- 1 + (i - 1) * charPerLine
+        for(j in 1:nLines){
+            str  <- substr(data[j], start, start + charPerLine - 1)
+            str  <- gsub(' ', '&nbsp;', str) 
+            str_ <- gsub('~', '', str) 
+            if(nchar(str_) > 0){
+                col <- if(j %in% blueLines[[input$jxnDisplayType]]) 'blue' else 'black'
+                output <- c(
+                    output,
+                    paste(paste('<span style="color:', col, ';">', sep = ""),
+                          str,
+                          '</span>', sep = "")
+                )                
+            }            
+        }
+    }
+    output <- gsub('~', '&nbsp;', output)
+    
+    # # app/prepend the outermost chromosomal positions
+    # firstInPair <- 64
+    # svx <- if(bitwAnd(zoom$sv$FLAG1, firstInPair)) {
+    #     zoom$sv[,.(RNAME1,PROX_OUT_POS1,RNAME2,PROX_OUT_POS2)]
+    # } else {
+    #     zoom$sv[,.(RNAME2,PROX_OUT_POS2,RNAME1,PROX_OUT_POS1)]
+    # }
+    # output <- c(
+    #     "<br>",
+    #     paste(svx[[1]], format(svx[[2]], big.mark=","), sep=":"),
+    #     '&darr;',
+    #     output,
+    #     paste(paste(rep("&nbsp;", nCharLastLine-1),collapse=""),'&uarr;',sep=""),
+    #     paste(svx[[3]], format(svx[[4]], big.mark=","), sep=":")
+    # )
+    
+    # return the hopefully readable sequence block
+    paste(output, collapse = "<br>")
+})
 
 # ----------------------------------------------------------------------
 # define bookmarking actions

@@ -45,37 +45,35 @@ svExplorerUI <- function(id, options) {
             )
         ),
         
+        # # box with sortable table of SVs
+        # fluidRow(
+        #     column(
+        #         width = 12,
+        #         style = unpad,
+        #         box(
+        #             width = 12,
+        #             bufferedTableUI(ns('svsTable'))
+        #         )
+        #     )
+        # ),
+        
         # box with sortable table of SVs
         fluidRow(
-            column(
+            box(
                 width = 12,
-                style = unpad,
-                box(
-                    width = 12,
-                    bufferedTableUI(ns('svsTable'))
+                bufferedTableUI(ns('svsTable'))
+            )
+        ),
+
+        # box with text view of a single junction
+        fluidRow(
+            box(
+                width = 12,
+                span(
+                    htmlOutput(ns("junctionZoom")),
+                    style = "font-family: monospace; font-weight: bold;"
                 )
             )
         )
-        # ,
-
-        # # explore individual sample distributions
-        # fluidRow(
-        #     column(
-        #         width = 6,
-        #         style = unpad,
-        #         box(width = 12,
-        #             title = "Insert Sizes",
-        #             plotOutput(ns('insertSizesPlot'), height = '400px')
-        #         )
-        #     ),
-        #     column(
-        #         width = 6,
-        #         style = unpad,
-        #         box(width = 12,
-        #             title = "Strand Family Sizes",
-        #             plotOutput(ns('familySizesPlot'), height = '400px')
-        #         )
-        #     ) 
-        # )
     )    
 }
