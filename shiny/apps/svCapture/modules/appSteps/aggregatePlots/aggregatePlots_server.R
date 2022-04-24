@@ -27,7 +27,7 @@ sampleSelector <- sampleSelectorServer( # selectors to pick one or more samples 
     id = 'sampleSelector',
     parentId = id
 )
-outcomes <- reactiveValues() # logical failure vectors keyed as [[sampleSet]]
+outcomes <- reactiveValues()
 
 #----------------------------------------------------------------------
 # generate the list of all filtered SVs from all selected samples
@@ -106,53 +106,22 @@ svRatesPlot <- staticPlotBoxServer(
     margins = TRUE,
     title = TRUE,
     create = function(...){
-        get <- svRatesPlot$settings$get
-        svRates <- svRates()[order(rev(1:.N))]
+        svRates <- copy(svRates())[order(rev(1:.N))]
         req(svRates)
-
         svRates[, groupFactor := factor(group, unique(group))]
-        # dstr(svRates)
-
-        # barplot(as.matrix(x), beside = TRUE, horiz = TRUE)
-        par(mar = c(
-            get("Plot_Frame", "Bottom_Margin"), 
-            get("Plot_Frame", "Left_Margin"), 
-            get("Plot_Frame", "Top_Margin"), 
-            get("Plot_Frame", "Right_Margin")
-        ))
         xi <- as.integer(svRates$groupFactor)
-        # plot(
-        #     jitter(xi, amount = 0.1),
-        #     svRates$svRate,
-        #     typ = "p",
-
-        #     xlim = c(0, max(as.integer(svRates$groupFactor))) + 0.5,
-        #     xlab = "",
-        #     ylim = c(0, max(svRates$svRate) * 1.1),
-        #     ylab = "SV Rate",
-        #     xaxt = "n"
-        # )
-        plot(
-            NA, NA, 
-            typ = "p",
-            main = get("Plot_Frame", "Title"),
-
+        svRatesPlot$initializeFrame(
+            xlim = c(0, max(svRates$svRate) * 1.1),            
             ylim = c(0, max(as.integer(svRates$groupFactor))) + 0.5,
+            xlab = "SV Rate",            
             ylab = "",
-            xlim = c(0, max(svRates$svRate) * 1.1),
-            xlab = "SV Rate",
             yaxt = "n"
         )
+        abline(v = seq(0, 1, 0.1), col = "grey80")
         abline(h = c(0, xi) + 0.5, col = "grey80")
-
-        # dstr(CONSTANTS$plotlyColors)
-        # dstr(as.integer(factor(svRates$replicate)))
-        # dstr(CONSTANTS$plotlyColors[as.integer(factor(svRates$replicate))])
-        points(
-            svRates$svRate,            
-            jitter(xi, amount = 0.1),
-            pch = get("Points_and_Lines", "Point_Type"),
-            cex = get("Points_and_Lines", "Point_Size"),
+        svRatesPlot$addPoints(
+            x = svRates$svRate,            
+            y = jitter(xi, amount = 0.1),
             col = unlist(CONSTANTS$plotlyColors[as.integer(factor(svRates$replicate))])
         )
         axis(
@@ -160,37 +129,18 @@ svRatesPlot <- staticPlotBoxServer(
             at = xi, 
             labels = svRates$group,
             las = 1
-            # , 
-            # tick = TRUE, 
-            # line = NA,
-            # pos = NA, 
-            # outer = FALSE, 
-            # font = NA, 
-            # lty = "solid",
-            # lwd = 1, 
-            # lwd.ticks = lwd, 
-            # col = NULL, 
-            # col.ticks = NULL,
-            # hadj = NA, 
-            # padj = NA, 
-            # gap.axis = NA
         )
-
-        # barplot(svRate ~ group, assignments, beside = TRUE, horiz = TRUE)
-
-        #     xaxs = "i", 
-        #     yaxs = "i",
-        #     xaxt = "n"
+        # barplot(as.matrix(x), beside = TRUE, horiz = TRUE)
     }
 )
 
 #----------------------------------------------------------------------
-# Microhomology Length Distribution plot
+# SV Size and Microhomology Length Distribution plots
 #----------------------------------------------------------------------
 svsByGroup <- reactive({
     maxSamples <- settings$SV_Filters()$Max_Samples_With_SV$value
     req(maxSamples == 1)
-    svRates <- svRates()
+    svRates <- copy(svRates())
     req(svRates)
     setkey(svRates, uniqueId)        
     svs <- workingSvs()[, .(
@@ -201,56 +151,78 @@ svsByGroup <- reactive({
     )]    
 })
 plotFrequencyDistribution <- function(
-    column, xlab, xlim, 
+    plot,
+    column, 
+    xlim,     
+    xlab, 
     modifyData = function(...) NULL,  
     modifyPlotBase = function(...) NULL
 ){
-    svsByGroup <- svsByGroup()
+    svsByGroup <- copy(svsByGroup()) # since we might modify it...
     req(svsByGroup)
-    modifyData(svsByGroup)
+    isCum <- settings$get("Data", "Cumulative")    
+    modifyData(svsByGroup, isCum)
     d <- svsByGroup[plotted == TRUE, .N, keyby = c("group", column)]
     d[, Frequency := N / sum(N), keyby = group]
-    plot(
-        NA, NA, typ = "n",
+    ymax <- if(isCum) 1 else max(d$Frequency) * 1.05
+    plot$initializeFrame(
         xlim = xlim,
-        ylim = c(0, max(d$Frequency) * 1.1),
+        ylim = c(0, ymax),
         xlab = xlab,
-        ylab = "Frequency"
+        ylab = paste0(if(isCum) "Cumulative " else "", "Frequency")
     )
     modifyPlotBase(d)
+    if(isCum) abline(h = 0.5, col = "grey60")
     groups <- unique(d$group)
     for(i in seq_along(groups)){
         dd <- d[group == groups[i]]
-        lines(dd[[column]], dd$Frequency, col = CONSTANTS$plotlyColors[[i]])
-    }        
+        plot$addLines(
+            x = dd[[column]], 
+            y = if(isCum) cumsum(dd$Frequency) else dd$Frequency, 
+            col = CONSTANTS$plotlyColors[[i]]
+        )
+    }  
+    plot$addLegend(
+        legend = groups,
+        col = unlist(CONSTANTS$plotlyColors[seq_along(groups)])
+    )
 }
 sizeDistribution <- staticPlotBoxServer(
     'sizeDistribution',
-    legend = TRUE,
+    legend    = TRUE,
+    lines     = TRUE,
+    title     = TRUE,
+    margins   = TRUE,
     immediate = TRUE,
     create = function(...){
         plotFrequencyDistribution(
-            column = "SV_SIZE", 
-            xlab = "log10 SV Size (bp)",
-            xlim = log10(c(1000, 1e6)),
-            modifyData = function(svsByGroup) svsByGroup[, SV_SIZE := round(log10(SV_SIZE), 1)]
-            # ,
-            # modifyPlotBase = function(...){
-            #     abline(v = seq(-100, 100, 10), col = "grey60")
-            #     abline(v = 0)
-            # }
+            sizeDistribution,
+            column  = "SV_SIZE", 
+            xlim    = log10(c(1000, 1e6)),            
+            xlab    = "log10 SV Size (bp)",
+            modifyData = function(svsByGroup, isCum) {
+                svsByGroup[, SV_SIZE := log10(SV_SIZE)]
+                if(!isCum) svsByGroup[, SV_SIZE := round(SV_SIZE * 2, 0) / 2]
+            },
+            modifyPlotBase = function(...){
+                abline(v = 0:10, col = "grey60")
+            }
         )
     }
 )
 microhomologyDistribution <- staticPlotBoxServer(
     'microhomologyDistribution',
-    legend = TRUE,
+    legend    = TRUE,
+    lines     = TRUE,
+    title     = TRUE,
+    margins   = TRUE,
     immediate = TRUE,
     create = function(...){
         plotFrequencyDistribution(
-            column = "MICROHOM_LEN", 
-            xlab = "Microhomology Length (bp)",
-            xlim = c(-20, 20),
+            microhomologyDistribution,            
+            column  = "MICROHOM_LEN", 
+            xlim    = c(-20, 20),            
+            xlab    = "Microhomology Length (bp)",
             modifyPlotBase = function(...){
                 abline(v = seq(-100, 100, 10), col = "grey60")
                 abline(v = 0)
@@ -271,13 +243,13 @@ ratesTable <- bufferedTableServer(
         svRates <- svRates()
         req(svRates)
         svRates[, .(
-            Group = Category1Name,
-            Category = Category2Name,
-            Project = Project,
-            Sample = Sample_ID,
-            nSvs = nSvs, 
+            Group       = Category1Name,
+            Category    = Category2Name,
+            Project     = Project,
+            Sample      = Sample_ID,
+            nSvs        = nSvs, 
             onTargetCoverage = onTargetCoverage,
-            svRate = svRate
+            svRate      = svRate
         )]
     })
 )
@@ -294,7 +266,9 @@ observe({
     if(!is.null(bm$outcomes)) {
         outcomes <<- listToReactiveValues(bm$outcomes)
         sampleSelector$setSelectedSamples(sampleSet, bm$outcomes$samples)
-        svRatesPlot$settings$replace(bm$outcomes$svRatesPlotPlotSettings)
+        svRatesPlot$settings$replace(bm$outcomes$svRatesPlotSettings)
+        sizeDistribution$settings$replace(bm$outcomes$sizeDistributionSettings)
+        microhomologyDistribution$settings$replace(bm$outcomes$microhomologyDistributionSettings)
     }
 })
 
@@ -307,7 +281,9 @@ list(
     samples  = sampleSelector$selectedSamples,
     outcomes = reactive({ list(
         samples = sampleSelector$selectedSamples(),
-        svRatesPlotPlotSettings  = svRatesPlot$settings$all_()
+        svRatesPlotSettings = svRatesPlot$settings$all_(),
+        sizeDistributionSettings = sizeDistribution$settings$all_(),
+        microhomologyDistributionSettings = microhomologyDistribution$settings$all_()
     ) }),
     isReady  = reactive({ getStepReadiness(options$source, outcomes) })
 )

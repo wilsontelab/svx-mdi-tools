@@ -33,3 +33,6 @@ settings:
         Transpose:
             type:   checkboxInput
             value:  false
+        Cumulative:
+            type:   checkboxInput
+            value:  true
