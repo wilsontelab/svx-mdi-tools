@@ -9,6 +9,7 @@
 #----------------------------------------------------------------------
 
 # objects instantiated here are available to all appStep modules in a session
+sourceExternalScript("genomex-mdi-tools", "shared/global/utilities/sequence.R")
 
 # get the data.table of called SVs matching the current filter set
 getWorkingSvs <- function(settings, sampleSelector){
@@ -61,21 +62,25 @@ getWorkingSvs <- function(settings, sampleSelector){
     x[sample.int(.N)] # randomize the list for optimized plotting
 }
 
-# get the data.table of molecules that support the currently selected SV
+# get a data.table of molecules that support the currently selected SV
+#   one SV (one line in the SVs table) may be shared by multiple samples in a source
+#   that SV might be listed twice if the selected samples come from multiple sources / pipeline runs
 getWorkingMols <- function(sv, sampleSelector){
     req(sv)
-    assignments <- sampleSelector$selectedAssignments() # Source_ID	Project	Sample_ID	Category1	Category2	uniqueId
+    assignments <- sampleSelector$selectedAssignments() 
     req(assignments)
     req(nrow(assignments) > 0)
+    startSpinner(session, 'getWorkingMols')    
     samples <- unlist(sv$PROJECT_SAMPLES) 
-    startSpinner(session, 'getWorkingMols')
-    x <- do.call(rbind, lapply(assignments[uniqueId %in% samples, unique(Source_ID)], function(sourceId){
-        project <- assignments[Source_ID == sourceId][1, Project]
-        molFile <- loadPersistentFile(sourceId = sourceId, contentFileType = "junctionMolecules")
-        persistentCache[[molFile]]$data[SV_ID == sv$SV_ID]
-    }))
-    stopSpinner(session, 'getWorkingSvs')
-    x[sample.int(.N)] # randomize the list for optimized plotting
+    sourceId <- assignments[uniqueId %in% samples, unique(Source_ID)] # one SV comes from exactly one source
+    molFile <- loadPersistentFile(sourceId = sourceId, contentFileType = "junctionMolecules")
+    metadataFile <- loadPersistentFile(sourceId = sourceId, contentFileType = "metadata")
+    maxTLen <- max(as.integer(strsplit(persistentCache[[metadataFile]]$data$MAX_TLENS, "\\s+")[[1]]))
+    stopSpinner(session, 'getWorkingSvs')    
+    list(
+        maxTLen = maxTLen,            # randomize the list for optimized plotting
+        mols = persistentCache[[molFile]]$data[SV_ID == sv$SV_ID][sample.int(.N)]
+    )
 }
 
 # appServer function called after all modules are instantiated

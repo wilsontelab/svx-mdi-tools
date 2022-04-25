@@ -7,11 +7,27 @@
 #----------------------------------------------------------------------
 SVX <- list()
 SVX$nodeClasses <- list(
-    GAP           = 0, # SV evidence type codes, i.e., node classes
-    SPLIT         = 1,
-    OUTER_CLIP    = 2,
-    RECONSTRUCTED = 3
+    GAP         = 0, # SV evidence type codes, i.e., node classes
+    SPLIT       = 1,
+    OUTER_CLIP  = 2
 )
+SVX$nodeClassColors <- list(
+    Gap   = CONSTANTS$plotlyColors$orange,
+    Split = CONSTANTS$plotlyColors$blue,
+    Clip  = CONSTANTS$plotlyColors$green
+)
+SVX$getMolColors <- function(x){
+    classes <- SVX$nodeClasses
+    cols    <- SVX$nodeClassColors
+    ifelse(
+        x == classes$SPLIT, 
+        cols$Split, 
+        ifelse(x == classes$GAP, 
+            cols$Gap, 
+            cols$Clip
+        )
+    )
+}
 SVX$jxnTypes <- data.table(
     code = c(
         "D",

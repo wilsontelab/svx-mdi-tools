@@ -31,19 +31,19 @@ svExplorerUI <- function(id, options) {
             sampleSelectorUI(ns('sampleSelector'))
         ) ),
         
-        # composite views of all filtered SVs
-        fluidRow(
-            staticPlotBoxUI(
-                ns('svLocations'),
-                width = 6,
-                title = "SV Locations"
-            ),
-            staticPlotBoxUI(
-                ns('svProperties'),
-                width = 6,
-                title = "SV Properties"
-            )
-        ),
+        # # composite views of all filtered SVs
+        # fluidRow(
+        #     staticPlotBoxUI(
+        #         ns('svLocations'),
+        #         width = 6,
+        #         title = "SV Locations"
+        #     ),
+        #     staticPlotBoxUI(
+        #         ns('svProperties'),
+        #         width = 6,
+        #         title = "SV Properties"
+        #     )
+        # ),
         
         # box with sortable table of SVs
         fluidRow(
@@ -60,17 +60,16 @@ svExplorerUI <- function(id, options) {
                 ns('junctionNodes'),
                 width = 4,
                 title = "Supporting Molecules"
-            )
-            # ,
+            ),
 
-            # # box with text view of a single junction
-            # box(
-            #     width = 12,
-            #     span(
-            #         htmlOutput(ns("junctionZoom")),
-            #         style = "font-family: monospace; font-weight: bold;"
-            #     )
-            # )            
+            # box with text view of a single junction
+            box(
+                width = 8,
+                span(
+                    htmlOutput(ns("junctionZoom")),
+                    style = "font-family: monospace; font-weight: bold;"
+                )
+            )            
         )
     )    
 }

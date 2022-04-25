@@ -313,47 +313,43 @@ svsTable <- bufferedTableServer(
 )
 
 # ----------------------------------------------------------------------
-# plot of node points of all molecules matching a specific selected junction
+# plot of outer endpoints of all molecules matching the selected junction
 # ----------------------------------------------------------------------
-
-
-# get rightmost mapped read position in reference genome from POS and CIGAR
-getEnd <- Vectorize(function(start, cigar) {
-    lengths    <- as.numeric(unlist(regmatches(cigar, gregexpr('\\d+', cigar))))
-    operations <-            unlist(regmatches(cigar, gregexpr('\\D',  cigar)))
-    allowed <- operations %notin% c('S', 'I')
-    start - 1 + sum(lengths[allowed])
-})
-
-
 junctionNodesPlot <- staticPlotBoxServer(
     'junctionNodes', 
-    # legend = TRUE,
+    legend = TRUE,
+    points = TRUE,
+    margins = TRUE,
     immediate = TRUE,
     create = function(...){
         mols <- workingMols()
         req(mols)
         sv <- selectedSv()
-
-        mols <- mols[NODE_CLASS != SVX$nodeClasses$OUTER_CLIP]
-
+        xAllowedLim <- sv$POS_1 + c(-1, 1) * mols$maxTLen
+        yAllowedLim <- sv$POS_2 + c(-1, 1) * mols$maxTLen
+        mols$mols <- mols$mols[ # in case molecule has >1 jxn; only plot this junction
+            OUT_POS1 %between% xAllowedLim & 
+            OUT_POS2 %between% yAllowedLim
+        ]
         junctionNodesPlot$initializeFrame(
-            xlim = sv$POS_1 + c(-1, 1) * 500,
-            ylim = sv$POS_2 + c(-1, 1) * 500
+            xlim = range(c(sv$POS_1, mols$mols$OUT_POS1)) / 1e6,
+            ylim = range(c(sv$POS_2, mols$mols$OUT_POS2)) / 1e6,
+            xlab = "Junction Coordinate 1 (Mbp)",
+            ylab = "Junction Coordinate 2 (Mbp)"
         )
-        abline(h = sv$POS_2)
-        abline(v = sv$POS_1)        
+        abline(h = sv$POS_2 / 1e6) # crosshairs at the junction point
+        abline(v = sv$POS_1 / 1e6)   
         junctionNodesPlot$addPoints(
-            x = c(sv$POS_1, mols$POS_1), 
-            y = c(sv$POS_2, mols$POS_2),
-            # x = c(sv$POS_1, if(sv$SIDE_1 == "L") mols$POS_1 else getEnd(mols$POS_1, mols$CIGAR_1)), 
-            # y = c(sv$POS_2, if(sv$SIDE_2 == "L") mols$POS_2 else getEnd(mols$POS_2, mols$CIGAR_2)), 
+            x = c(sv$POS_1, mols$mols$OUT_POS1) / 1e6, 
+            y = c(sv$POS_2, mols$mols$OUT_POS2) / 1e6,
             col = c(
-                CONSTANTS$plotlyColors$red, 
-                ifelse(mols$NODE_CLASS == SVX$nodeClasses$SPLIT, 
-                       CONSTANTS$plotlyColors$blue, 
-                       CONSTANTS$plotlyColors$orange)
+                CONSTANTS$plotlyColors$red, # red dot at the junction point
+                SVX$getMolColors(mols$mols$NODE_CLASS)
             )
+        )
+        junctionNodesPlot$addLegend(
+            legend = names(SVX$nodeClassColors),
+            col   = unlist(SVX$nodeClassColors)
         )
     }
 )
@@ -361,32 +357,52 @@ junctionNodesPlot <- staticPlotBoxServer(
 # ----------------------------------------------------------------------
 # text-based zoom of a single selected junction
 # ----------------------------------------------------------------------
-zoomInfo <- reactive({
-    reportProgress('getZoomInfo')
-    rowI <- svsTable$rows_selected()
-    req(rowI)
-    svs <- workingSvs()
-    svs[rowI]
-    # smp  <- svTable[rowI,smp]
-    # svId <- svTable[rowI,svId]
-    # nodes <- getSvMoleculesFromList(smp, svId)
-    # nodes[,c('chrom','side','pos') := unpackNodeNames(NODE)]
-    # list(
-    #     smp  = smp,
-    #     svId = svId,
-    #     sv = sampleData[[smp]]$svTable[SV_ID == svId],
-    #     nodes = nodes[order(side,chrom,pos)] # thus, nodes are in canonical order
-    # )
-})
 isSequencedJunction <- function(sv) sv[, !is.na(JXN_SEQ)] # either sequenced or reconstructed
 isReconstructedJunction <- function(sv) sv[, !is.na(JXN_SEQ) & !is.na(MERGE_LEN)]
 output$junctionZoom <- renderText({
-    reportProgress('makeJunctionZoom')
-    zoom <- zoomInfo()
-    req(zoom)
-    req(zoom$JXN_BASES != "*")
+    mols <- workingMols()
+    req(mols)
+    sv <- selectedSv()
+    req(sv$JXN_BASES != "*")
 
-    return(zoom$JXN_SEQ)
+    reportProgress('makeJunctionZoom')
+
+    faidxPadding <- (nchar(sv$GEN_REF_1) - 1) / 2
+    refStart1 <- sv$POS_1 - faidxPadding
+    refStart2 <- sv$POS_2 - faidxPadding
+
+    # dstr(mols$mols)
+    refMol <- mols$mols[IS_REFERENCE == 1]
+    alns <- c(
+        cigarToRefAln(refMol$CIGAR_1, refMol$SEQ_1),
+        cigarToRefAln(refMol$CIGAR_2, refMol$SEQ_2)
+    )
+
+    # dstr(refMol)
+
+#     dstr(cigarToRefAln(mol1$CIGAR_1, mol1$SEQ_1))
+#     List of 4
+#  $ seq             : chr [1:148] "C" "A" "A" "T" ...
+#  $ leftClip        : num 0
+#  $ lengthOut       : int 148
+#  $ lengthAlignedOut: num 148
+
+    return(paste(
+        faidxPadding,
+        nchar(sv$JXN_SEQ),
+        nchar(sv$GEN_REF_1),
+        nchar(sv$GEN_REF_2),
+        sv$MICROHOM_LEN,
+        sv$JXN_BASES,
+        refMol$CIGAR_1,
+        refMol$SEQ_1,
+        refMol$CIGAR_2,
+        refMol$SEQ_2,
+        paste(alns[1]$seq, collapse = ""),
+        paste(alns[2]$seq, collapse = ""),
+
+        sep = "<br>"
+    ))
 
     # # determine the requested alignment type
     # if(input$jxnDisplayType == "Genome"){
