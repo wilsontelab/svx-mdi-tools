@@ -33,6 +33,15 @@ targetClasses <- reactive({ SVX$targetClasses[[settings$SV_Filters()$Target_Clas
 workingSvs <- reactive({
     getWorkingSvs(settings, sampleSelector)
 })
+selectedSv <- reactive({
+    rowI <- svsTable$rows_selected()
+    req(rowI)
+    svs <- workingSvs()
+    svs[rowI]
+})
+workingMols <- reactive({
+    getWorkingMols(selectedSv(), sampleSelector)
+})
 
 #----------------------------------------------------------------------
 # set SV plot point colors
@@ -301,6 +310,52 @@ svsTable <- bufferedTableServer(
     #         }
     #     )
     # )
+)
+
+# ----------------------------------------------------------------------
+# plot of node points of all molecules matching a specific selected junction
+# ----------------------------------------------------------------------
+
+
+# get rightmost mapped read position in reference genome from POS and CIGAR
+getEnd <- Vectorize(function(start, cigar) {
+    lengths    <- as.numeric(unlist(regmatches(cigar, gregexpr('\\d+', cigar))))
+    operations <-            unlist(regmatches(cigar, gregexpr('\\D',  cigar)))
+    allowed <- operations %notin% c('S', 'I')
+    start - 1 + sum(lengths[allowed])
+})
+
+
+junctionNodesPlot <- staticPlotBoxServer(
+    'junctionNodes', 
+    # legend = TRUE,
+    immediate = TRUE,
+    create = function(...){
+        mols <- workingMols()
+        req(mols)
+        sv <- selectedSv()
+
+        mols <- mols[NODE_CLASS != SVX$nodeClasses$OUTER_CLIP]
+
+        junctionNodesPlot$initializeFrame(
+            xlim = sv$POS_1 + c(-1, 1) * 500,
+            ylim = sv$POS_2 + c(-1, 1) * 500
+        )
+        abline(h = sv$POS_2)
+        abline(v = sv$POS_1)        
+        junctionNodesPlot$addPoints(
+            x = c(sv$POS_1, mols$POS_1), 
+            y = c(sv$POS_2, mols$POS_2),
+            # x = c(sv$POS_1, if(sv$SIDE_1 == "L") mols$POS_1 else getEnd(mols$POS_1, mols$CIGAR_1)), 
+            # y = c(sv$POS_2, if(sv$SIDE_2 == "L") mols$POS_2 else getEnd(mols$POS_2, mols$CIGAR_2)), 
+            col = c(
+                CONSTANTS$plotlyColors$red, 
+                ifelse(mols$NODE_CLASS == SVX$nodeClasses$SPLIT, 
+                       CONSTANTS$plotlyColors$blue, 
+                       CONSTANTS$plotlyColors$orange)
+            )
+        )
+    }
 )
 
 # ----------------------------------------------------------------------

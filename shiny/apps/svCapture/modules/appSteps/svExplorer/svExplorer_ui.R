@@ -45,18 +45,6 @@ svExplorerUI <- function(id, options) {
             )
         ),
         
-        # # box with sortable table of SVs
-        # fluidRow(
-        #     column(
-        #         width = 12,
-        #         style = unpad,
-        #         box(
-        #             width = 12,
-        #             bufferedTableUI(ns('svsTable'))
-        #         )
-        #     )
-        # ),
-        
         # box with sortable table of SVs
         fluidRow(
             box(
@@ -65,15 +53,24 @@ svExplorerUI <- function(id, options) {
             )
         ),
 
-        # box with text view of a single junction
         fluidRow(
-            box(
-                width = 12,
-                span(
-                    htmlOutput(ns("junctionZoom")),
-                    style = "font-family: monospace; font-weight: bold;"
-                )
+
+            # box with the node points of all molecules matching a specific selected junction
+            staticPlotBoxUI(
+                ns('junctionNodes'),
+                width = 4,
+                title = "Supporting Molecules"
             )
+            # ,
+
+            # # box with text view of a single junction
+            # box(
+            #     width = 12,
+            #     span(
+            #         htmlOutput(ns("junctionZoom")),
+            #         style = "font-family: monospace; font-weight: bold;"
+            #     )
+            # )            
         )
     )    
 }

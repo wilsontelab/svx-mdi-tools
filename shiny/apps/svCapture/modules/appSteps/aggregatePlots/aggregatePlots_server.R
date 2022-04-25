@@ -34,7 +34,7 @@ outcomes <- reactiveValues()
 #----------------------------------------------------------------------
 targetClasses <- reactive({ SVX$targetClasses[[settings$SV_Filters()$Target_Class$value]] })
 workingSvs <- reactive({
-    getWorkingSvs(settings, sampleSelector, parseSamples = TRUE)
+    getWorkingSvs(settings, sampleSelector)
 })
 
 #----------------------------------------------------------------------

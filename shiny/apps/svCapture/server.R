@@ -9,7 +9,9 @@
 #----------------------------------------------------------------------
 
 # objects instantiated here are available to all appStep modules in a session
-getWorkingSvs <- function(settings, sampleSelector, parseSamples = FALSE){
+
+# get the data.table of called SVs matching the current filter set
+getWorkingSvs <- function(settings, sampleSelector){
     assignments <- sampleSelector$selectedAssignments() # Source_ID	Project	Sample_ID	Category1	Category2	uniqueId
     req(assignments)
     req(nrow(assignments) > 0)
@@ -52,13 +54,28 @@ getWorkingSvs <- function(settings, sampleSelector, parseSamples = FALSE){
         } else {
             x[, matchesSamples := TRUE]
         }   
-        x[, PROJECT_SAMPLES := if(parseSamples) {
-            lapply(strsplit(SAMPLES, ","), function(x) paste(project, x, sep = ":"))
-        } else ""]  
+        x[, PROJECT_SAMPLES := lapply(strsplit(SAMPLES, ","), function(x) paste(project, x, sep = ":"))]  
         x[matchesSamples == TRUE, .SD, .SDcols = c(names(SVX$find$structural_variants), "PROJECT_SAMPLES") ]
     }))
     stopSpinner(session, 'getWorkingSvs')
-    x[sample.int(.N)] # randomize the SV list for optimized plotting
+    x[sample.int(.N)] # randomize the list for optimized plotting
+}
+
+# get the data.table of molecules that support the currently selected SV
+getWorkingMols <- function(sv, sampleSelector){
+    req(sv)
+    assignments <- sampleSelector$selectedAssignments() # Source_ID	Project	Sample_ID	Category1	Category2	uniqueId
+    req(assignments)
+    req(nrow(assignments) > 0)
+    samples <- unlist(sv$PROJECT_SAMPLES) 
+    startSpinner(session, 'getWorkingMols')
+    x <- do.call(rbind, lapply(assignments[uniqueId %in% samples, unique(Source_ID)], function(sourceId){
+        project <- assignments[Source_ID == sourceId][1, Project]
+        molFile <- loadPersistentFile(sourceId = sourceId, contentFileType = "junctionMolecules")
+        persistentCache[[molFile]]$data[SV_ID == sv$SV_ID]
+    }))
+    stopSpinner(session, 'getWorkingSvs')
+    x[sample.int(.N)] # randomize the list for optimized plotting
 }
 
 # appServer function called after all modules are instantiated
