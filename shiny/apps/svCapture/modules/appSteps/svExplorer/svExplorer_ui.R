@@ -25,67 +25,71 @@ svExplorerUI <- function(id, options) {
         # HTML(options$longLabel),
         leaderText,
 
-        # box for selecting sample sources
+        # selecting sample sources
         fluidRow( box(
             width = 12,
             sampleSelectorUI(ns('sampleSelector'))
         ) ),
         
-        # # composite views of all filtered SVs
-        # fluidRow(
-        #     staticPlotBoxUI(
-        #         ns('svLocations'),
-        #         width = 6,
-        #         title = "SV Locations"
-        #     ),
-        #     staticPlotBoxUI(
-        #         ns('svProperties'),
-        #         width = 6,
-        #         title = "SV Properties"
-        #     )
-        # ),
+        # composite views of all filtered SVs
+        fluidRow(
+            staticPlotBoxUI(
+                ns('svLocations'),
+                width = 6,
+                title = "SV Locations"
+            ),
+            staticPlotBoxUI(
+                ns('svProperties'),
+                width = 6,
+                title = "SV Properties"
+            )
+        ),
         
-        # box with sortable table of SVs
+        # sortable table of SVs
         fluidRow(
             box(
                 width = 12,
                 bufferedTableUI(ns('svsTable'))
             )
         ),
-
-        fluidRow(
-
-            # # box with the node points of all molecules matching a specific selected junction
-            # staticPlotBoxUI(
-            #     ns('junctionNodes'),
-            #     width = 4,
-            #     title = "Supporting Molecules"
-            # ),
-
-            # # box with image view of a single junction
-            # box(
-            #     width = 8,
-            #     imageOutput(ns("junctionMapImage")),
-            # )
-
-            # box(
-            #     width = 8,
-            #     span(
-            #         htmlOutput(ns("junctionAlignment")),
-            #         style = "font-family: monospace; font-weight: bold;"
-            #     )
-            # )            
-        ),
         
-        # box with text view of a single junction
+        # map image view of a single junction
         fluidRow(
             box(
-                width = 12,
+                width = 12,                
+                collapsible = TRUE,
+                collapsed = FALSE,
+                title = tagList(
+                    "Junction Evidence Map",
+                    settingsUI(ns('mapSettings'))
+                ),
+                imageOutput(ns("junctionMapImage"), inline = TRUE)
+            )
+        ),
+
+        fluidRow(
+
+            # plot of node points of all molecules matching a specific selected junction
+            staticPlotBoxUI(
+                ns('junctionNodes'),
+                width = 4,
+                title = "Supporting Molecules"
+            ),
+            
+            # base-level text view of the junction
+            box(
+                width = 8,
+                collapsible = TRUE,
+                collapsed = FALSE,
+                title = tagList(
+                    "Junction Alignment to Reference Genome",
+                    settingsUI(ns('alignmentSettings'))
+                ),
                 span(
                     htmlOutput(ns("junctionAlignment")),
                     style = "font-family: monospace; font-weight: bold;"
                 )
-            )    
+            )            
         ),
         ""
     )    

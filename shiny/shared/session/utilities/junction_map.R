@@ -1,13 +1,9 @@
-#----------------------------------------------------------------------
-# functions to load SVs and associates evidence molecules
-#----------------------------------------------------------------------
-
 # ----------------------------------------------------------------------
-# map of all base positions at and around the selected SV junction
-# supports consensus making, evident plotting, etc.
+# map of all base positions at and around a selected SV junction
+# supports consensus making, evidence plotting, etc.
 # ----------------------------------------------------------------------
 wsh <- 0.7 # for washed-out colors
-zoomBaseColors <- list( # generally follow IGV base color conventions
+CONSTANTS$junctionBaseColors <- list( # generally follow IGV base color conventions
     A = c(0,    1,    0), # green 
     a = c(wsh,  1,    wsh), 
     C = c(0,    0,    1), # blue
@@ -23,19 +19,13 @@ zoomBaseColors <- list( # generally follow IGV base color conventions
     '+' = c(1,   0,   1),   # insertion = purple
     ' ' = c(1,   1,   1)    # white-space
 )
-clipBases <- c('a', 'c', 'g', 't', 'n')
-# zoomBaseR <- sapply(zoomBaseColors, function(v) v[1])
-# zoomBaseG <- sapply(zoomBaseColors, function(v) v[2])
-# zoomBaseB <- sapply(zoomBaseColors, function(v) v[3])
+CONSTANTS$clipBases <- c('a', 'c', 'g', 't', 'n')
 
 # convert an SV and its set of evidence molecules to a base map
-getJunctionMap <- function(x){
+getJunctionMap <- function(x, clipMode = "Faded Colors"){
     req(x)
     req(x$sv$JXN_BASES != "*")
     startSpinner(session, 'getJunctionMap') 
-
-    ##########
-    x$mols <- x$mols[IS_REFERENCE == 1]
 
     # initialize map and dimensions
     refWidth <- nchar(x$sv$GEN_REF_1)
@@ -48,6 +38,7 @@ getJunctionMap <- function(x){
     yOffset <- 1
     baseMap <- matrix(NA, nrow = mapWidth, ncol = nAln) # for consensus making
     imgMap  <- array(NA, dim = c(mapWidth, nAln + vPadding * 2, 3)) # for graphical display
+    refMolAlns <- logical()
 
     # parse the genome reference lines
     GEN_REF_1 <- c(    strsplit(x$sv$GEN_REF_1, "")[[1]],  rep(" ", mapWidth))
@@ -81,33 +72,31 @@ getJunctionMap <- function(x){
     }    
     
     # add all alignments to maps
-    processNode <- function(nodeN, jxnSide, jxnPos, CIGAR, SEQ, pos){
+    processNode <- function(nodeN, isRef, jxnSide, jxnPos, CIGAR, SEQ, pos){
         if(CIGAR == "*") return(NULL) # the missing node of an outer clip
-        aln <- cigarToRefAln(CIGAR, SEQ)            
-        #      if(clipMode == "grey") aln$seq[aln$seq %in% clipBases] <- "x"
-        # else if(clipMode == "none") aln$seq[aln$seq %in% clipBases] <- " "
-
-        # aln$seq[aln$seq %in% clipBases] <- " "
-
+        refMolAlns <<- c(refMolAlns, isRef == 1)
+        aln <- cigarToRefAln(CIGAR, SEQ)           
         nodePosDelta <- if(jxnSide == "L") jxnPos - pos else pos - jxnPos
         mapPos <- if(nodeN == 1){
             leftRefI - nodePosDelta - aln$lengthAlignedOut - aln$leftClip + 1
         } else {
-            leftRefI + 2 - microhomologyLength + nodePosDelta - aln$leftClip
+            leftRefI + 1 - microhomologyLength + nodePosDelta - aln$leftClip
         }
         j <- mapPos:(mapPos + aln$lengthOut - 1)
-        col <- t(sapply(aln$seq, function(base) zoomBaseColors[[base]]))
-        imgMap[ j, yOffset + vPadding, ] <<- col
-        baseMap[j, yOffset] <<- aln$seq
+        baseMap[j, yOffset] <<- aln$seq        
+             if(clipMode == "Greyed Out") aln$seq[aln$seq %in% CONSTANTS$clipBases] <- "x"
+        else if(clipMode == "Hidden")     aln$seq[aln$seq %in% CONSTANTS$clipBases] <- " "
+        col <- t(sapply(aln$seq, function(base) CONSTANTS$junctionBaseColors[[base]]))        
+        imgMap[ j, yOffset + vPadding, ] <<- col        
         yOffset <<- yOffset + 1 
     }
     x$mols[
         order( CLIP_LEN_1, POS_1), 
-        mapply(processNode, 1, x$sv$SIDE_1, x$sv$POS_1, CIGAR_1, SEQ_1, pos1)
+        mapply(processNode, 1, IS_REFERENCE, x$sv$SIDE_1, x$sv$POS_1, CIGAR_1, SEQ_1, pos1)
     ]
     x$mols[
         order(-CLIP_LEN_2, POS_2 + nchar(SEQ_2)), 
-        mapply(processNode, 2, x$sv$SIDE_2, x$sv$POS_2, CIGAR_2, SEQ_2, pos2)
+        mapply(processNode, 2, IS_REFERENCE, x$sv$SIDE_2, x$sv$POS_2, CIGAR_2, SEQ_2, pos2)
     ]
 
     # assemble the final maps
@@ -122,6 +111,7 @@ getJunctionMap <- function(x){
         mols    = x$mols,  
         text    = baseMap, 
         image   = imgMap,
+        refMolAlns = refMolAlns,
         usedPos = usedPos,
         GEN_REF_1 = GEN_REF_1,
         GEN_REF_2 = GEN_REF_2
@@ -129,87 +119,80 @@ getJunctionMap <- function(x){
 }
 
 # create an alignment betweeen junction molecules, their consensus and the genome reference
-getJunctionAlignment <- function(map){
+getJunctionAlignment <- function(map, charPerLine = 100, mode = "Evidence Consensus"){
     req(map)    
 
-    # consensus <- apply(map$text, 1, function(x){
-    #     x <- x[!(is.na(x) | x %in% clipBases)]
-    #     if(length(x) == 0) return(NA)
-    #     agg <- aggregate(x, list(x), length)
-    #     agg[which.max(agg[[2]]), 1]
-    # })
-    # match1 <- ifelse(map$GEN_REF_1 == consensus, "|", "~")
-    # match2 <- ifelse(map$GEN_REF_2 == consensus, "|", "~")
+    # consensus mode
+    if(mode == "Evidence Consensus"){
+        consensus <- apply(map$text, 1, function(x){
+            x <- x[!is.na(x)]
+            if(length(x) == 0) return("~")
+            xx <- x[!(x %in% CONSTANTS$clipBases)] # insertions are also lower case
+            if(length(xx) == 0) xx <- x
+            agg <- aggregate(xx, list(xx), length)
+            agg[which.max(agg[[2]]), 1]
+        })
+        match1 <- ifelse(map$GEN_REF_1 == toupper(consensus), "|", "~")
+        match2 <- ifelse(map$GEN_REF_2 == toupper(consensus), "|", "~")
+        map$text <- cbind(
+            map$GEN_REF_1, 
+            match1, 
+            consensus, 
+            match2,
+            map$GEN_REF_2
+        )
+    
+    # reference mode (two alignemnts)
+    } else if(mode == "Reference Molecule"){
+        map$text <- map$text[, which(map$refMolAlns)]
+        match1 <- ifelse(map$GEN_REF_1 == toupper(map$text[, 1]), "|", "~")
+        match2 <- ifelse(map$GEN_REF_2 == toupper(map$text[, 2]), "|", "~")     
+        map$text <- cbind(
+            map$GEN_REF_1, 
+            match1, 
+            map$text, 
+            match2,
+            map$GEN_REF_2
+        )  
 
-    # map$text <- cbind(
-    #     map$GEN_REF_1, 
-    #     match1,
-    #     consensus, 
-    #     match2,        
-    #     map$GEN_REF_2, 
-    #     rep(" ", length(map$GEN_REF_1))
-    # )[map$usedPos, ]
+    # all molecules, all alignments
+    } else if(mode == "All Molecules"){
+        map$text <- cbind(
+            map$GEN_REF_1, 
+            map$text, 
+            map$GEN_REF_2
+        )  
+    } else {
+        return(NULL)
+    }
 
+    # trim the excess
     map$text[is.na(map$text)] <- "~"   
-
     map$text <- map$text[map$usedPos, ]
-
-    # dstr(map) 
 
     # parse into readable rows
     nChar  <- nrow(map$text)    
     nLines <- ncol(map$text)
-    charPerLine <- 100 # as.numeric(input$charPerLine)
     nChunks <- ceiling(nChar / charPerLine)
     nCharLastLine <- nChar %% charPerLine
     if(nCharLastLine == 0) nCharLastLine <- charPerLine
-
-    # output <- character()
-    # blueLines <- list( # junction lines to denote with highlight coloring
-    #     Genome = 3:4,
-    #     'Genome+' = 3:4,
-    #     Reads = 1  
-    # )
-
-    # dprint(map$sv[, .(
-    #     MERGE_LEN, MICROHOM_LEN, JXN_BASES
-    # )])
-    # dprint(map$mols[, .(
-    #     CIGAR_1, SEQ_1, CLIP_LEN_1, 
-    #     CIGAR_2, SEQ_2, CLIP_LEN_2)]
-    # )
-
-    return( paste(sapply(seq_len(nChunks), function(chunk){
-        # if(chunk > 1) output <- c(output, "<br>")        
+    x <- unlist(sapply(seq_len(nChunks), function(chunk){        
         lineStart <- 1 + (chunk - 1) * charPerLine
-        paste(sapply(seq_len(nLines), function(line){
+        x <- unlist(sapply(seq_len(nLines), function(line){
             bases <- map$text[lineStart:min(nChar, lineStart + charPerLine - 1), line]
-            gsub('~', '&nbsp;', paste(bases, collapse = ""))
-        }), collapse = "<br>")
-    }), collapse = "<br><br>") )
+            if(any(bases != "~")) gsub('~', '&nbsp;', paste(bases, collapse = "")) else NULL
+        }))
+        i <- length(x)
+        if(i > 2) { # TODO: prettier colors
+            x[1] <- paste0('<span style="color: blue;">', x[1], '</span>')
+            x[i] <- paste0('<span style="color: red;">',  x[i], '</span>')
+            paste(x, collapse = "<br>")
+        } else NULL
+    }))
+    x <- if(length(x) > 0) paste(x, collapse = "<br><br>") else NULL
 
-    # for(chunk in seq_along(nChunks)){
-    #     if(chunk > 1) output <- c(output, "<br>")        
-    #     lineStart <- 1 + (chunk - 1) * charPerLine
-    #     for(line in seq_along(nLines)){
-    #         bases <- map$bases[lineStart:(lineStart + charPerLine - 1), line]
-    #         str  <- substr(map$bases[j], start, start + charPerLine - 1)
+    return(x)
 
-    #         str  <- gsub(' ', '&nbsp;', str) 
-    #         str_ <- gsub('~', '', str) 
-    #         if(nchar(str_) > 0){
-    #             col <- if(j %in% blueLines[[input$jxnDisplayType]]) 'blue' else 'black'
-    #             output <- c(
-    #                 output,
-    #                 paste(paste('<span style="color:', col, ';">', sep = ""),
-    #                       str,
-    #                       '</span>', sep = "")
-    #             )                
-    #         }            
-    #     }
-    # }
-    # output <- gsub('~', '&nbsp;', output)
-    
     # # # app/prepend the outermost chromosomal positions
     # # firstInPair <- 64
     # # svx <- if(bitwAnd(map$sv$FLAG1, firstInPair)) {
@@ -217,15 +200,15 @@ getJunctionAlignment <- function(map){
     # # } else {
     # #     map$sv[,.(RNAME2,PROX_OUT_POS2,RNAME1,PROX_OUT_POS1)]
     # # }
-    # # output <- c(
+    # # x <- c(
     # #     "<br>",
     # #     paste(svx[[1]], format(svx[[2]], big.mark=","), sep=":"),
     # #     '&darr;',
-    # #     output,
+    # #     x,
     # #     paste(paste(rep("&nbsp;", nCharLastLine-1),collapse=""),'&uarr;',sep=""),
     # #     paste(svx[[3]], format(svx[[4]], big.mark=","), sep=":")
     # # )
     
     # return the hopefully readable sequence block
-    paste(output, collapse = "<br>")
+    paste(x, collapse = "<br>")
 }

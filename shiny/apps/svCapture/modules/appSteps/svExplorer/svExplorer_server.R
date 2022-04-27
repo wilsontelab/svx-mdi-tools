@@ -23,6 +23,23 @@ settings <- settingsServer( # display settings not stored in the UI, exposed by 
 targetClasses <- reactive({ 
     SVX$targetClasses[[settings$SV_Filters()$Target_Class$value]] 
 })
+moduleOptions <- stepModuleInfo[[ app$config$appSteps[[id]]$module ]]
+mapSettings <- settingsServer( # display settings not stored in the UI, exposed by gear icon click
+    id = 'mapSettings',
+    parentId = id,
+    templates = list(moduleOptions$mapSettings),
+    fade = FALSE,
+    title = "Base Map Settings",
+    immediate = TRUE
+)
+alignmentSettings <- settingsServer( # display settings not stored in the UI, exposed by gear icon click
+    id = 'alignmentSettings',
+    parentId = id,
+    templates = list(moduleOptions$alignmentSettings),
+    fade = FALSE,
+    title = "Junction Alignment Settings",
+    immediate = TRUE
+)
 sampleSelector <- sampleSelectorServer( # selectors to pick one or more samples from a sample set
     id = 'sampleSelector',
     parentId = id
@@ -44,7 +61,10 @@ selectedSv <- reactive({
 # complete supporting molecule evidence on selectedSv()
 svMols <- reactive({ getSVMolecules(sampleSelector, selectedSv) })
 # map of all base positions at and around the selected SV junction
-junctionMap <- reactive({ getJunctionMap(svMols()) })
+junctionMap <- reactive({ getJunctionMap(
+    svMols(), 
+    mapSettings$get("Map_Settings", "Clip_Mode")) 
+})
 
 #----------------------------------------------------------------------
 # set SV plot point colors
@@ -278,9 +298,9 @@ svsTable <- bufferedTableServer(
             chr2 = CHROM_2,
             pos2 = POS_2,
             #---------------
+            svSize = SV_SIZE,
             uHom = MICROHOM_LEN,
-            jxnSeq = JXN_BASES,
-            svSize = SV_SIZE
+            jxnSeq = JXN_BASES
         )]
     })
     # 'SHARED_PROPER' =  'double',
@@ -363,11 +383,10 @@ output$junctionMapImage <- renderImage({
     map <- junctionMap()
     req(map)
     pngFile <- file.path(sessionDirectory, "junctionMapImage.png")
+    pixels <- mapSettings$get("Map_Settings", "Pixels_Per_Base")
     suppressWarnings(
         imager::as.cimg(map$image[map$usedPos, , ]) %>% 
-
-        imager::imresize(scale = 3, interpolation = -1) %>%
-
+        expandImg(h = pixels, v = pixels) %>%
         imager::save.image(pngFile)        
     )
     list(src = pngFile)
@@ -377,8 +396,11 @@ output$junctionMapImage <- renderImage({
 # text representation of all an SV junction consensus sequence vs. genome references
 # ----------------------------------------------------------------------
 output$junctionAlignment <- renderText({
-
-    getJunctionAlignment(junctionMap())
+    getJunctionAlignment(
+        junctionMap(),
+        alignmentSettings$get("Alignment_Settings", "Bases_Per_Line"),
+        alignmentSettings$get("Alignment_Settings", "Display_Mode")
+    )
 })
 
 # ----------------------------------------------------------------------
@@ -395,6 +417,8 @@ observe({
         sampleSelector$setSelectedSamples(sampleSet, bm$outcomes$samples)
         locationsPlot$settings$replace(bm$outcomes$locationsPlotSettings)
         propertiesPlot$settings$replace(bm$outcomes$propertiesPlotSettings)
+        mapSettings$replace(bm$outcomes$mapSettings)
+        alignmentSettings$replace(bm$outcomes$alignmentSettings)
     }
 })
 
@@ -408,7 +432,9 @@ list(
     outcomes = reactive({ list(
         samples = sampleSelector$selectedSamples(),
         locationsPlotSettings  = locationsPlot$settings$all_(),
-        propertiesPlotSettings = propertiesPlot$settings$all_()
+        propertiesPlotSettings = propertiesPlot$settings$all_(),
+        mapSettings = mapSettings$all_(),
+        alignmentSettings = alignmentSettings$all_()
     ) }),
     isReady  = reactive({ getStepReadiness(options$source, outcomes) })
 )

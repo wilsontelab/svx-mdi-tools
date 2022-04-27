@@ -33,8 +33,8 @@ outcomes <- reactiveValues()
 # generate the list of all filtered SVs from all selected samples
 #----------------------------------------------------------------------
 targetClasses <- reactive({ SVX$targetClasses[[settings$SV_Filters()$Target_Class$value]] })
-workingSvs <- reactive({
-    getWorkingSvs(settings, sampleSelector)
+filteredSvs <- reactive({
+    getFilteredSvs(settings, sampleSelector)
 })
 
 #----------------------------------------------------------------------
@@ -60,7 +60,7 @@ svRates <- reactive({
 
     # count the number of SVs assigned to each sample
     # depending on filters, an SV could be assigned to multiple samples
-    ps <- workingSvs()[, PROJECT_SAMPLES]
+    ps <- filteredSvs()[, PROJECT_SAMPLES]
     assignments[, nSvs := sum(sapply(ps, function(x) uniqueId %in% x)), by = uniqueId]  
 
     # normalize SV counts to rates based on on-target coverage depth
@@ -143,7 +143,7 @@ svsByGroup <- reactive({
     svRates <- copy(svRates())
     req(svRates)
     setkey(svRates, uniqueId)        
-    svs <- workingSvs()[, .(
+    svs <- filteredSvs()[, .(
         plotted = JXN_BASES != "*", # MICROHOM_LEN meaningless if not a sequenced junction
         MICROHOM_LEN, 
         SV_SIZE,
