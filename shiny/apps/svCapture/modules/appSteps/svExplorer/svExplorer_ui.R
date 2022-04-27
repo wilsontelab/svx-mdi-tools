@@ -55,21 +55,38 @@ svExplorerUI <- function(id, options) {
 
         fluidRow(
 
-            # box with the node points of all molecules matching a specific selected junction
-            staticPlotBoxUI(
-                ns('junctionNodes'),
-                width = 4,
-                title = "Supporting Molecules"
-            ),
+            # # box with the node points of all molecules matching a specific selected junction
+            # staticPlotBoxUI(
+            #     ns('junctionNodes'),
+            #     width = 4,
+            #     title = "Supporting Molecules"
+            # ),
 
-            # box with text view of a single junction
+            # # box with image view of a single junction
+            # box(
+            #     width = 8,
+            #     imageOutput(ns("junctionMapImage")),
+            # )
+
+            # box(
+            #     width = 8,
+            #     span(
+            #         htmlOutput(ns("junctionAlignment")),
+            #         style = "font-family: monospace; font-weight: bold;"
+            #     )
+            # )            
+        ),
+        
+        # box with text view of a single junction
+        fluidRow(
             box(
-                width = 8,
+                width = 12,
                 span(
-                    htmlOutput(ns("junctionZoom")),
+                    htmlOutput(ns("junctionAlignment")),
                     style = "font-family: monospace; font-weight: bold;"
                 )
-            )            
-        )
+            )    
+        ),
+        ""
     )    
 }

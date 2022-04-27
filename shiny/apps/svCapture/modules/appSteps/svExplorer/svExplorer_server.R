@@ -20,6 +20,9 @@ settings <- settingsServer( # display settings not stored in the UI, exposed by 
     templates = list(file.path(app$sources$suiteGlobalDir, "sv_filters.yml"), id),
     fade = FALSE
 )
+targetClasses <- reactive({ 
+    SVX$targetClasses[[settings$SV_Filters()$Target_Class$value]] 
+})
 sampleSelector <- sampleSelectorServer( # selectors to pick one or more samples from a sample set
     id = 'sampleSelector',
     parentId = id
@@ -27,27 +30,27 @@ sampleSelector <- sampleSelectorServer( # selectors to pick one or more samples 
 outcomes <- reactiveValues() # logical failure vectors keyed as [[sampleSet]]
 
 #----------------------------------------------------------------------
-# generate the list of all filtered SVs from all selected samples
+# parse filtered SVs and evidence molecules from selected sample(s) and SV(s)
 #----------------------------------------------------------------------
-targetClasses <- reactive({ SVX$targetClasses[[settings$SV_Filters()$Target_Class$value]] })
-workingSvs <- reactive({
-    getWorkingSvs(settings, sampleSelector)
-})
-selectedSv <- reactive({
+# the set of SV junction passing the query filters
+filteredSvs <- reactive({ getFilteredSvs(settings, sampleSelector) })
+# the one working SV the user has clicked on
+selectedSv <- reactive({ 
     rowI <- svsTable$rows_selected()
     req(rowI)
-    svs <- workingSvs()
+    svs <- filteredSvs()
     svs[rowI]
 })
-workingMols <- reactive({
-    getWorkingMols(selectedSv(), sampleSelector)
-})
+# complete supporting molecule evidence on selectedSv()
+svMols <- reactive({ getSVMolecules(sampleSelector, selectedSv) })
+# map of all base positions at and around the selected SV junction
+junctionMap <- reactive({ getJunctionMap(svMols()) })
 
 #----------------------------------------------------------------------
 # set SV plot point colors
 #----------------------------------------------------------------------
 svPointColors <- reactive({
-    svs <- workingSvs()
+    svs <- filteredSvs()
     req(svs)
     filters <- settings$SV_Filters()
     ps <- settings$Plot_Settings()
@@ -122,7 +125,7 @@ locationsPlot <- staticPlotBoxServer(
         # initialize the data
         filters <- settings$SV_Filters()
         stepSettings <- settings$Plot_Settings()
-        svs <- workingSvs()[, .(TARGET_POS_1, TARGET_POS_2)]
+        svs <- filteredSvs()[, .(TARGET_POS_1, TARGET_POS_2)]
         svs[, ':='(
             size = abs(TARGET_POS_2 - TARGET_POS_1 + 1),
             center = pmin(TARGET_POS_1, TARGET_POS_2) + abs(TARGET_POS_2 - TARGET_POS_1 + 1) / 2
@@ -198,7 +201,7 @@ propertiesPlot <- staticPlotBoxServer(
         filters <- settings$SV_Filters()
         stepSettings <- settings$Plot_Settings()   
         svPointColors <- svPointColors()        
-        svs <- workingSvs()[, .(
+        svs <- filteredSvs()[, .(
             plotted = JXN_BASES != "*", # MICROHOM_LEN meaningless if not a sequenced junction
             color = svPointColors$colors,
             MICROHOM_LEN, 
@@ -252,7 +255,7 @@ svsTable <- bufferedTableServer(
     tableData = reactive({
         invalidateTable()
         setkey(SVX$jxnTypes, code)
-        workingSvs()[, .(
+        filteredSvs()[, .(
             svId = SV_ID,
             #---------------
             type = SVX$jxnTypes[JXN_TYPE, name],
@@ -322,29 +325,28 @@ junctionNodesPlot <- staticPlotBoxServer(
     margins = TRUE,
     immediate = TRUE,
     create = function(...){
-        mols <- workingMols()
-        req(mols)
-        sv <- selectedSv()
-        xAllowedLim <- sv$POS_1 + c(-1, 1) * mols$maxTLen
-        yAllowedLim <- sv$POS_2 + c(-1, 1) * mols$maxTLen
-        mols$mols <- mols$mols[ # in case molecule has >1 jxn; only plot this junction
+        x <- svMols()
+        req(x)
+        xAllowedLim <- x$sv$POS_1 + c(-1, 1) * x$maxTLen
+        yAllowedLim <- x$sv$POS_2 + c(-1, 1) * x$maxTLen
+        x$mols <- x$mols[ # in case molecule has >1 jxn; only plot this junction
             OUT_POS1 %between% xAllowedLim & 
             OUT_POS2 %between% yAllowedLim
         ]
         junctionNodesPlot$initializeFrame(
-            xlim = range(c(sv$POS_1, mols$mols$OUT_POS1)) / 1e6,
-            ylim = range(c(sv$POS_2, mols$mols$OUT_POS2)) / 1e6,
+            xlim = range(c(x$sv$POS_1, x$mols$OUT_POS1)) / 1e6,
+            ylim = range(c(x$sv$POS_2, x$mols$OUT_POS2)) / 1e6,
             xlab = "Junction Coordinate 1 (Mbp)",
             ylab = "Junction Coordinate 2 (Mbp)"
         )
-        abline(h = sv$POS_2 / 1e6) # crosshairs at the junction point
-        abline(v = sv$POS_1 / 1e6)   
+        abline(h = x$sv$POS_2 / 1e6) # crosshairs at the junction point
+        abline(v = x$sv$POS_1 / 1e6)   
         junctionNodesPlot$addPoints(
-            x = c(sv$POS_1, mols$mols$OUT_POS1) / 1e6, 
-            y = c(sv$POS_2, mols$mols$OUT_POS2) / 1e6,
+            x = c(x$sv$POS_1, x$mols$OUT_POS1) / 1e6, 
+            y = c(x$sv$POS_2, x$mols$OUT_POS2) / 1e6,
             col = c(
                 CONSTANTS$plotlyColors$red, # red dot at the junction point
-                SVX$getMolColors(mols$mols$NODE_CLASS)
+                SVX$getMolColors(x$mols$NODE_CLASS)
             )
         )
         junctionNodesPlot$addLegend(
@@ -355,121 +357,28 @@ junctionNodesPlot <- staticPlotBoxServer(
 )
 
 # ----------------------------------------------------------------------
-# text-based zoom of a single selected junction
+# colored-image representation of all molecules supporting and SV junction
 # ----------------------------------------------------------------------
-isSequencedJunction <- function(sv) sv[, !is.na(JXN_SEQ)] # either sequenced or reconstructed
-isReconstructedJunction <- function(sv) sv[, !is.na(JXN_SEQ) & !is.na(MERGE_LEN)]
-output$junctionZoom <- renderText({
-    mols <- workingMols()
-    req(mols)
-    sv <- selectedSv()
-    req(sv$JXN_BASES != "*")
+output$junctionMapImage <- renderImage({
+    map <- junctionMap()
+    req(map)
+    pngFile <- file.path(sessionDirectory, "junctionMapImage.png")
+    suppressWarnings(
+        imager::as.cimg(map$image[map$usedPos, , ]) %>% 
 
-    reportProgress('makeJunctionZoom')
+        imager::imresize(scale = 3, interpolation = -1) %>%
 
-    faidxPadding <- (nchar(sv$GEN_REF_1) - 1) / 2
-    refStart1 <- sv$POS_1 - faidxPadding
-    refStart2 <- sv$POS_2 - faidxPadding
-
-    # dstr(mols$mols)
-    refMol <- mols$mols[IS_REFERENCE == 1]
-    alns <- c(
-        cigarToRefAln(refMol$CIGAR_1, refMol$SEQ_1),
-        cigarToRefAln(refMol$CIGAR_2, refMol$SEQ_2)
+        imager::save.image(pngFile)        
     )
+    list(src = pngFile)
+}, deleteFile = FALSE)
 
-    # dstr(refMol)
+# ----------------------------------------------------------------------
+# text representation of all an SV junction consensus sequence vs. genome references
+# ----------------------------------------------------------------------
+output$junctionAlignment <- renderText({
 
-#     dstr(cigarToRefAln(mol1$CIGAR_1, mol1$SEQ_1))
-#     List of 4
-#  $ seq             : chr [1:148] "C" "A" "A" "T" ...
-#  $ leftClip        : num 0
-#  $ lengthOut       : int 148
-#  $ lengthAlignedOut: num 148
-
-    return(paste(
-        faidxPadding,
-        nchar(sv$JXN_SEQ),
-        nchar(sv$GEN_REF_1),
-        nchar(sv$GEN_REF_2),
-        sv$MICROHOM_LEN,
-        sv$JXN_BASES,
-        refMol$CIGAR_1,
-        refMol$SEQ_1,
-        refMol$CIGAR_2,
-        refMol$SEQ_2,
-        paste(alns[1]$seq, collapse = ""),
-        paste(alns[2]$seq, collapse = ""),
-
-        sep = "<br>"
-    ))
-
-    # # determine the requested alignment type
-    # if(input$jxnDisplayType == "Genome"){
-    #     offset <- zoom$idx$ALIGNS_OFFSET
-    #     length <- zoom$idx$ALIGNS_LENGTH
-    # } else if(input$jxnDisplayType == "Genome+") {
-    #     offset <- zoom$idx$ALIGNS_PLUS_OFFSET
-    #     length <- zoom$idx$ALIGNS_PLUS_LENGTH
-    # } else if(input$jxnDisplayType == "Reads") {
-    #     offset <- zoom$idx$READS_OFFSET
-    #     length <- zoom$idx$READS_LENGTH        
-    # }
-    
-    # get the alignment data
-    data <- getSvIndexed(zoom$smp, zoom$svId, 'alignments', offset, length)
-    
-    # parse into readable rows
-    nLines <- length(data)
-    nChar <- nchar(data[1])
-    charPerLine <- 100 # as.numeric(input$charPerLine)
-    nChunks <- ceiling(nChar / charPerLine)
-    nCharLastLine <- nChar %% charPerLine
-    if(nCharLastLine == 0) nCharLastLine <- charPerLine
-    output <- character()
-    blueLines <- list( # junction lines to denote with highlight coloring
-        Genome = 3:4,
-        'Genome+' = 3:4,
-        Reads = 1  
-    )
-    for(i in 1:nChunks){
-        if(i > 1) output <- c(output, "<br>")        
-        start <- 1 + (i - 1) * charPerLine
-        for(j in 1:nLines){
-            str  <- substr(data[j], start, start + charPerLine - 1)
-            str  <- gsub(' ', '&nbsp;', str) 
-            str_ <- gsub('~', '', str) 
-            if(nchar(str_) > 0){
-                col <- if(j %in% blueLines[[input$jxnDisplayType]]) 'blue' else 'black'
-                output <- c(
-                    output,
-                    paste(paste('<span style="color:', col, ';">', sep = ""),
-                          str,
-                          '</span>', sep = "")
-                )                
-            }            
-        }
-    }
-    output <- gsub('~', '&nbsp;', output)
-    
-    # # app/prepend the outermost chromosomal positions
-    # firstInPair <- 64
-    # svx <- if(bitwAnd(zoom$sv$FLAG1, firstInPair)) {
-    #     zoom$sv[,.(RNAME1,PROX_OUT_POS1,RNAME2,PROX_OUT_POS2)]
-    # } else {
-    #     zoom$sv[,.(RNAME2,PROX_OUT_POS2,RNAME1,PROX_OUT_POS1)]
-    # }
-    # output <- c(
-    #     "<br>",
-    #     paste(svx[[1]], format(svx[[2]], big.mark=","), sep=":"),
-    #     '&darr;',
-    #     output,
-    #     paste(paste(rep("&nbsp;", nCharLastLine-1),collapse=""),'&uarr;',sep=""),
-    #     paste(svx[[3]], format(svx[[4]], big.mark=","), sep=":")
-    # )
-    
-    # return the hopefully readable sequence block
-    paste(output, collapse = "<br>")
+    getJunctionAlignment(junctionMap())
 })
 
 # ----------------------------------------------------------------------

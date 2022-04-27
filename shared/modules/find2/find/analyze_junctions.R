@@ -93,7 +93,7 @@ characterizeSvJunction <- function(svIdx){
         seq1Len  <- refMol[, nchar(SEQ_1)]
         readPos1 <- seq1Len - refMol[, CLIP_LEN_1]
         readPos2 <- refMol[, 
-            if(MERGE_LEN == 0) CLIP_LEN_2             # a sequenced junction
+            if(MERGE_LEN == 0) CLIP_LEN_2 + 1         # a sequenced junction
             else seq1Len - MERGE_LEN + CLIP_LEN_2 + 1 # a reconstructed junction
         ]
 
@@ -107,7 +107,7 @@ characterizeSvJunction <- function(svIdx){
     }
 
     # aggregate SV-level information
-    jxnMols[,.(
+    jxnMols[, .(
         MAPQ_1          = paste(MAPQ_1, collapse = ","),
         UMI_1           = paste(UMI_1, collapse = ","),
         #-------------

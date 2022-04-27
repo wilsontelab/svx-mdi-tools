@@ -64,10 +64,9 @@ SVX$targetClasses <- list(
 # compile file columns
 #----------------------------------------------------------------------
 unpackNodeNames <- function(nodeNames){ 
-    x <- as.data.frame(
-        matrix(unlist(strsplit(nodeNames, '\\W')), ncol = 3, byrow = TRUE),
-        stringsAsFactors = FALSE
-    )
+    x <- as.data.frame(t(sapply(nodeNames, function(x){
+        if(x == "*") c("0", "*", "0") else strsplit(x, '\\W')[[1]]
+    })), stringsAsFactors = FALSE)
     x[[1]] <- as.integer(x[[1]])
     x[[3]] <- as.integer(x[[3]])
     x

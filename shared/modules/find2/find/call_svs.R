@@ -46,7 +46,7 @@ checkEnvVars(list(
 # set some options
 setDTthreads(env$N_CPU)
 options(scipen = 999) # prevent 1+e6 in printed, which leads to read.table error when integer expected
-options(warn=2) ########################
+options(warn = 2) ########################
 #-------------------------------------------------------------------------------------
 # source R scripts
 sourceScripts(rUtilDir, 'utilities')
@@ -61,9 +61,9 @@ sourceScripts(file.path(env$ACTION_DIR, 'find'), c(
 # initialize samples
 message("initializing samples")
 env$SAMPLES <- strsplit(env$SAMPLES, "\\s+")[[1]]
-SAMPLES <- as.list(1:length(env$SAMPLES)) # create sample indices
+SAMPLES <- as.list(seq_len(env$SAMPLES)) # create sample indices
 names(SAMPLES) <- env$SAMPLES
-env$MAX_TLENS <- as.integer(strsplit(env$MAX_TLENS,"\\s+")[[1]])
+env$MAX_TLENS <- as.integer(strsplit(env$MAX_TLENS, "\\s+")[[1]])
 MAX_MAX_TLEN <- max(env$MAX_TLENS)
 # MAX_TLENS <- as.list(env$MAX_TLENS)
 # names(MAX_TLENS) <- env$SAMPLES
@@ -84,12 +84,12 @@ jxnMols <- as.data.table(read.table(
 jxnMols[, c('chrom1', 'side1', 'pos1')] <- unpackNodeNames(jxnMols$NODE_1)
 jxnMols[, c('chrom2', 'side2', 'pos2')] <- unpackNodeNames(jxnMols$NODE_2)
 jxnMols[, ':='(
-    jxnName       = paste(NODE_1, NODE_2, sep = ","), # the junction edge called by a molecule (could be >1 per molecule)
-    jxnKey        = paste(SAMPLES[SAMPLE], MOL_ID, JXN_N, sep = ":"), # sample-level ID for the source junction edge (each with 2 nodes)
+    jxnName       = paste(NODE_1, NODE_2, sep = ","), # the junction edge called by a molecule (could be >1 per molecule) # nolint
+    jxnKey        = paste(SAMPLES[SAMPLE], MOL_ID, JXN_N, sep = ":"), # sample-level ID for the source junction edge (each with 2 nodes) # nolint
     svIndex       = '', # SV identifier shared between all samples
     sampleSvIndex = '', # SV identifier unique to one sample
-    AMBIGUOUS     = 0L, # AMBIGUOUS gap molecules are consistent with more than one split and present in the table more than once
-    DOWNSAMPLED   = 0L, # DOWNSAMPLED molecules were originally part of a larger molecule set, some of which were dropped
+    AMBIGUOUS     = 0L, # AMBIGUOUS gap molecules are consistent with more than one split and present in the table more than once # nolint
+    DOWNSAMPLED   = 0L, # DOWNSAMPLED molecules were originally part of a larger molecule set, some of which were dropped # nolint
     N_COLLAPSED   = 1L, # the number of input molecules collapsed as duplicates into this remaining molecule
     IS_REFERENCE  = 0L  # reference molecules acted as the primary guide to characterizing an SV
 )]
@@ -166,7 +166,7 @@ message("initializing genome sequence retrieval")
 setCanonicalChroms()
 write(
     paste0('CHROMS: ', paste(canonicalChroms, collapse = " ")), 
-    file = paste(env$FIND_PREFIX, "metadata", "yml", sep="."),
+    file = paste(env$FIND_PREFIX, "metadata", "yml", sep = "."),
     append = TRUE
 )
 loadFaidx(env$SHM_DIR_WRK)
@@ -176,7 +176,7 @@ faidx_padding <- round(MAX_MAX_TLEN * 1.2, 0) # sufficient to contain any source
 loadTargetRegions()
 write.table(
     if(!is.null(targetRegions)) targetRegions$bed else "NA", 
-    paste(env$FIND_PREFIX, "target_regions", "bed", sep="."), 
+    paste(env$FIND_PREFIX, "target_regions", "bed", sep = "."), 
     quote = FALSE, 
     sep = "\t",
     row.names = FALSE,
