@@ -61,7 +61,7 @@ sourceScripts(file.path(env$ACTION_DIR, 'find'), c(
 # initialize samples
 message("initializing samples")
 env$SAMPLES <- strsplit(env$SAMPLES, "\\s+")[[1]]
-SAMPLES <- as.list(seq_len(env$SAMPLES)) # create sample indices
+SAMPLES <- as.list(seq_along(env$SAMPLES)) # create sample indices
 names(SAMPLES) <- env$SAMPLES
 env$MAX_TLENS <- as.integer(strsplit(env$MAX_TLENS, "\\s+")[[1]])
 MAX_MAX_TLEN <- max(env$MAX_TLENS)
