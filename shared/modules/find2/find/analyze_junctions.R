@@ -93,15 +93,15 @@ characterizeSvJunction <- function(svIdx){
         seq1Len  <- refMol[, nchar(SEQ_1)]
         readPos1 <- seq1Len - refMol[, CLIP_LEN_1]
         readPos2 <- refMol[, 
-            if(MERGE_LEN == 0) CLIP_LEN_2 + 1         # a sequenced junction
-            else seq1Len - MERGE_LEN + CLIP_LEN_2 + 1 # a reconstructed junction
+            if(MERGE_LEN == 0) CLIP_LEN_2 + 1L         # a sequenced junction
+            else seq1Len - MERGE_LEN + CLIP_LEN_2 + 1L # a reconstructed junction
         ]
 
         # parse microhomology vs. inserted bases
-        jxnMols[refMolI, MICROHOM_LEN := readPos1 - readPos2 + 1]  
+        jxnMols[refMolI, MICROHOM_LEN := readPos1 - readPos2 + 1L]  
         jxnMols[refMolI, 
-            JXN_BASES := if(MICROHOM_LEN > 0) substr(JXN_SEQ, readPos2, readPos1)         # microhomology
-                    else if(MICROHOM_LEN < 0) substr(JXN_SEQ, readPos1 + 1, readPos2 - 1) # inserted bases
+            JXN_BASES := if(MICROHOM_LEN > 0) substr(JXN_SEQ, readPos2,      readPos1)      # microhomology
+                    else if(MICROHOM_LEN < 0) substr(JXN_SEQ, readPos1 + 1L, readPos2 - 1L) # inserted bases
                     else "" # a blunt joint
         ]   
     }

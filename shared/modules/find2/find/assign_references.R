@@ -7,7 +7,7 @@
 assignReferenceMolecule <- function(svIdx){
     jxnMols <- jxnMols[svIdx] 
     if(nrow(jxnMols) == 1){
-        jxnMols[, IS_REFERENCE := 1]
+        jxnMols[, IS_REFERENCE := 1L]
         return(jxnMols)
     }   
     usable <- jxnMols[, NODE_CLASS == nodeClasses$SPLIT]
@@ -26,7 +26,7 @@ assignReferenceMolecule <- function(svIdx){
        1,
        jxnKey
     ]
-    jxnMols[, IS_REFERENCE := ifelse(jxnKey == refJxnKey, 1, 0)]
+    jxnMols[, IS_REFERENCE := ifelse(jxnKey == refJxnKey, 1L, 0L)]
     jxnMols
 }
 

@@ -52,7 +52,7 @@ purgeDuplicateMolecules_ <- function(jxnMols){
         jxnMols[bestJxnKey, ':='(
             STRAND_COUNT1 = STRAND_COUNT1 + worstCount1,
             STRAND_COUNT2 = STRAND_COUNT2 + worstCount2,
-            N_COLLAPSED   = N_COLLAPSED + 1
+            N_COLLAPSED   = N_COLLAPSED + 1L
         )]
 
         # add to the list of rejected molecules

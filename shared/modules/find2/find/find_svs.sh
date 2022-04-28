@@ -79,13 +79,13 @@ else
     TARGET_CLASS_FILTER=""
 fi
 
-#-----------------------------------------------------------------
-# load genome into shared memory for rapid reference sequence lookup
-#-----------------------------------------------------------------
-echo "loading $GENOME into RAM"
-export SHM_GENOME_FASTA=$SHM_DIR_WRK/$GENOME.fa
-cp $GENOME_FASTA     $SHM_GENOME_FASTA
-cp $GENOME_FASTA.fai $SHM_GENOME_FASTA.fai
+# #-----------------------------------------------------------------
+# # load genome into shared memory for rapid reference sequence lookup
+# #-----------------------------------------------------------------
+# echo "loading $GENOME into RAM"
+# export SHM_GENOME_FASTA=$SHM_DIR_WRK/$GENOME.fa
+# cp $GENOME_FASTA     $SHM_GENOME_FASTA
+# cp $GENOME_FASTA.fai $SHM_GENOME_FASTA.fai
 
 #-----------------------------------------------------------------
 # break junctions into continuity groups and parse to called SVs

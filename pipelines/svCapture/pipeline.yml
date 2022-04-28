@@ -51,11 +51,11 @@ package:
                 type: bed
                 file: $FIND_PREFIX.target_regions.bed
             structuralVariants:
-                type: tab-delimited
-                file: $FIND_PREFIX.structural_variants.gz
+                type: rds-file
+                file: $FIND_PREFIX.structural_variants.rds
             junctionMolecules:
-                type: tab-delimited
-                file: $FIND_PREFIX.junction_molecules.gz
+                type: rds-file
+                file: $FIND_PREFIX.junction_molecules.rds
             manifestFile:
                 type: comma-delimited
                 manifestType: simple

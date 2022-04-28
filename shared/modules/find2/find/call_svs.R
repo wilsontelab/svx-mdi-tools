@@ -25,7 +25,9 @@ checkEnvVars(list(
         'SAMPLES',
         'MAX_TLENS',
         'GENOME',
-        'GENOME_CHROMS'
+        'GENOME_CHROMS',
+        'GENOME_FASTA',
+        'CHROM_FASTA_DIR'        
     ),
     integer = c(
         'N_CPU',
@@ -169,8 +171,8 @@ write(
     file = paste(env$FIND_PREFIX, "metadata", "yml", sep = "."),
     append = TRUE
 )
-loadFaidx(env$SHM_DIR_WRK)
-faidx_padding <- round(MAX_MAX_TLEN * 1.2, 0) # sufficient to contain any source molecule span
+loadFaidx() 
+faidx_padding <- as.integer(MAX_MAX_TLEN * 1.2) # sufficient to contain any source molecule
 
 # initialize and store parsed target regions (if any)
 loadTargetRegions()
@@ -209,17 +211,31 @@ fwrite(
     col.names = TRUE, 
     compress = "gzip"
 )
+outFile <- paste(env$FIND_PREFIX, 'structural_variants', 'rds', sep = ".")
+saveRDS(
+    svCalls, 
+    file = outFile
+)
+############################
+gr2 <- svCalls[, nchar(GEN_REF_2)]
+print(aggregate(gr2, list(gr2), length))
 
 message("writing molecule evidence table")
 outFile <- paste(env$FIND_PREFIX, 'junction_molecules', 'gz', sep = ".")
 jxnMols[, SV_ID := svIndex]
+jxnMols <- jxnMols[, .SD, .SDcols = names(find$junction_molecules)]
 fwrite(
-    jxnMols[, .SD, .SDcols = names(find$junction_molecules)], 
+    jxnMols, 
     file = outFile, 
     quote = FALSE, 
     sep = "\t",    
     row.names = FALSE,   
     col.names = TRUE, 
     compress = "gzip"
+)
+outFile <- paste(env$FIND_PREFIX, 'junction_molecules', 'rds', sep = ".")
+saveRDS(
+    jxnMols, 
+    file = outFile
 )
 #=====================================================================================
