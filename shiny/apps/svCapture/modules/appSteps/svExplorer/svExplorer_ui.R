@@ -85,9 +85,17 @@ svExplorerUI <- function(id, options) {
                     "Junction Alignment to Reference Genome",
                     settingsUI(ns('alignmentSettings'))
                 ),
-                span(
+                tags$style(HTML("
+                    .junction { background-color: #ddd;}
+                    .alignment .base_A { color: green; }
+                    .alignment .base_C { color: blue; }
+                    .alignment .base_G { color: brown; }
+                    .alignment .base_T { color: red; }
+                    .referenceGenome { font-style: oblique; }
+                ")),
+                div(
                     htmlOutput(ns("junctionAlignment")),
-                    style = "font-family: monospace; font-weight: bold;"
+                    style = "font-family: monospace; font-weight: bold; width: 100; overflow: auto;"
                 )
             )            
         ),

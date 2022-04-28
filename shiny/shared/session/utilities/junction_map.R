@@ -30,8 +30,9 @@ getJunctionMap <- function(x, clipMode = "Faded Colors"){
     # initialize map and dimensions
     refWidth <- nchar(x$sv$GEN_REF_1)
     faidxPadding <- (refWidth - 1) / 2
-    leftRefI <- faidxPadding + 1
-    microhomologyLength <- x$sv[, MICROHOM_LEN]
+    microhomologyLength <- x$sv[, MICROHOM_LEN]    
+    leftRefI  <- faidxPadding + 1
+    rightRefI <- leftRefI + 1 - microhomologyLength
     mapWidth <- refWidth + 1 - microhomologyLength
     nAln <- x$mols[, .N + sum(!isOuterClip)]
     vPadding <- 3
@@ -46,6 +47,15 @@ getJunctionMap <- function(x, clipMode = "Faded Colors"){
     GEN_REF_1 <- GEN_REF_1[1:mapWidth]
     GEN_REF_2 <- GEN_REF_2[1:mapWidth]
     GEN_REF_2 <- rev(GEN_REF_2)
+
+    dprint(faidxPadding)
+    dprint(nchar(x$sv$GEN_REF_1))
+    dprint(nchar(x$sv$GEN_REF_2))
+    dprint(x$sv$GEN_REF_1)
+    dprint(x$sv$GEN_REF_2) 
+    test <- strsplit(x$sv$GEN_REF_2, "")[[1]]
+    dprint(paste(test[(faidxPadding + 1):(faidxPadding + 100)], collapse = ""))
+
 
     # set verticals as a visual aid to junction localization
     if(microhomologyLength == 0){
@@ -112,6 +122,8 @@ getJunctionMap <- function(x, clipMode = "Faded Colors"){
         text    = baseMap, 
         image   = imgMap,
         refMolAlns = refMolAlns,
+        leftRefI = leftRefI,
+        rightRefI = rightRefI,
         usedPos = usedPos,
         GEN_REF_1 = GEN_REF_1,
         GEN_REF_2 = GEN_REF_2
@@ -134,6 +146,8 @@ getJunctionAlignment <- function(map, charPerLine = 100, mode = "Evidence Consen
         })
         match1 <- ifelse(map$GEN_REF_1 == toupper(consensus), "|", "~")
         match2 <- ifelse(map$GEN_REF_2 == toupper(consensus), "|", "~")
+        match1[map$leftRefI]  <- "[" 
+        match2[map$rightRefI] <- "]"
         map$text <- cbind(
             map$GEN_REF_1, 
             match1, 
@@ -146,7 +160,9 @@ getJunctionAlignment <- function(map, charPerLine = 100, mode = "Evidence Consen
     } else if(mode == "Reference Molecule"){
         map$text <- map$text[, which(map$refMolAlns)]
         match1 <- ifelse(map$GEN_REF_1 == toupper(map$text[, 1]), "|", "~")
-        match2 <- ifelse(map$GEN_REF_2 == toupper(map$text[, 2]), "|", "~")     
+        match2 <- ifelse(map$GEN_REF_2 == toupper(map$text[, 2]), "|", "~")  
+        match1[map$leftRefI]  <- "[" 
+        match2[map$rightRefI] <- "]"
         map$text <- cbind(
             map$GEN_REF_1, 
             match1, 
@@ -180,16 +196,30 @@ getJunctionAlignment <- function(map, charPerLine = 100, mode = "Evidence Consen
         lineStart <- 1 + (chunk - 1) * charPerLine
         x <- unlist(sapply(seq_len(nLines), function(line){
             bases <- map$text[lineStart:min(nChar, lineStart + charPerLine - 1), line]
-            if(any(bases != "~")) gsub('~', '&nbsp;', paste(bases, collapse = "")) else NULL
+            if(any(bases != "~")) {
+                bases <- paste(bases, collapse = "")
+                bases <- gsub('A', '<span class="base_A">A</span>', bases)
+                bases <- gsub('C', '<span class="base_C">C</span>', bases)
+                bases <- gsub('G', '<span class="base_G">G</span>', bases)
+                bases <- gsub('T', '<span class="base_T">T</span>', bases)
+             } else NULL
         }))
         i <- length(x)
-        if(i > 2) { # TODO: prettier colors
-            x[1] <- paste0('<span style="color: blue;">', x[1], '</span>')
-            x[i] <- paste0('<span style="color: red;">',  x[i], '</span>')
+        if(i > 2) {
+            x[1] <- paste0('<span class="referenceGenome">', x[1], '</span>')
+            sapply(2:(i - 2), function(j) x[j] <<- paste0('<span class="alignment">', x[j], '</span>'))
+            x[i] <- paste0('<span class="referenceGenome">',  x[i], '</span>')
             paste(x, collapse = "<br>")
         } else NULL
     }))
     x <- if(length(x) > 0) paste(x, collapse = "<br><br>") else NULL
+    x <- gsub('~', '&nbsp;', x)
+
+    # annotate the junction positions
+    title1 <- paste(map$sv$CHROM_1, map$sv$POS_1, sep = ":")
+    title2 <- paste(map$sv$CHROM_2, map$sv$POS_2, sep = ":")
+    x <- gsub('[', paste0('<span style="cursor: pointer;" title="', title1, '">*</span>'), x, fixed = TRUE)
+    x <- gsub(']', paste0('<span style="cursor: pointer;" title="', title2, '">*</span>'), x, fixed = TRUE)
 
     return(x)
 
