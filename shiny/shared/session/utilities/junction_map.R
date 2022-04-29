@@ -42,20 +42,17 @@ getJunctionMap <- function(x, clipMode = "Faded Colors"){
     refMolAlns <- logical()
 
     # parse the genome reference lines
-    GEN_REF_1 <- c(    strsplit(x$sv$GEN_REF_1, "")[[1]],  rep(" ", mapWidth))
-    GEN_REF_2 <- c(rev(strsplit(x$sv$GEN_REF_2, "")[[1]]), rep(" ", mapWidth))
+    GEN_REF_1 <- x$sv$GEN_REF_1
+    GEN_REF_2 <- x$sv$GEN_REF_2
+    if(x$sv$SIDE_1 == x$sv$SIDE_2){ # flip one reference strand for inversion
+        if(x$sv$SIDE_1 == "L") GEN_REF_2 <- tolower(rc(GEN_REF_2))
+                          else GEN_REF_1 <- tolower(rc(GEN_REF_1))
+    }
+    GEN_REF_1 <- c(    strsplit(GEN_REF_1, "")[[1]],  rep(" ", mapWidth))
+    GEN_REF_2 <- c(rev(strsplit(GEN_REF_2, "")[[1]]), rep(" ", mapWidth))
     GEN_REF_1 <- GEN_REF_1[1:mapWidth]
     GEN_REF_2 <- GEN_REF_2[1:mapWidth]
     GEN_REF_2 <- rev(GEN_REF_2)
-
-    dprint(faidxPadding)
-    dprint(nchar(x$sv$GEN_REF_1))
-    dprint(nchar(x$sv$GEN_REF_2))
-    dprint(x$sv$GEN_REF_1)
-    dprint(x$sv$GEN_REF_2) 
-    test <- strsplit(x$sv$GEN_REF_2, "")[[1]]
-    dprint(paste(test[(faidxPadding + 1):(faidxPadding + 100)], collapse = ""))
-
 
     # set verticals as a visual aid to junction localization
     if(microhomologyLength == 0){
@@ -134,6 +131,9 @@ getJunctionMap <- function(x, clipMode = "Faded Colors"){
 getJunctionAlignment <- function(map, charPerLine = 100, mode = "Evidence Consensus"){
     req(map)    
 
+
+
+
     # consensus mode
     if(mode == "Evidence Consensus"){
         consensus <- apply(map$text, 1, function(x){
@@ -144,8 +144,22 @@ getJunctionAlignment <- function(map, charPerLine = 100, mode = "Evidence Consen
             agg <- aggregate(xx, list(xx), length)
             agg[which.max(agg[[2]]), 1]
         })
-        match1 <- ifelse(map$GEN_REF_1 == toupper(consensus), "|", "~")
-        match2 <- ifelse(map$GEN_REF_2 == toupper(consensus), "|", "~")
+
+
+    if(map$sv$MICROHOM_LEN < 0){
+        dmsg()
+        wideInsertion <- toupper(paste0(consensus[(map$leftRefI - 1):(map$leftRefI - map$sv$MICROHOM_LEN + 2)], collapse = ""))
+        dmsg(wideInsertion)
+        dmsg(map$sv$JXN_BASES)
+        dmsg(grepl(wideInsertion,    paste0(map$GEN_REF_1, collapse = ""),  ignore.case = TRUE))
+        dmsg(grepl(wideInsertion, rc(paste0(map$GEN_REF_1, collapse = "")), ignore.case = TRUE))
+        dmsg(grepl(wideInsertion,    paste0(map$GEN_REF_2, collapse = ""),  ignore.case = TRUE))
+        dmsg(grepl(wideInsertion, rc(paste0(map$GEN_REF_2, collapse = "")), ignore.case = TRUE))        
+    }
+
+
+        match1 <- ifelse(toupper(map$GEN_REF_1) == toupper(consensus), "|", "~")
+        match2 <- ifelse(toupper(map$GEN_REF_2) == toupper(consensus), "|", "~")
         match1[map$leftRefI]  <- "[" 
         match2[map$rightRefI] <- "]"
         map$text <- cbind(
@@ -159,8 +173,8 @@ getJunctionAlignment <- function(map, charPerLine = 100, mode = "Evidence Consen
     # reference mode (two alignemnts)
     } else if(mode == "Reference Molecule"){
         map$text <- map$text[, which(map$refMolAlns)]
-        match1 <- ifelse(map$GEN_REF_1 == toupper(map$text[, 1]), "|", "~")
-        match2 <- ifelse(map$GEN_REF_2 == toupper(map$text[, 2]), "|", "~")  
+        match1 <- ifelse(toupper(map$GEN_REF_1) == toupper(map$text[, 1]), "|", "~")
+        match2 <- ifelse(toupper(map$GEN_REF_2) == toupper(map$text[, 2]), "|", "~")  
         match1[map$leftRefI]  <- "[" 
         match2[map$rightRefI] <- "]"
         map$text <- cbind(
@@ -214,6 +228,7 @@ getJunctionAlignment <- function(map, charPerLine = 100, mode = "Evidence Consen
     }))
     x <- if(length(x) > 0) paste(x, collapse = "<br><br>") else NULL
     x <- gsub('~', '&nbsp;', x)
+    x <- gsub('-', '&#8209;', x)
 
     # annotate the junction positions
     title1 <- paste(map$sv$CHROM_1, map$sv$POS_1, sep = ":")
@@ -240,5 +255,5 @@ getJunctionAlignment <- function(map, charPerLine = 100, mode = "Evidence Consen
     # # )
     
     # return the hopefully readable sequence block
-    paste(x, collapse = "<br>")
+    # paste(x, collapse = "<br>")
 }

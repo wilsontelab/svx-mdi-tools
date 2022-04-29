@@ -216,9 +216,6 @@ saveRDS(
     svCalls, 
     file = outFile
 )
-############################
-gr2 <- svCalls[, nchar(GEN_REF_2)]
-print(aggregate(gr2, list(gr2), length))
 
 message("writing molecule evidence table")
 outFile <- paste(env$FIND_PREFIX, 'junction_molecules', 'gz', sep = ".")

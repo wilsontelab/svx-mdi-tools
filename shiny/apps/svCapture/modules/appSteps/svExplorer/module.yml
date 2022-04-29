@@ -45,6 +45,12 @@ settings:
                 - duplex
                 - blue
             value: type
+        Max_Microhomology:
+            type: numericInput
+            value:  40
+            min:    10
+            max:    100
+            step:   10      
 mapSettings:
     Map_Settings:
         Pixels_Per_Base:
