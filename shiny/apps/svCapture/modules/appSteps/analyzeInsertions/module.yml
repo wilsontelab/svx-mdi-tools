@@ -1,0 +1,38 @@
+#----------------------------------------------------------------------
+# ui
+#----------------------------------------------------------------------
+
+# label shown on dashboard menu 
+shortLabel: "Analyze Insertions"
+
+# description shown on the Overview page
+shortDescription: "Make aggregate plots that describe insertions in a set of filtered junctions."
+
+# label shown at top of appStep tab  
+longLabel: "Addtional aggregate junction insertion properties"
+
+#----------------------------------------------------------------------
+# server
+#----------------------------------------------------------------------
+
+# names of the type(s) of this module ...
+types:
+    - analyzeInsertions
+    
+# ... and of its dependencies
+sourceTypes:
+    - assign
+
+#----------------------------------------------------------------------
+# settings: use camel case and '_' in names (it is replaced with a space in the UI)
+#----------------------------------------------------------------------
+# most of the default settings are fairly promiscuous to show ~all SVs
+#----------------------------------------------------------------------
+settings:
+    Junction_Properties:
+        Min_Insertion_Size:
+            type:   numericInput
+            value:  1
+        Max_Insertion_Size:
+            type:   numericInput
+            value:  20

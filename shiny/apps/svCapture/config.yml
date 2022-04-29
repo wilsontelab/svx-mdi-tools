@@ -65,3 +65,5 @@ appSteps:
         module: svExplorer
     aggregatePlots:
         module: aggregatePlots
+    analyzeInsertions:
+        module: analyzeInsertions
