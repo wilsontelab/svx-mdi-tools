@@ -131,9 +131,6 @@ getJunctionMap <- function(x, clipMode = "Faded Colors"){
 getJunctionAlignment <- function(map, charPerLine = 100, mode = "Evidence Consensus"){
     req(map)    
 
-
-
-
     # consensus mode
     if(mode == "Evidence Consensus"){
         consensus <- apply(map$text, 1, function(x){
@@ -144,20 +141,6 @@ getJunctionAlignment <- function(map, charPerLine = 100, mode = "Evidence Consen
             agg <- aggregate(xx, list(xx), length)
             agg[which.max(agg[[2]]), 1]
         })
-
-
-    if(map$sv$MICROHOM_LEN < 0){
-        dmsg()
-        wideInsertion <- toupper(paste0(consensus[(map$leftRefI - 1):(map$leftRefI - map$sv$MICROHOM_LEN + 2)], collapse = ""))
-        dmsg(wideInsertion)
-        dmsg(map$sv$JXN_BASES)
-        dmsg(grepl(wideInsertion,    paste0(map$GEN_REF_1, collapse = ""),  ignore.case = TRUE))
-        dmsg(grepl(wideInsertion, rc(paste0(map$GEN_REF_1, collapse = "")), ignore.case = TRUE))
-        dmsg(grepl(wideInsertion,    paste0(map$GEN_REF_2, collapse = ""),  ignore.case = TRUE))
-        dmsg(grepl(wideInsertion, rc(paste0(map$GEN_REF_2, collapse = "")), ignore.case = TRUE))        
-    }
-
-
         match1 <- ifelse(toupper(map$GEN_REF_1) == toupper(consensus), "|", "~")
         match2 <- ifelse(toupper(map$GEN_REF_2) == toupper(consensus), "|", "~")
         match1[map$leftRefI]  <- "[" 

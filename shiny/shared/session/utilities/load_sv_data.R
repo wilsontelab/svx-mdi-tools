@@ -19,12 +19,6 @@ getFilteredSvs <- function(settings, sampleSelector){
         # load table into cache
         svFile <- loadPersistentFile(sourceId = sourceId, contentFileType = "structuralVariants") 
 
-        ############################
-        gr2 <- persistentCache[[svFile]]$data[, GEN_REF_2]
-        gr2 <- nchar(gr2)
-        dprint(aggregate(gr2, list(gr2), length))
-
-
         # apply SV filters
         x <- persistentCache[[svFile]]$data[
             TARGET_CLASS %in% targetClasses &

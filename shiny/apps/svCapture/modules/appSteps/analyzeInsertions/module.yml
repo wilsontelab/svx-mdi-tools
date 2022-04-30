@@ -36,3 +36,20 @@ settings:
         Max_Insertion_Size:
             type:   numericInput
             value:  20
+        Flanking_Microhomology:
+            type:   numericInput
+            value:  2
+locationSettings:
+    Distance:
+        Max_Plotted_Distance:
+            type:   numericInput
+            value:  500 
+            min:    10
+            max:    10000
+            step:   10
+        Distance_Grid_Spacing:
+            type:   numericInput
+            value:  100        
+            min:    10
+            max:    1000
+            step:   10

@@ -36,7 +36,7 @@ analyzeInsertionsUI <- function(id, options) {
             staticPlotBoxUI(
                 ns('svCounts'),
                 width = 6,
-                title = "Number of SVs By Insert Size"
+                title = "# of SVs By Insert Size"
             ),
             staticPlotBoxUI(
                 ns('templateYield'),
@@ -45,7 +45,7 @@ analyzeInsertionsUI <- function(id, options) {
             ),            
             staticPlotBoxUI(
                 ns('templateLocations'),
-                width = 6,
+                width = 12,
                 title = "Templated Insertion Locations"
             )
         )
