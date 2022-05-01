@@ -1,0 +1,87 @@
+---
+pipeline:
+    name: wgaSeq
+    description: "Examine single-cell, whole-genome sequencing data for large CNVs/aneuploidy"
+    version: v0.0.0
+suiteVersions:
+    genomex-mdi-tools: main 
+actions: 
+    do:
+        order: 1
+        condaFamilies:
+            - genomex-mdi-tools//base
+            - genomex-mdi-tools//bwa
+            - genomex-mdi-tools//genome
+            - r-4.1
+        optionFamilies:
+            - input
+            - genomex-mdi-tools//AGC
+            - genomex-mdi-tools//genome
+            - genomex-mdi-tools//fixed-width-bins
+            - count
+        resources:
+            required:
+                total-ram: 8G
+            recommended: 
+                n-cpu: 8
+                ram-per-cpu: 2G
+        job-manager:
+            recommended:
+                time-limit: 24:00:00
+        description: "align reads, make bin counts, and create sample pivot table"  
+optionFamilies:
+    input:
+        options:
+            input-dir: 
+                order: 1
+                short: i
+                type: string
+                required: true
+                default: null
+                directory:
+                    must-exist: true
+                description: "every sub-directory of input-dir will be searched for cell FASTQ files"   
+    count:
+        options: 
+            min-mapq:
+                order: 1
+                short: Q
+                type: integer
+                required: false
+                default: 20
+                description: "reject read alignments with lower than this MAPQ during counting"
+            ploidy: 
+                order: 2
+                short: P
+                type: integer
+                required: false
+                default: 2
+                description: "expected copy number per cell for autosomes"
+package:
+    do: # the pipeline action after which a data package should assembled
+        uploadType: wgaSeq # a signal to the Stage 2 framework regarding the package contents
+        files:
+            manifestFile:
+                type: manifest-file
+                manifestType: IlluminaDefault
+                file: $MANIFEST_FILE
+            insertSizes:
+                type: insert-size-distributions
+                header: true
+                separator: tab
+                file: $INS_SIZES_FILE
+            sampleSummary:
+                type: sample-value-matrix
+                header: true
+                separator: tab
+                file: $RATES_FILE
+            countMatrix:
+                type: feature-count-matrix
+                header: true
+                separator: tab
+                file: $COUNT_MATRIX_FILE
+container:
+    supported: false       # set to true if you maintain a container registry for this pipeline [false]
+    registry:  ghcr.io     # domain name of your OCI-compatible, oras-accessible, container registry [ghcr.io]
+    owner:     wilsontelab # REQUIRED: the name of the owner, e.g., user or organization, at 'registry'
+    installer: apt-get     # the installer program used by the container OS, typically apt-get or yum [apt-get]
