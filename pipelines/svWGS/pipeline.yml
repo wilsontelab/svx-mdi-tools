@@ -3,31 +3,39 @@ pipeline:
     name: svWGS
     description: "Characterize structural variant junctions in whole-genomic, short-read, paired-end NGS data"
     version: v0.0.0
+suiteVersions:
+    genomex-mdi-tools: main 
 actions:
     align:
         order: 1
-        thread: do
         module: genomex-mdi-tools//align/dna-paired-end  
-    find:
+    extract:
         order: 2
-        thread: do
-        module: find  
-# package:
-#     uploadType: _template # a signal to the Stage 2 framework regarding the package contents
-#     packageAction: do     # the pipeline action after which the data package should assembled
-#     files:
-#         directoryContents:  # a contentFileType of any name you choose; 'manifestFile' has special meaning
-#             type: file-list # additional information as to the file type
-#             file: $DATA_FILE_PREFIX.directoryContents.txt
-#         dataFrame:
-#             type: sample-value-matrix
-#             header: true
-#             separator: comma
-#             file: $DATA_FILE_PREFIX.mtcars.csv
-#         # manifestFile: # a sample manifest
-#         #     type: manifest-file
-#         #     manifestType: xxxx
-#         #     file: $XXXX.xxxx
+        module: extract
+    find:
+        order: 3
+        module: find2
+package:
+    find: # the pipeline action after which a data package should assembled
+        uploadType: svWGS # a signal to the Stage 2 framework regarding the package contents
+        files:
+            metadata:
+                type: yml
+                file: $FIND_PREFIX.metadata.yml
+            structuralVariants:
+                type: rds-file
+                file: $FIND_PREFIX.structural_variants.rds
+            junctionMolecules:
+                type: rds-file
+                file: $FIND_PREFIX.junction_molecules.rds
+            manifestFile:
+                type: comma-delimited
+                manifestType: simple
+                file: $MANIFEST_PREFIX.sample_manifest.csv
+            distributionsZip:
+                type: zip-file
+                file: $MANIFEST_PREFIX.distribution_plots.zip
+
 container:
     supported: false    # set to true if you maintain a container registry for this pipeline [false]
     registry:  ghcr.io  # domain name of your OCI-compatible, oras-accessible, container registry [ghcr.io]
