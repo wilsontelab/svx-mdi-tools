@@ -10,13 +10,14 @@ our $action  = "parse_BWA";
 # load dependencies
 my $perlUtilDir = "$ENV{MODULES_DIR}/utilities/perl";
 require "$perlUtilDir/workflow.pl";
-require "$perlUtilDir/sequence.pl";
 require "$perlUtilDir/numeric.pl";
+$perlUtilDir = "$ENV{GENOMEX_MODULES_DIR}/utilities/perl";
+require "$perlUtilDir/sequence/general.pl";
 use vars qw($leftClip_ $rightClip_);
 
 # environment variables
-fillEnvVar(\my $nCpu,       'N_CPU');
-fillEnvVar(\my $minMapQ,    'MIN_MAPQ');
+fillEnvVar(\my $nCpu,    'N_CPU');
+fillEnvVar(\my $minMapQ, 'MIN_MAPQ');
 
 # constants
 use constant {

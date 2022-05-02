@@ -5,12 +5,8 @@ echo "counting read yields before and after filtering and grouping"
 # set sort RAM
 SORT_RAM=$(($TOTAL_RAM_INT - 4000000000))"b"
 
-# set tmp dir
-TMP_DIR_WRK=$TMP_DIR_LARGE/$PIPELINE_NAME"_count_"$DATA_NAME
-mkdir -p $TMP_DIR_WRK
-
 # collect the DUP_RATE information per cell
-samtools view -q $MIN_MAPQ $BAM_FILE | # output is quality filtered to reflect usable reads
+samtools view -q $MIN_MAPQ $COORDINATE_BAM_FILE | # output is quality filtered to reflect usable reads
 cut -f 9,12,13 |
 sed -e 's/XC:i://' -e 's/CB:Z://' |
 tee >(

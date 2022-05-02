@@ -1,0 +1,42 @@
+#----------------------------------------------------------------------
+# differential expression when user does not have sample replicates
+# only provide ratios and correlations, no p-values or other statistics
+#----------------------------------------------------------------------
+
+# exposed job options and execution parameters
+analysisTypes$NoReplicatesDE <- list(
+    options = list(
+        column1 = list(
+            analyzeBy = list(
+                name = "Analyze By",
+                choices = c('Group', 'Condition'),
+                default = 'Group'
+            )            
+        )
+    ), 
+    jobType = 'promise'
+)
+analysisTypes$NoReplicatesDE_groupOnly <- analysisTypes$NoReplicatesDE
+analysisTypes$NoReplicatesDE_groupOnly$options$column1$analyzeBy <- "Group"
+
+
+# setJobParameters is called to generate the variable values sent to executeJob
+#   a main purpose is to convert reactives to static variables for use by promises
+analysisTypes$NoReplicatesDE$setJobParameters <- function(...){
+    reactiveToStatic_commmon(...)
+}
+
+
+# the function that does the actual work
+#   called by runJobXXX family of functions
+#   if jobType is not 'immediate', must not depend on any reactives (will not be available)
+analysisTypes$NoReplicatesDE$executeJob <- function(jobParameters, analyzeName, schema, schemaId){
+    
+    # load the count data
+    composite <- getSampleCountsMatrix(analyzeName, schema,
+                                       jobParameters$sampleSets, jobParameters$samples)    
+    
+    print(composite$colData)
+    print(head(composite$countData))
+    
+}

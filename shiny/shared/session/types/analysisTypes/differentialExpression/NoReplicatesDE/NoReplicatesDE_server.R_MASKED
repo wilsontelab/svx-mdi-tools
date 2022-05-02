@@ -1,0 +1,26 @@
+#----------------------------------------------------------------------
+# reactive components for the analysis type results viewer
+#----------------------------------------------------------------------
+
+#----------------------------------------------------------------------
+# BEGIN MODULE SERVER
+#----------------------------------------------------------------------
+NoReplicatesDEServer <- function(id, parentId, options, selectedSchema, jobResults) {
+    moduleServer(id, function(input, output, session) {
+        ns <- NS(id) # in case we create inputs, e.g. via renderUI
+        parentNS <- function(id) paste(parentId, ns(id), sep = "-")
+        module <- 'NoReplicatesDE' # for reportProgress tracing   
+#----------------------------------------------------------------------
+
+# not implemented yet
+
+#----------------------------------------------------------------------
+# set return value
+#----------------------------------------------------------------------
+NULL
+
+#----------------------------------------------------------------------
+# END MODULE SERVER
+#----------------------------------------------------------------------
+})}
+#----------------------------------------------------------------------

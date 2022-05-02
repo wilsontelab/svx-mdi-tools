@@ -1,0 +1,32 @@
+#----------------------------------------------------------------------
+# differential expression analysis by DESeq2
+#----------------------------------------------------------------------
+---
+name: DESeq2
+jobType: promise
+options:
+    Analyze_By:
+        type:    selectInput
+        choices: getInvertedAnalyzeByNames
+        value:   Category1
+packages:
+    R: null
+    Bioconductor:
+        - DESeq2
+settings:
+    Plot_Thresholds:
+        Log10_P_Adjusted:
+            type:   numericInput
+            value:  3
+            min:    0
+            max:    10
+            step:   0.1
+        Log2_Fold_Change:
+            type:   numericInput
+            value:  1
+            min:    0
+            max:    5
+            step:   0.1
+hints:
+    - "<strong>Sort and Filter</strong> the gene list by gene name, fold-change, p-value, etc."
+    - "<strong>Click a gene</strong> to create gene-specific plots."

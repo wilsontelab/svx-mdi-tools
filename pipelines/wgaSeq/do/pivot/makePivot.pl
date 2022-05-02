@@ -22,7 +22,7 @@ my ($chrom) = @ARGV;
 # working variables
 my ($prevBin, %counts);
 my @binColumns = qw(chrom start end binN gc strand excluded gap badRegion umap genmap);
-my @cells = split(" ", $ENV{CELL_DIRS});
+my @cells = split(" ", $ENV{CELL_IDS});
 
 # initialize output
 $chrom eq 'chr1' and print join("\t", @binColumns, @cells), "\n";

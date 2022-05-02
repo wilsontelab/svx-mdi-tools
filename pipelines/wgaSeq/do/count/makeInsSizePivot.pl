@@ -2,7 +2,7 @@ use strict;
 use warnings;
 
 # working variables
-my @cells = split(" ", $ENV{CELL_DIRS});
+my @cells = split(" ", $ENV{CELL_IDS});
 my @counts;
 
 # initialize output

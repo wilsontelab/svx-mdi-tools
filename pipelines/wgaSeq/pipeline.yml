@@ -16,7 +16,7 @@ actions:
         optionFamilies:
             - input
             - genomex-mdi-tools//AGC
-            - genomex-mdi-tools//genome
+            - genomex-mdi-tools//genome         
             - genomex-mdi-tools//fixed-width-bins
             - count
         resources:
@@ -40,7 +40,7 @@ optionFamilies:
                 default: null
                 directory:
                     must-exist: true
-                description: "every sub-directory of input-dir will be searched for cell FASTQ files"   
+                description: "--input-dir and its sub-directories will be searched for cell FASTQ files"   
     count:
         options: 
             min-mapq:
@@ -63,8 +63,8 @@ package:
         files:
             manifestFile:
                 type: manifest-file
-                manifestType: IlluminaDefault
-                file: $MANIFEST_FILE
+                manifestType: simple
+                file: $SIMPLE_MANIFEST_FILE
             insertSizes:
                 type: insert-size-distributions
                 header: true

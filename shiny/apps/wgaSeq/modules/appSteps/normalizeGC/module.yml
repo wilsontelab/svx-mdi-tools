@@ -1,0 +1,83 @@
+#----------------------------------------------------------------------
+# ui
+#----------------------------------------------------------------------
+
+# label shown on dashboard menu 
+shortLabel: "GC Bias"
+
+# description shown on the Overview page
+shortDescription: "Use interactive plots to optimize the GC bias normalization of individual samples and to reject low quality samples."
+
+# label shown at top of appStep tab  
+longLabel: "Optimize GC normalization and reject low quality samples"
+
+#----------------------------------------------------------------------
+# server
+#----------------------------------------------------------------------
+
+# names of the type(s) of this module ...
+types:
+    - normalizeGC
+    
+# ... and of its dependencies
+sourceTypes:
+    - libraryQC
+
+# optional data classes and UI modules this module will use
+# e.g., might expect to find shared/optional/classes/<classType>/<className>/<className>_*.R
+classes:
+    dataStructures:
+        - mdiSummarizedExperiment            
+    stats:
+        - nbinomCountsGC
+        - hmmEPTable
+#modules: null
+
+#----------------------------------------------------------------------
+# settings: use camel case and '_' in names (it is replaced with a space in the UI)
+#----------------------------------------------------------------------
+settings:
+    Fit_Parameters:
+        Default_Modal_CN:
+            type:   numericInput
+            value:  2
+            min:    1
+            max:    4
+            step:   1
+        Window_Size:
+            type:   numericInput
+            value:  3
+            min:    1
+            max:    5
+            step:   2
+    Bin_Filters: 
+        Minimum_Mappability:
+            type:   numericInput
+            value:  0.8
+            min:    0
+            max:    1
+            step:   0.05
+        Mappability_Source:
+            type:   selectInput
+            choices:
+                - genmap
+                - umap
+            value:  genmap  
+        Minimum_GC:
+            type:   numericInput
+            value:  0.25
+            min:    0
+            max:    1
+            step:   0.05
+        Maximum_GC:
+            type:   numericInput
+            value:  0.65
+            min:    0
+            max:    1
+            step:   0.05
+        Maximum_Excluded:
+            type:   numericInput
+            value:  0.25
+            min:    0
+            max:    1
+            step:   0.05

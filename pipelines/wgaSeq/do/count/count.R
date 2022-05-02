@@ -48,4 +48,36 @@ d <- d[order(d$sampleN),
        c('sampleN', 'sampleName', 'libraryName', 'cellName',
          'readPairs', 'filtered', 'grouped',
          'alignRate', 'dupRate')]
-write.table(d, env$RATES_FILE, quote = FALSE, sep = "\t", row.names = FALSE, col.names = TRUE)
+write.table(
+    d, 
+    env$RATES_FILE, 
+    quote = FALSE, 
+    sep = "\t", 
+    row.names = FALSE, 
+    col.names = TRUE
+)
+
+# create a simple manifest file for the app
+project <- if(env$MANIFEST_FILE == "NA"){
+    basename(env$INPUT_DIR)
+} else { 
+    tryCatch({
+        manifest <- read.csv(env$MANIFEST_FILE, header = TRUE, stringsAsFactors = FALSE)
+        manifest[manifest$Lane == 1, 'Project']
+    }, error = function(e) {
+        basename(env$INPUT_DIR)
+    })
+}
+write.table(
+    data.frame(
+        Project = project,
+        Sample_ID = d$libraryName,
+        Description = d$cellName,
+        stringsAsFactors = FALSE
+    ),
+    env$SIMPLE_MANIFEST_FILE, 
+    quote = FALSE, 
+    sep = ",", 
+    row.names = FALSE, 
+    col.names = TRUE
+)

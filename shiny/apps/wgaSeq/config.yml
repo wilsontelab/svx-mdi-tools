@@ -1,0 +1,75 @@
+---
+#----------------------------------------------------------------------
+# app name is shown at the top of the dashboard menu
+# description is used when needing to query the user for the desired target app
+# semantic version is of form v0.0.0: https://semver.org/
+# external modules will come from latest suite versions unless listed in suiteVersions
+#----------------------------------------------------------------------
+name: wgaSeq
+description: "Analyze whole genome amplification (WGA) data from individual cells for copy number changes"
+# version: v0.0.0 # OPTIONAL
+# suiteVersions:
+#     suiteName: v0.0.0
+
+#----------------------------------------------------------------------
+# project data file type(s) associated with this app
+#   - the keys in uploadTypes are matched to key uploadType in incoming package.yml
+#   - required files lead to rejection of a project file if missing
+#----------------------------------------------------------------------
+uploadTypes:
+    wgaSeq: 
+        contentFileTypes: # anything not listed will not be available to the app, 
+            manifestFile:
+                required: true    
+            countMatrix:  # even if present in the package file
+                required: true
+            sampleSummary:
+                required: true                     
+            insertSizes:
+                required: false
+
+#----------------------------------------------------------------------
+# labels and definitions for all sequential analysis steps shown in sidebar
+#----------------------------------------------------------------------
+# module = the appSteps module used for a sequential step
+#    the keyed name of a step becomes its namespace in the 'app' object
+# shortLabel = as shown on dashboard menu (required if not provided as module default)
+# shortDescription = as shown on the Overview page (required if not provided as module default)
+# options = passed to both <module>UI and <module>Server functions
+#    longLabel = the title for the appStep tabbed page
+#    alwaysVisible = declares that step is NOT sequential and thus always available
+#    other options are module specific; see module definitions
+#----------------------------------------------------------------------
+appSteps:
+    upload: # nearly always the 1st step of every app
+        module: sourceFileUpload
+    assign: # nearly always the 2nd step of every app
+        module: assignSamples        
+        shortLabel: "Assign Cells"
+        shortDescription: "Drag and drop cells to declare their associations into <strong>groups</strong> (e.g. source tissues) and <strong>types</strong> (e.g. cell properties)."
+        options:
+            longLabel: "Assign cells to Groups and Types"
+            allowEmptyCells: true
+            categories:
+                group:
+                    singular: Group
+                    plural: Groups
+                    nLevels: 1:25
+                type:
+                    singular: Type
+                    plural: Types
+                    nLevels: 1:25  
+            validationFn: validateSampleAssignments
+    libraryQC:
+        module: libraryQC        
+    normalizeGC:
+        module: normalizeGC        
+        shortDescription: "Use interactive plots to optimize the GC bias normalization of individual cells and to reject low quality cells."
+        options:
+            longLabel: "Optimize GC normalization and reject low quality cells"
+            contentFileType: countMatrix
+    normalizeBatch:
+        module: normalizeBatch
+        shortDescription: "Execute and visualize the batch effect normalization of a set of cells."
+    compositePlots:
+        module: compositePlots        

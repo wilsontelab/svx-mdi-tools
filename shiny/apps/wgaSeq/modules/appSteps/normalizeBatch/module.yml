@@ -1,0 +1,24 @@
+#----------------------------------------------------------------------
+# ui
+#----------------------------------------------------------------------
+
+# label shown on dashboard menu 
+shortLabel: "Batch Effects"
+
+# description shown on the Overview page
+shortDescription: "Execute and visualize the batch effect normalization of a set of samples."
+
+# label shown at top of appStep tab  
+longLabel: "Execute and visualize batch effect normalization"
+
+#----------------------------------------------------------------------
+# server
+#----------------------------------------------------------------------
+
+# names of the type(s) of this module ...
+types:
+    - normalizeBatch
+    
+# ... and of its dependencies
+sourceTypes:
+    - normalizeGC

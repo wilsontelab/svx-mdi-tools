@@ -1,0 +1,56 @@
+
+#----------------------------------------------------------------------
+# ui
+#----------------------------------------------------------------------
+
+# label shown on dashboard menu 
+shortLabel: "Composite Plots"
+
+# description shown on the Overview page
+shortDescription: "View plots for multiple related cells together."
+
+# label shown at top of appStep tab  
+longLabel: "Composite cell plots"
+
+#----------------------------------------------------------------------
+# server
+#----------------------------------------------------------------------
+
+# names of the type(s) of this module ...
+types:
+    - compositePlots
+    
+# ... and of its dependencies
+sourceTypes:
+    - normalizeBatch
+
+#----------------------------------------------------------------------
+# settings: use camel case and '_' in names (it is replaced with a space in the UI)
+#----------------------------------------------------------------------
+settings:
+    Plot_Settings:
+        Track_Height_Pixels:
+            type:   numericInput
+            value:  150
+            min:    100
+            max:    400
+            step:   25
+        Maximum_Copy_Number:
+            type:   numericInput
+            value:  5
+            min:    4
+            max:    100
+            step:   1
+    Model_Parameters:    
+        Transition_Probability:
+            type:   selectInput
+            choices:
+                - '1e-2'
+                - '1e-3'
+                - '1e-4'
+                - '1e-5'
+                - '1e-6'
+                - '1e-7'
+                - '1e-8'
+            value:  '1e-6'
+

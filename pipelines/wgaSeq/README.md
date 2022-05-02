@@ -5,7 +5,7 @@ published: false
 ## wgaSeq: Whole Genome Amplification Sequencing
 
 **wgaSeq** takes the output of low-depth, next-generation
-sequencing as applied to single-cell whole genome
+sequencing as applied to single-cell, whole-genome
 amplification (WGA). Reads are trimmed, merged, and aligned to
 the reference genome and counts are made in fixed-width bins.
 
@@ -18,27 +18,37 @@ aneuploidy and large segmental CNVs.
 It is expected that a set of individual cells will have been
 sequenced together in a single sequencing run and
 thus subjected to common conditions and batch effects.
-Different batches of cells should typically be analyzed in separate
-calls to wgaSeq.
+Different batches of cells should be analyzed in separate
+calls to wgaSeq and compared later.
 
 ### Required Data Inputs
 
 You must provide a set of fastq.gz format files, with one
 pair of files for each cell corresponding to the two reads
-of a paired-end sequencing run. These must be in a single
-folder, with one sub-folder for each cell, where the folder
-name will be taken as a cell's identifier, e.g.
+of a paired-end sequencing run. These must be provided in one 
+of the following two file structures:
 
 ```
 --input-dir /path/to/project
-
-/path/to/project/cell_1/*_R1_*.fastq.gz
-/path/to/project/cell_1/*_R2_*.fastq.gz
-/path/to/project/cell_2/*_R1_*.fastq.gz
-/path/to/project/cell_2/*_R2_*.fastq.gz
 ```
 
-would find and analyze two cells, named cell_1 and cell_2.
+```sh
+# one cell per named sub-folder (the default, checked first)
+/path/to/project/cell-1/*_R1_*.fastq.gz
+/path/to/project/cell-1/*_R2_*.fastq.gz
+/path/to/project/cell-2/*_R1_*.fastq.gz
+/path/to/project/cell-2/*_R2_*.fastq.gz
+```
+
+```sh
+# all cells in the same folder
+/path/to/project/cell-1_*_R1_*.fastq.gz
+/path/to/project/cell-1_*_R2_*.fastq.gz
+/path/to/project/cell-2_*_R1_*.fastq.gz
+/path/to/project/cell-2_*_R2_*.fastq.gz
+```
+
+either of which would find and analyze two cells, named cell-1 and cell-2.
 
 Optionally, you may also provide a path to a Michigan Advanced
 Genomics Core (AGC) manifest file that provides additional descriptions 

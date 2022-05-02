@@ -1,0 +1,55 @@
+#----------------------------------------------------------------------
+# ui
+#----------------------------------------------------------------------
+
+# label shown on dashboard menu 
+shortLabel: "Library QC"
+
+# description shown on the Overview page
+shortDescription: "Examine QC metrics for all libraries in a run and reject failed libraries."
+
+# label shown at top of appStep tab  
+longLabel: "Examine library QC and reject failed libraries"
+
+#----------------------------------------------------------------------
+# server
+#----------------------------------------------------------------------
+
+# names of the type(s) of this module ...
+types:
+    - libraryQC
+    
+# ... and of its dependencies
+sourceTypes:
+    - assign
+
+#----------------------------------------------------------------------
+# settings: use camel case and '_' in names (it is replaced with a space in the UI)
+#----------------------------------------------------------------------
+settings:
+    QC_Thresholds:
+        Minimum_Unique_Reads_M:
+            type:   numericInput
+            value:   2
+            min:     1
+            max:    10
+            step:    1
+        Minimum_Alignment_Rate:
+            type:   numericInput
+            value:  0.9
+            min:    0
+            max:    1
+            step:   0.01            
+        Maximum_Duplication_Rate:
+            type:   numericInput
+            value:  0.15
+            min:    0
+            max:    1
+            step:   0.01
+    Plot_Limits:
+        Read_Count_Fold_Median:
+            type:   numericInput
+            value:  2.5
+            min:    1.5
+            max:    10
+            step:   0.5

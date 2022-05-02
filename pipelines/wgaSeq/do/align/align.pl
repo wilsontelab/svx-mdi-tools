@@ -21,7 +21,8 @@ fillEnvVar(\my $tmpDirWrk,  'TMP_DIR_WRK');
 fillEnvVar(\my $logPrefix,  'LOG_FILE_PREFIX');
 fillEnvVar(\my $actionDir,  'ACTION_DIR');
 fillEnvVar(\my $genomeFasta,'BWA_GENOME_FASTA');
-fillEnvVar(\my $cellDirs,   'CELL_DIRS');
+fillEnvVar(\my $cellIds,    'CELL_IDS');
+fillEnvVar(\my $inputMode,  'INPUT_MODE');
 
 # set memory usage
 my $alignRam = 5e9; # RAM set aside for BWA and all other non-sorting programs in stream
@@ -56,7 +57,7 @@ use constant {
 };
 
 # get inputs
-my @cellDirs = split(/\s+/, $cellDirs);
+my @cellIds = split(/\s+/, $cellIds);
 
 # initialize outputs
 my $bamListFile  = "$logPrefix.$action.bam.list";
@@ -68,24 +69,27 @@ my $bwaLogFile = "$logPrefix.$action.bwa.log";
 unlink $bwaLogFile;
 
 # collect a common bam header for all cell output files
-my $cellName = $cellDirs[0];
-my $fastQs = join(" ", glob("$cellName/*.fastq.gz"));
+sub getCellFastqs {
+    my ($cellId) = @_; # working from within INPUT_DIR
+    glob($inputMode eq "directory" ? "$cellId/*.fastq.gz" : $cellId."_*.fastq.gz");
+}
+my $fastQs = join(" ", getCellFastqs($cellIds[0]));
 my $bwa = "bwa mem -Y -t $nCpu $genomeFasta $fastQs 2>/dev/null";
 my $samtools = "samtools view -H";
 my $bamHeader = qx/$bwa | $samtools/;
 
 # align one cell at a time with parallelization
-foreach my $cellName(@cellDirs){
+foreach my $cellId(@cellIds){
     my $time = localtime();
     
     # add cell to cell list in abbreviated 10x CellRanger format    
     $nCells++;
     my $cellN = $nCells - 1;
-    print STDERR "  $cellName (cell #$cellN), started $time\n";
-    print $cellH join(",", $cellName, $cellN), "\n";
+    print STDERR "  $cellId (cell #$cellN), started $time\n";
+    print $cellH join(",", $cellId, $cellN), "\n";
     
     # set files
-    my @fastQs = glob("$cellName/*.fastq.gz");
+    my @fastQs = getCellFastqs($cellId);
     @fastQs == 2 or die "did not get expected two FASTQ files\n".join("\n", @fastQs)."\n";
     my $tmpBam = "$tmpDirWrk/cell_$cellN.sorted.bam";
     print $bamListH "$tmpBam\n";
@@ -93,10 +97,10 @@ foreach my $cellName(@cellDirs){
     
     # align reads and remove duplicates
     # output does not retain full alignments, just the needed information about unique source molecules
-    my $fastpLogPrefix = "$logPrefix.$cellName.fastp";
+    my $fastpLogPrefix = "$logPrefix.$cellId.fastp";
     my $fastp = "fastp --thread $nCpu --in1 $fastQs[0] --in2 $fastQs[1] --stdout ".
                 "--merge --include_unmerged --disable_quality_filtering ".
-                "--html $fastpLogPrefix.html --json $fastpLogPrefix.json --report_title \"$cellName\" 2>/dev/null";
+                "--html $fastpLogPrefix.html --json $fastpLogPrefix.json --report_title \"$cellId\" 2>/dev/null";
     my $bwa      = "bwa mem -p -Y -t $nCpu $genomeFasta - 2>>$bwaLogFile";    
     my $parseBWA = "perl $actionDir/align/parse_bwa.pl";
     my $sort     = "sort --parallel=$nCpu -T $tmpDirWrk -S $sortRam"."b --compress-program=pigz -k1,1 -k2,2n -k3,3n";
@@ -128,7 +132,7 @@ foreach my $cellName(@cellDirs){
             '*',
             '*',
             "XC:i:$f[_DUP_RATE]",
-            "CB:Z:$cellName"
+            "CB:Z:$cellId"
         ), "\n";        
         $molId++;
     }

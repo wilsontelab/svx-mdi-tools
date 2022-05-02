@@ -1,0 +1,19 @@
+#----------------------------------------------------------------------
+# static components for the analysis type results viewer
+#----------------------------------------------------------------------
+
+# inline module ui function
+NoReplicatesDEUI <- function(id, options) {
+    
+    # initialize namespace
+    ns <- NS(id)
+
+    # always wrap in a div that acts as the removeUI css target
+    tags$div(
+
+        # pending
+        fluidRow(
+            "NoReplicatesDEUI pending"
+        ) 
+    )
+}

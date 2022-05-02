@@ -7,13 +7,13 @@ BINS_DIR=$GENOME_BINS_DIR/fixed_width_bins
 export BINS_FILE=$BINS_DIR/$GENOME.bins.size_$BIN_SIZE.k_$KMER_LENGTH.e_$N_ERRORS.bed.gz
 if [ ! -e $BINS_FILE ]; then
     echo "missing file: $BINS_FILE"
-    echo "please run pipeline 'prepareBins' first"
+    echo "please run pipeline 'genomex-mdi-tools/prepareBins' first"
     exit 1
 fi
 
 # count reads per sample in parallel by chromosome
 zcat $BINS_FILE |
-perl $MODULES_DIR/genome/sort_chroms.pl |
+perl $GENOMEX_MODULES_DIR/genome/sort_chroms.pl |
 cut -f 1 |
 uniq | # yields unique ordered chroms
 parallel -j $N_CPU -k bash $ACTION_DIR/pivot/makePivot.sh {} |
