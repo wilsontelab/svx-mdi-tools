@@ -1,0 +1,6 @@
+External_SVs:
+    SVs_Bed_File:
+        type:   fileInput
+        accept: 
+            - ".bed"
+            - ".bed.gz"
