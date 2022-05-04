@@ -58,7 +58,7 @@ filteredSvs <- reactive({ getFilteredSvs(settings, sampleSelector) })
 # the one working SV the user has clicked on
 selectedSv <- reactive({ 
     rowI <- svsTable$rows_selected()
-    req(rowI)
+    if(is.null(rowI) || rowI == 0) return(NULL)
     svs <- filteredSvs()
     svs[rowI]
 })
@@ -75,9 +75,9 @@ junctionMap <- reactive({ getJunctionMap(
 #----------------------------------------------------------------------
 externalSvs <- reactive({
     bedFile <- settings$External_SVs()$SVs_Bed_File$value
-    req(bedFile)
+    if(is.null(bedFile) || bedFile == "") return(NULL) # not req(...)
     bedFile <- file.path(serverEnv$UPLOADS_DIR, bedFile)
-    req(file.exists(bedFile))
+    if(!file.exists(bedFile)) return(NULL)
     x <- fread(bedFile)[, 1:3]
     names(x) <- c("chrom", "start", "end")
     x[, ":="(
@@ -169,7 +169,7 @@ locationsPlot <- staticPlotBoxServer(
         svs <- filteredSvs()[, .(TARGET_POS_1, TARGET_POS_2)]
         svs[, ':='(
             size = abs(TARGET_POS_2 - TARGET_POS_1 + 1),
-            center = pmin(TARGET_POS_1, TARGET_POS_2) + abs(TARGET_POS_2 - TARGET_POS_1 + 1) / 2
+            centerI = pmin(TARGET_POS_1, TARGET_POS_2) + abs(TARGET_POS_2 - TARGET_POS_1 + 1) / 2
         )]
         svPointColors <- svPointColors()
 
@@ -218,7 +218,7 @@ locationsPlot <- staticPlotBoxServer(
 
         # plot the SV points on top
         points(
-            svs[, center], 
+            svs[, centerI], 
             svs[, size], 
             pch = 20, 
             cex = stepSettings$Point_Size$value,
@@ -227,40 +227,34 @@ locationsPlot <- staticPlotBoxServer(
 
         # finally, plot any external comparator SVs on top of everything
         externalSvs <- externalSvs()
-        if(!is.null(externalSvs)){ 
-# Classes 'data.table' and 'data.frame':  16 obs. of  5 variables:
-#  $ chrom : chr  "chr10" "chr10" "chr1" "chr1" ...
-#  $ start : int  51616453 51628463 71643114 71830439 51508820 78602605 71861295 78488898 71718794 51566939 ...
-#  $ end   : int  51648536 51647510 71768387 72047181 51744414 78946165 71886554 78576240 72164112 51695648 ...
-#  $ size  : int  32083 19047 125273 216742 235594 343560 25259 87342 445318 128709 ...
-#  $ center: num  51632495 51637987 71705751 71938810 51626617 ...
-#  - attr(*, ".internal.selfref")=<externalptr>
-# Classes 'data.table' and 'data.frame':  2 obs. of  11 variables:
-#  $ chrom       : chr  "chr3" "chr16"
-#  $ start       : int  60300384 78456040
-#  $ end         : int  60700384 78856040
-#  $ regionName  : chr  "FHIT" "WWOX"
-#  $ chromI      : int  3 16
-#  $ paddedStartI: int  1 2000001
-#  $ startI      : int  800001 2800001
-#  $ centerI     : int  1000000 3000000
-#  $ endI        : int  1200000 3200000
-#  $ paddedEndI  : int  2000000 4000000
-#  $ size        : int  400000 400000          
+        if(!is.null(externalSvs)){     
             externalSvs <- externalSvs[chrom %in% targets$chrom]
-            # externalSvs <- externalSvs[, {
-            #     svChrom <- chrom
-            #     targets[targets$chrom == ]
-            # }, by = chrom]
-
+            targets[, center := centerI + (start - startI)]
+            targetIs <- mapply(function(svChrom, svCenter){ # find the target region closest to this CNV
+                targets[, which.min(ifelse(chrom == svChrom, abs(center - svCenter), 1e9))]
+            }, externalSvs$chrom, externalSvs$center)
+            externalSvs[, centerI := center - targets[targetIs[.I], start - startI]] # convert to I coordinates
             points(
-                externalSvs[, center], 
+                externalSvs[, centerI], 
                 externalSvs[, size], 
-                pch = "X"
-                # , 
-                # cex = stepSettings$Point_Size$value,
-                # col = svPointColors$colors
-            )  
+                pch = 1, 
+                cex = 2, # stepSettings$Point_Size$value,
+                col = CONSTANTS$plotlyColors$black
+            ) 
+        }
+        selectedSv <- selectedSv()
+        if(!is.null(selectedSv)){
+            selectedSv[, ':='(
+                size = abs(TARGET_POS_2 - TARGET_POS_1 + 1),
+                centerI = pmin(TARGET_POS_1, TARGET_POS_2) + abs(TARGET_POS_2 - TARGET_POS_1 + 1) / 2
+            )]
+            points(
+                selectedSv[, centerI], 
+                selectedSv[, size], 
+                pch = 1, 
+                cex = 2, # stepSettings$Point_Size$value,
+                col = CONSTANTS$plotlyColors$red
+            )
         }
 
         # add a legend
