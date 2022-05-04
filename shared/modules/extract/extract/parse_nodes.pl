@@ -85,7 +85,7 @@ use vars qw(@alns @mol $jxnN
             $spansH $nodesH $endpointsH
             $isTargeted $maxInsertSize %insertSizes $isCountStrands %strandCounts 
             $fwdSide2 $revSide2
-            $IS_COLLATED $TARGETS_BED $LIBRARY_TYPE $MIN_CLIP $MAX_TLEN $READ_LEN);    
+            $IS_COLLATED $LIBRARY_TYPE $MIN_CLIP $MAX_TLEN $READ_LEN);    
 my $gapDelLimit =  2 * $MAX_TLEN - 2 * $READ_LEN; # these are conservative, i.e., call more proper than aligner typically
 my $gapDupLimit = -2 * $READ_LEN;
 my $collapseStrands = ($LIBRARY_TYPE eq 'TruSeq'); # otherwise, Nextera, where same signatures on opposite strands are unique source molecules
@@ -420,7 +420,7 @@ sub printOuterEndpoints {
     my $molIsOuterClipped = ($mol[IS_OUTER_CLIP1] or $mol[IS_OUTER_CLIP2]);
     printNode(UMI1, $outAln1, $outData1, # outer clip output used as SV evidence support
               OUTER_CLIP, _NULL, -1, $molIsOuterClipped);
-    printNode(UMI2, $outAln2, $outData2, # outer clips bear negative JXN_N, 1/2 for each molecule en
+    printNode(UMI2, $outAln2, $outData2, # outer clips bear negative JXN_N
               OUTER_CLIP, _NULL, -1, $molIsOuterClipped);
 
     # prepare for coverage map analysis downstream if untargeted

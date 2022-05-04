@@ -7,8 +7,9 @@ use warnings;
 #     sorted BED3 plus MOL_CLASS
 # output:
 #     baseCoverage.breaks   = 0-referenced positions where coverage changes
-#     baseCoverage.counts   = the corresponding coverage at each break
+#     baseCoverage.counts   = the corresponding coverage at each break start until the next break
 #     baseCoverage.index.gz = index file for extracting the coverage map of a chunk of a chromosome
+#                             also contains a low resolution bin/chunk-based coverage map
 
 # load dependencies
 my $perlUtilDir = "$ENV{MODULES_DIR}/utilities/perl";
@@ -34,17 +35,19 @@ my $maxPosInChunk = CHUNK_SIZE - 1; # the last position in the working chrom chu
 my $coverage = 0; # running coverage value as breaks are handled, RESETS EVERY CHROM
 my $pos0 = -1;    # 0-indexed base position for first element of @breaks, RESETS EVERY CHROM
 my $maxEnd1 = -1; # rightmost span end encountered so far, RESETS EVERY CHROM
-my ($prevChromI); # tally of TLENs for histogram
+my $cumChunkWeightedCoverage = 0; # for calculating the mean coverage over all bases in each chunk
+my $cumChunkWeights = 0;
+my $prevBreakPos = 1;
+my ($prevChromI); 
 
 # output files
-my $filePrefix = "$ENV{DATA_FILE_PREFIX}.baseCoverage";
-my $posFile = "$filePrefix.breaks";
-my $covFile = "$filePrefix.counts";
-my $idxFile = "$filePrefix.index.gz";
+my $posFile = "$ENV{COVERAGE_PREFIX}.breaks";
+my $covFile = "$ENV{COVERAGE_PREFIX}.counts";
+my $idxFile = "$ENV{COVERAGE_PREFIX}.index.gz";
 open my $posH, ">", $posFile or die "could not open $posFile for writing\n$!\n";
 open my $covH, ">", $covFile or die "could not open $covFile for writing\n$!\n";
 open my $idxH, "|-", "gzip -c > $idxFile" or die "could not open $idxFile for writing\n$!\n";
-print $idxH join("\t", qw(chromIndex chunkIndex cumNBreaks)), "\n";
+print $idxH join("\t", qw(chromIndex chunkIndex cumNBreaks coverage)), "\n";
 
 # run all sorted spans
 while (<STDIN>) {
@@ -55,13 +58,14 @@ while (<STDIN>) {
 	if($prevChromI){
 		if($prevChromI != $chromI){
 			commitBreaks($maxEnd1 + 1); # commit any/all remaining breaks on the chromosome
-			print $idxH join("\t", $prevChromI, $chunkIndex, $nBreaksPrinted), "\n";
+			print $idxH join("\t", $prevChromI, $chunkIndex, $nBreaksPrinted, getChunkCoverage()), "\n";
 			@breaks = (0) x BUFFER_LEN;
 			$chunkIndex = 0;
 			$maxPosInChunk = CHUNK_SIZE - 1;
 			$coverage = 0;
 			$pos0 = -1;
 			$maxEnd1 = -1;
+			$prevBreakPos = 1;
 
 		# commit any break positions prior to the first position of the current span
 		} else {
@@ -81,7 +85,7 @@ while (<STDIN>) {
 	$maxEnd1 > $end1 or $maxEnd1 = $end1;
 }
 commitBreaks($maxEnd1 + 1); # finish the last chromosome
-print $idxH join("\t", $prevChromI, $chunkIndex, $nBreaksPrinted), "\n";
+print $idxH join("\t", $prevChromI, $chunkIndex, $nBreaksPrinted, getChunkCoverage()), "\n";
 close $posH;
 close $covH;
 close $idxH;
@@ -91,11 +95,25 @@ sub commitBreaks {
     my ($start0) = @_;
 	foreach my $p0($pos0..min($maxEnd1, $start0 - 1)){
 		my $increment = $breaks[$p0 % BUFFER_LEN] or next;
+
+		# handle chunk breaks
 		while($p0 > $maxPosInChunk){
-			print $idxH join("\t", $prevChromI, $chunkIndex, $nBreaksPrinted), "\n";
+			my $breakWeight = $maxPosInChunk - $prevBreakPos + 1;
+			$cumChunkWeightedCoverage += $coverage * $breakWeight;
+			$cumChunkWeights += $breakWeight;
+			$prevBreakPos = $maxPosInChunk + 1;	
+			print $idxH join("\t", $prevChromI, $chunkIndex, $nBreaksPrinted, getChunkCoverage()), "\n";
 			$chunkIndex++;
 			$maxPosInChunk = ($chunkIndex + 1) * CHUNK_SIZE - 1;
-		}	
+		}
+
+		# keep track of the mean coverage per chunk prior to this break
+		my $breakWeight = $p0 - $prevBreakPos;
+        $cumChunkWeightedCoverage += $coverage * $breakWeight;
+		$cumChunkWeights += $breakWeight;
+		$prevBreakPos = $p0;
+
+		# increment and commit this break 
 		$coverage += $increment;
 		print $posH pack("S", $p0); # implicitly applies modulo to pos
 		print $covH pack("C", $coverage > MAX_COVERAGE ? MAX_COVERAGE : $coverage);
@@ -103,6 +121,12 @@ sub commitBreaks {
 		$breaks[$p0 % BUFFER_LEN] = 0;
 	}
 	$pos0 = $start0;                          
+}
+sub getChunkCoverage {
+	my $chunkMeanCoverage = $cumChunkWeights ? $cumChunkWeightedCoverage / $cumChunkWeights : 0;
+	$cumChunkWeightedCoverage = 0;
+	$cumChunkWeights = 0;
+	int($chunkMeanCoverage * 10 + 0.5) / 10; # record chunk coverage to 0.1 precision
 }
 
 1;

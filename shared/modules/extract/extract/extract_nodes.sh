@@ -19,7 +19,7 @@ echo $NAME_BAM_FILE
 # extract SV info from name sorted bam and send all reads to coordinate sort
 slurp -s 250M $NAME_BAM_FILE |
 samtools view - |
-perl $ACTION_DIR/extract/extract_nodes.pl |
+perl $ACTION_DIR/extract/extract_nodes.pl # |
 checkPipe
 # tee >( 
 #     samtools view - |

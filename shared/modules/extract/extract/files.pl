@@ -35,7 +35,7 @@ sub openFileHandles {
     # used to set the SHARED_PROPER count in later steps
     # only used if targeted, i.e., if svCapture, where we expect large strand family sizes
     $file = getFileStream('endpoints', $childN);
-    $isTargeted and open $endpointsH, "|-", $$file{stream} or die $$file{error};
+    !$isTargeted or open $endpointsH, "|-", $$file{stream} or die $$file{error};
 }
 
 # close all open file handles

@@ -45,7 +45,7 @@ if(env$FIND_MODE == "find"){
 message("loading sample metadata")
 inFile <- paste(env$FIND_PREFIX, "metadata", "yml", sep=".")
 metadata <- read_yaml(inFile)
-metadata <- lapply(metadata, function(x) strsplit(x, "\\s+")[[1]])
+metadata <- lapply(metadata, function(x) strsplit(as.character(x), "\\s+")[[1]])
 
 message("loading SV summary table")
 inFile <- paste(env$FIND_PREFIX, 'structural_variants', 'gz', sep = ".")

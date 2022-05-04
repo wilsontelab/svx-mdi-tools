@@ -8,7 +8,6 @@ action: # required
     optionFamilies: # these options apply to all actions
         - genomex-mdi-tools//genome
         - genomex-mdi-tools//read-merging     
-        # - clip
         - sv-filtering
         - genomex-mdi-tools//target-region
     resources:

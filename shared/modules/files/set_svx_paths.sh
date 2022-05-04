@@ -14,6 +14,9 @@ export COMPILE_PREFIX=$DATA_GENOME_PREFIX.compile
 export EXTRACT_GLOB_PREFIX=$TASK_DIR/*/*.$GENOME.extract # for multi-sample find
 export COMPILE_GLOB_PREFIX=$TASK_DIR/*/*.$GENOME.compile
 
+# coverage 
+export COVERAGE_PREFIX=$DATA_GENOME_PREFIX.coverage
+
 # find
 export FIND_PREFIX=$DATA_GENOME_PREFIX.find
 export FIND_GLOB_PREFIX=$TASK_DIR/*/*.$GENOME.find

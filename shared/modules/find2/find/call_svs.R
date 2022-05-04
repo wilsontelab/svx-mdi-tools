@@ -123,6 +123,12 @@ jxnMols[ambiguousJxnKeys, AMBIGUOUS := 1L]
 message("aggregating source molecule duplicates")
 setkey(jxnMols, sampleSvIndex)
 jxnMols <- do.call(rbind, mclapply(jxnMols[, unique(sampleSvIndex)], purgeDuplicateMolecules, mc.cores = env$N_CPU))
+if(env$MIN_COVERAGE > 1){
+    message("enforcing --min-coverage based on unique splits + gaps (not outer clips)")
+    setkey(jxnMols, svIndex)
+    x <- jxnMols[, .N, by = svIndex]
+    jxnMols <- jxnMols[x[N >= env$MIN_COVERAGE, svIndex]]
+}
 #=====================================================================================
 
 #=====================================================================================
@@ -144,6 +150,7 @@ flipGuidance <- jxnMols[IS_REFERENCE == 1, .(
     isInversion = side1 == side2, 
     flipNode    = ifelse(side1 == 'R', 1L, 2L)
 )]
+
 jxnMols <- rbind(jxnMols, do.call(rbind, getOuterClipEvidence())) # one sample at a time with internal parallel actions 
 unlink(refNodesFile)
 
@@ -175,6 +182,7 @@ loadFaidx()
 faidx_padding <- as.integer(MAX_MAX_TLEN * 1.2) # sufficient to contain any source molecule
 
 # initialize and store parsed target regions (if any)
+message("initializing target region parsing (if any)")
 loadTargetRegions()
 write.table(
     if(!is.null(targetRegions)) targetRegions$bed else "NA", 

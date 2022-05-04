@@ -48,7 +48,7 @@ use constant {
     OUT_POS_1 => 24,
     OUT_POS_2 => 25,
     #---------------
-    CLIP_NODE_N => 26, # temporary value added by compile_nodes for our use, not printed
+    CLIP_NODE_N => 26, # temporary value added by compile_nodes for our use, placed into jxnKey
     SAMPLE => 26       # added by this script to support sample-admixed SV finding
 };
 
@@ -73,7 +73,7 @@ my @samples = split(/\s+/, $ENV{SAMPLES});
 my %samples = map { $samples[$_] => $_ + 1 } 0..$#samples;
 my $sampleIndex = $samples{$sample};
 
-# load the reference nodes
+# load the reference nodes (two per split/gap SV junction)
 # the same node could possibly be claimed by more than one SV
 open my $inH, "<", $refNodesFile or die "could not open: $!";
 while (my $line = <$inH>){
@@ -92,6 +92,7 @@ while (my $line = <STDIN>){
 
     # assemble and print a complete molecule line from each outer clip node
     foreach my $svNode(@{$refNodes{$f[NODE_1]}}){
+        my @f_ = @f; # copy clip since we will modify it below, i.e., prevent those changes from impacting the next SV
         my ($svIndex, $refNodeN, $clipNode) = @$svNode;
         my @clipSplitNode = split(":", $clipNode); # the presumptive node if the clip had been aligned
         my $multiplier = $clipSplitNode[SIDE] eq 'L' ? -1 : 1;
@@ -100,32 +101,33 @@ while (my $line = <STDIN>){
         # put outer-clipped alignment node into the same node position as the SV reference node
         # thus, we are creating the junction inferred by the match of the clipped and reference nodes
         if($refNodeN == 1){ 
-            @node1 = @f[NODE_1..UMI_1];
+            @node1 = @f_[NODE_1..UMI_1];
             @node2 = @nullNode;
-            @splitNode1 = split(":", $f[NODE_1]);
+            @splitNode1 = split(":", $f_[NODE_1]);
             @splitNode2 = @clipSplitNode; # adjust other node with just enough information for processing and plotting
-            $f[OUT_POS_1] = $f[$alignedNodeOutPosI];
-            $f[OUT_POS_2] = $clipSplitNode[POS] + $multiplier * $f[CLIP_LEN_1];   
+            $f_[OUT_POS_1] = $f_[$alignedNodeOutPosI];
+            $f_[OUT_POS_2] = $clipSplitNode[POS] + $multiplier * $f_[CLIP_LEN_1];   
         } else {
             @node1 = @nullNode;
-            @node2 = @f[NODE_1..UMI_1];
+            @node2 = @f_[NODE_1..UMI_1];
             @splitNode1 = @clipSplitNode;
-            @splitNode2 = split(":", $f[NODE_1]);
-            $f[OUT_POS_1] = $clipSplitNode[POS] + $multiplier * $f[CLIP_LEN_1];   
-            $f[OUT_POS_2] = $f[$alignedNodeOutPosI];
+            @splitNode2 = split(":", $f_[NODE_1]);
+            $f_[OUT_POS_1] = $clipSplitNode[POS] + $multiplier * $f_[CLIP_LEN_1];   
+            $f_[OUT_POS_2] = $f_[$alignedNodeOutPosI];
         }
 
-        # print a molecule lines consistent with call_svs.R
+        # print a molecule line consistent with call_svs.R
         print join("\t", 
             @node1, 
-            @f[NODE_CLASS..OUT_POS_2],
+            @f_[NODE_CLASS..OUT_POS_2],
             $sample,
             @node2,
             0, # groupIndex, NA            
             @splitNode1, # chrom, side, pos
             @splitNode2,
             join(",", $node1[0], $node2[0]), # jxnName
-            join(":", $sampleIndex, @f[MOL_ID, JXN_N]), # jxnKey
+            # join(":", $sampleIndex, @f_[MOL_ID, JXN_N]), # jxnKey
+            join(":", $sampleIndex, @f_[MOL_ID, JXN_N, CLIP_NODE_N]), # jxnKey
             $svIndex, 
             join(":", $sampleIndex, $svIndex), # sampleSvIndex
             0, # AMBIGUOUS, NA

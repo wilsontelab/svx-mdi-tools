@@ -79,14 +79,6 @@ else
     TARGET_CLASS_FILTER=""
 fi
 
-# #-----------------------------------------------------------------
-# # load genome into shared memory for rapid reference sequence lookup
-# #-----------------------------------------------------------------
-# echo "loading $GENOME into RAM"
-# export SHM_GENOME_FASTA=$SHM_DIR_WRK/$GENOME.fa
-# cp $GENOME_FASTA     $SHM_GENOME_FASTA
-# cp $GENOME_FASTA.fai $SHM_GENOME_FASTA.fai
-
 #-----------------------------------------------------------------
 # break junctions into continuity groups and parse to called SVs
 echo "aggregating junction molecules into SV calls"
@@ -97,12 +89,8 @@ awk 'BEGIN{OFS="\t"}'$TARGET_CLASS_FILTER'{
     split($'$NODE_2', n2, ":");
     print n2[1]":"n2[2]":"n1[1]":"n1[2], n1[3], n2[3], $0;
 }' |
-################
-# head -n 1000 | 
 $SORT -k1,1 -k2,2n | 
 perl $ACTION_DIR/find/group_junctions.pl | 
-##################
-# awk '$NF<=2500' | 
 Rscript $ACTION_DIR/find/call_svs.R
 checkPipe
 

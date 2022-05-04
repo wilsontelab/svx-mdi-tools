@@ -5,6 +5,10 @@ use warnings;
 # update the TARGET_CLASS field to apply to the two nodes that form an SV _junction_
 # NB: this is distinct from the value in node files that describes the outer the ends of _molecules_
 
+# initialize reporting
+our $script = "collapse_junctions";
+our $error  = "$script error";
+
 # load dependencies
 my $perlUtilDir = "$ENV{GENOMEX_MODULES_DIR}/utilities/perl";
 map { require "$perlUtilDir/$_.pl" } qw(workflow);
@@ -12,9 +16,9 @@ map { require "$perlUtilDir/genome/$_.pl" } qw(chroms targets);
 
 # environment variables
 fillEnvVar(\our $DATA_NAME,        'DATA_NAME');
-fillEnvVar(\our $TARGETS_BED,      'TARGETS_BED');
-fillEnvVar(\our $REGION_PADDING,   'REGION_PADDING');
-fillEnvVar(\our $TARGET_SCALAR,    'TARGET_SCALAR', 1, 10); # use 10 bp target resolution for svCapture targets
+fillEnvVar(\our $TARGETS_BED,      'TARGETS_BED',    1, "");
+fillEnvVar(\our $REGION_PADDING,   'REGION_PADDING', 1, 0);
+fillEnvVar(\our $TARGET_SCALAR,    'TARGET_SCALAR',  1, 10); # use 10 bp target resolution for svCapture targets
 
 # constants
 use constant {

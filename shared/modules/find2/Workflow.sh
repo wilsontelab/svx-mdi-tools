@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # set derivative environment variables and file paths
-if [[ "$ON_TARGET" =  "" || "$ON_TARGET" =  "null" ]]; then export ON_TARGET=0; fi
+if [[ "$ON_TARGET" =  "" || "$ON_TARGET" =  "NA" || "$ON_TARGET" =  "null" ]]; then export ON_TARGET=0; fi
 export GENOMEX_MODULES_DIR=$SUITES_DIR/genomex-mdi-tools/shared/modules
 source $GENOMEX_MODULES_DIR/genome/set_genome_vars.sh
 source $MODULES_DIR/files/set_svx_paths.sh
