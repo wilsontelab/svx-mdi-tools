@@ -35,9 +35,9 @@ package:
             distributionsZip:
                 type: zip-file
                 file: $MANIFEST_PREFIX.distribution_plots.zip
-            coverageIndex:
-                type: tab-delimited
-                file: $COVERAGE_PREFIX.index.gz
+            coverageFile:
+                type: rds-file
+                file: $COVERAGE_PREFIX.rds
 container:
     supported: false    # set to true if you maintain a container registry for this pipeline [false]
     registry:  ghcr.io  # domain name of your OCI-compatible, oras-accessible, container registry [ghcr.io]

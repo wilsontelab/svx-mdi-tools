@@ -35,6 +35,9 @@ runWorkflowStep 1 find find/find_svs.sh
 # assemble a final sample manifest for the svx family of apps
 runWorkflowStep 2 manifest manifest/make_manifest.sh
 
+# for svWGS, assemble a composite bin coverage profile with normalization data
+runWorkflowStep 3 coverage coverage/assemble_coverage.sh
+
 # clean up
 rm -fr $TMP_DIR_WRK
 # rm -f  $EXTRACT_PREFIX.endpoints.*.gz
