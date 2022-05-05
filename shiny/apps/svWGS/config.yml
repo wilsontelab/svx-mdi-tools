@@ -29,6 +29,8 @@ uploadTypes:
                 required: true
             distributionsZip:
                 required: false
+            coverageIndex:
+                required: true
 #----------------------------------------------------------------------
 # labels and definitions for all sequential analysis steps shown in sidebar
 #----------------------------------------------------------------------
@@ -59,8 +61,8 @@ appSteps:
                     nLevels: 1:10
     # libraryQC:
     #     module: libraryQC
-    svExplorer:
-        module: svExplorer
+    svWGSExplorer:
+        module: svWGSExplorer
     # aggregatePlots:
     #     module: aggregatePlots
     # analyzeInsertions:

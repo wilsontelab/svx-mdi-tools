@@ -1,5 +1,5 @@
 # ----------------------------------------------------------------------
-# map of all base positions at and around a selected SV junction
+# analyze the base positions at and around a selected SV junction
 # supports consensus making, evidence plotting, etc.
 # ----------------------------------------------------------------------
 wsh <- 0.7 # for washed-out colors
@@ -21,7 +21,9 @@ CONSTANTS$junctionBaseColors <- list( # generally follow IGV base color conventi
 )
 CONSTANTS$clipBases <- c('a', 'c', 'g', 't', 'n')
 
+# ----------------------------------------------------------------------
 # convert an SV and its set of evidence molecules to a base map
+# ----------------------------------------------------------------------
 getJunctionMap <- function(x, clipMode = "Faded Colors"){
     req(x)
     req(x$sv$JXN_BASES != "*")
@@ -127,7 +129,9 @@ getJunctionMap <- function(x, clipMode = "Faded Colors"){
     )
 }
 
-# create an alignment betweeen junction molecules, their consensus and the genome reference
+# ----------------------------------------------------------------------
+# create an alignment betweeen junction molecules, their consensus, and the genome reference
+# ----------------------------------------------------------------------
 getJunctionAlignment <- function(map, charPerLine = 100, mode = "Evidence Consensus"){
     req(map)    
 

@@ -17,7 +17,8 @@ analyzeInsertionsServer <- function(id, options, bookmark, locks) {
 settings <- settingsServer( # display settings not stored in the UI, exposed by gear icon click
     id = 'settings',
     parentId = id,
-    templates = list(file.path(app$sources$suiteGlobalDir, "sv_filters.yml"), id),
+    templates = list(file.path(app$sources$suiteGlobalDir, "settings", "svx_filters.yml"), id), 
+        file.path(app$sources$suiteGlobalDir, "settings", "svCapture_filters.yml"),
     fade = FALSE
 )
 sampleSelector <- sampleSelectorServer( # selectors to pick one or more samples from a sample set
@@ -30,7 +31,7 @@ outcomes <- reactiveValues()
 # generate the list of all filtered SVs from all selected samples
 #----------------------------------------------------------------------
 filteredSvs <- reactive({
-    getFilteredSvs(settings, sampleSelector)
+    getFilteredSvs(settings, sampleSelector, isCapture = TRUE)
 })
 
 #----------------------------------------------------------------------

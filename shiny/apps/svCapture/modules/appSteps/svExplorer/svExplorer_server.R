@@ -18,7 +18,8 @@ settings <- settingsServer( # display settings not stored in the UI, exposed by 
     id = 'settings',
     parentId = id,
     templates = list(
-        file.path(app$sources$suiteGlobalDir, "sv_filters.yml"), 
+        file.path(app$sources$suiteGlobalDir, "settings", "svx_filters.yml"), 
+        file.path(app$sources$suiteGlobalDir, "settings", "svCapture_filters.yml"),
         id,
         file.path(app$sources$suiteGlobalDir, "external_svs.yml")
     ),
@@ -54,7 +55,9 @@ outcomes <- reactiveValues() # logical failure vectors keyed as [[sampleSet]]
 # parse filtered SVs and evidence molecules from selected sample(s) and SV(s)
 #----------------------------------------------------------------------
 # the set of SV junction passing the query filters
-filteredSvs <- reactive({ getFilteredSvs(settings, sampleSelector) })
+filteredSvs <- reactive({ 
+    getFilteredSvs(settings, sampleSelector, isCapture = TRUE) 
+})
 # the one working SV the user has clicked on
 selectedSv <- reactive({ 
     rowI <- svsTable$rows_selected()

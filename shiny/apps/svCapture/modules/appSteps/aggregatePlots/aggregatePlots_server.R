@@ -18,7 +18,8 @@ settings <- settingsServer( # display settings not stored in the UI, exposed by 
     id = 'settings',
     parentId = id,
     templates = list(
-        file.path(app$sources$suiteGlobalDir, "sv_filters.yml"),
+        file.path(app$sources$suiteGlobalDir, "settings", "svx_filters.yml"), 
+        file.path(app$sources$suiteGlobalDir, "settings", "svCapture_filters.yml"),
         id
     ),
     fade = FALSE
@@ -33,8 +34,8 @@ outcomes <- reactiveValues()
 # generate the list of all filtered SVs from all selected samples
 #----------------------------------------------------------------------
 targetClasses <- reactive({ SVX$targetClasses[[settings$SV_Filters()$Target_Class$value]] })
-filteredSvs <- reactive({
-    getFilteredSvs(settings, sampleSelector)
+filteredSvs <- reactive({ 
+    getFilteredSvs(settings, sampleSelector, isCapture = TRUE) 
 })
 
 #----------------------------------------------------------------------

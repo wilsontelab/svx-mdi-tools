@@ -1,0 +1,16 @@
+Capture_Filters:
+    Min_Read_Count:
+        type:   numericInput
+        value:  1
+        min:    1
+        max:    100
+        step:   1 
+    # SPACER_1:
+    #     type: spacer       
+    Target_Class:
+        type:   selectInput
+        choices:
+            - both on target
+            - one on target
+            - all SVs
+        value: both on target   

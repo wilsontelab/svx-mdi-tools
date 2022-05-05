@@ -1,0 +1,15 @@
+# settings that apply to the colored-bases molecule map
+Map_Settings:
+    Pixels_Per_Base:
+        type:   numericInput
+        value:  2
+        min:    1
+        max:    10
+        step:   1
+    Clip_Mode:
+        type: selectInput
+        choices:
+            - Faded Colors            
+            - Greyed Out
+            - Hidden
+        value: Faded Colors
