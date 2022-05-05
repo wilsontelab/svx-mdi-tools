@@ -29,7 +29,7 @@ uploadTypes:
                 required: true
             distributionsZip:
                 required: false
-            coverageIndex:
+            coverageFile:
                 required: true
 #----------------------------------------------------------------------
 # labels and definitions for all sequential analysis steps shown in sidebar

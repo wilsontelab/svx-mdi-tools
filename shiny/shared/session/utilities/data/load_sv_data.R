@@ -89,33 +89,23 @@ getSVMolecules <- function(sampleSelector, selectedSv){
 }
 
 # get the whole genome coverage map
-
-# TODO: need to do this by sample - it is a sample level map, not a project level map
-
 getGenomeCoverage <- function(sampleSelector){
     assignments <- sampleSelector$selectedAssignments() # Source_ID	Project	Sample_ID	Category1	Category2	uniqueId
     req(assignments)
     req(nrow(assignments) > 0)
-    startSpinner(session, 'getGenomeCoverage')    
-    x <- mapply(function(sourceId, sampleId){
-        coverageIndexFile <- loadPersistentFile(sourceId = sourceId, contentFileType = "coverageIndex")
-        metadataFile <- loadPersistentFile(sourceId = sourceId, contentFileType = "metadata")
 
-        chromNames <- strsplit(persistentCache[[metadataFile]]$data$CHROMS, "\\s+")[[1]]
-        chroms <- seq_along(chromNames)
-        names(chroms) <- chromNames
+    # merge up a single coverage file across all samples
+    startSpinner(session, 'getGenomeCoverage')      
+    x <- Reduce(merge, lapply(assignments[, unique(Source_ID)], function(sourceId){
+        coverageFile <- loadPersistentFile(sourceId = sourceId, contentFileType = "coverageFile")
+        persistentCache[[coverageFile]]$data
+    }))
 
-        list(
-            chroms = chroms,
-            depth = persistentCache[[coverageIndexFile]]$data
-        )
-
-    }, assignments$Source_ID, assignments$Sample_ID)
-#             Classes 'data.table' and 'data.frame':  46633 obs. of  4 variables:
-#  $ chromIndex: int  1 1 1 1 1 1 1 1 1 1 ...
-#  $ chunkIndex: int  0 1 2 3 4 5 6 7 8 9 ...
-#  $ cumNBreaks: int  0 0 0 0 0 0 0 0 0 0 ...
-#  $ coverage  : num  0 0 0 0 0 0 0 0 0 0 ...
+    # ensure that chromosomes display in the proper order
+    chromNames <- paste0("chr", c(1:90, "X", "Y", "M"))
+    chromIs <- seq_along(chromNames)
+    names(chromIs) <- chromNames
+    x[, chromI := chromIs[chrom]]
     stopSpinner(session, 'getGenomeCoverage')
-    x
+    x[order(chromI)]
 }

@@ -56,92 +56,41 @@ svPointColors <- getSvPointColors(filteredSvs, settings, isCapture = FALSE)
 #----------------------------------------------------------------------
 locationsPlot <- staticPlotBoxServer(
     'svLocations', 
+    points = TRUE,
     legend = TRUE,
     immediate = TRUE,
     create = function(...){
-
 #         # load targets bed, assumed to be the same for all sample sources
 #         assignments <- sampleSelector$selectedAssignments()
 #         req(assignments)
 #         req(nrow(assignments) > 0)
 #         sourceId <- assignments[, Source_ID[1]]
 
+        x <- getGenomeCoverage(sampleSelector)
 
-        depth <- getGenomeCoverage(sampleSelector)[[2]]
-        maxChunkIndices <- depth[, .(maxChunkIndex = max(chunkIndex)), by = chromIndex]
-        maxChunkIndices <- maxChunkIndices[order(chromIndex), c(0, cumsum(maxChunkIndex))]
+        x[, i := .I] # record I so that gaps will show on screen
+        x <- x[x$genmap >= 0.5 & x$excluded <= 65536 / 2]
 
-        plot(
-            depth$chunkIndex + maxChunkIndices[depth$chromIndex], 
-            depth$coverage, pch = "."
+        normalizedDepth <- x$NA12878 / x$genmap
+
+        modalCN <- 2
+
+        locationsPlot$initializeFrame(
+            xlab = "bin",
+            ylab = "log2(normalizedDepth)",
+            xlim = range(x$i),
+            ylim = log2(c(0.75, modalCN + 4) / modalCN)
         )
-        abline(v = maxChunkIndices)
 
+        verticals <- sapply(unique(x$chrom), function(chr) x[chrom == chr, max(i, na.rm = TRUE)])
+        abline(v = c(0, verticals), col = CONSTANTS$plotlyColors$grey)
+        abline(h = log2((modalCN + -modalCN:4) / modalCN), col = CONSTANTS$plotlyColors$grey)
+        abline(h = 0, col = CONSTANTS$plotlyColors$black)
 
-        # # initialize the data
-        # svFilters <- settings$SV_Filters()
-        # stepSettings <- settings$Plot_Settings()
-
-        # svs <- filteredSvs()[, .(TARGET_POS_1, TARGET_POS_2)]
-
-        # svs[, ':='(
-        #     size = abs(TARGET_POS_2 - TARGET_POS_1 + 1),
-        #     center = pmin(TARGET_POS_1, TARGET_POS_2) + abs(TARGET_POS_2 - TARGET_POS_1 + 1) / 2
-        # )]
-        # svPointColors <- svPointColors()
-
-#         # initialize the plot
-#         par(mar = c(4.1, 4.1, 0.1, 0.1))
-#         xlim <- c(min(targets$paddedStartI), max(targets$paddedEndI))
-#         ylim <- c(0, if(any(c("tt", "ta", "aa") %in% targetClasses())){
-#             targets[, max(paddedEndI)]
-#         } else {
-#             targets[, .(x = endI - paddedStartI + 1), by = regionName][, max(x)]
-#         })
-        
-#         plot(
-#             NA, NA, typ = "n",
-#             xlim = xlim,
-#             ylim = ylim,
-#             xlab = "SV Center (Mbp)",
-#             ylab = "SV Size (bp)",
-#             xaxs = "i", 
-#             yaxs = "i",
-#             xaxt = "n"
-#         )
-
-#         # shade and demarcate the capture target regions
-#         targets[, {
-#             xinc <- ylim[2] / 2
-#             polygon(
-#                 x = c(startI, startI + xinc, endI + xinc, endI, startI), 
-#                 y = c(ylim[1], ylim[2], ylim[2], ylim[1], ylim[1]), 
-#                 border = NA, col = "grey90"
-#             )
-#             polygon(
-#                 x = c(startI, startI - xinc, endI - xinc, endI, startI), 
-#                 y = c(ylim[1], ylim[2], ylim[2], ylim[1], ylim[1]), 
-#                 border = NA, col = "grey90"
-#             )
-#             mtext(paste(regionName, chrom, sep = ","), side = 1, line = 2.25, at = centerI, cex = 1)
-#             paddedSize <- paddedEndI - paddedStartI + 1
-#             unit <- paddedSize / 10
-#             at <- seq(unit, paddedSize - unit, unit)
-#             axis(1, at = paddedStartI + at, labels = round((start - (startI - paddedStartI) + at) / 1e6, 2))
-#         }, by = regionName]    
-#         for(i in unlist(targets[, .(paddedStartI, startI, endI, paddedEndI)])){
-#             abline(-i * 2,  2, col = "grey60")
-#             abline( i * 2, -2, col = "grey60")
-#         }
-
-#         # plot the SV points on top
-#         points(
-#             svs[, center], 
-#             svs[, size], 
-#             pch = 20, 
-#             cex = stepSettings$Point_Size$value,
-#             col = svPointColors$colors
-#         )
+        locationsPlot$addPoints(
+            x = x$i, 
+            y = log2(normalizedDepth / median(normalizedDepth))
+        )
 
 #         # add a legend
 #         pointColorLegend(stepSettings, locationsPlot$settings, svPointColors)
@@ -177,7 +126,7 @@ observe({
     if(!is.null(bm$outcomes)) {
         outcomes <<- listToReactiveValues(bm$outcomes)
         sampleSelector$setSelectedSamples(sampleSet, bm$outcomes$samples)
-        # locationsPlot$settings$replace(bm$outcomes$locationsPlotSettings)
+        locationsPlot$settings$replace(bm$outcomes$locationsPlotSettings)
         propertiesPlot$settings$replace(bm$outcomes$propertiesPlotSettings)
         mapSettings$replace(bm$outcomes$mapSettings)
         alignmentSettings$replace(bm$outcomes$alignmentSettings)
@@ -193,7 +142,7 @@ list(
     samples  = sampleSelector$selectedSamples,
     outcomes = reactive({ list(
         samples = sampleSelector$selectedSamples(),
-        # locationsPlotSettings  = locationsPlot$settings$all_(),
+        locationsPlotSettings  = locationsPlot$settings$all_(),
         propertiesPlotSettings = propertiesPlot$settings$all_(),
         mapSettings = mapSettings$all_(),
         alignmentSettings = alignmentSettings$all_()
