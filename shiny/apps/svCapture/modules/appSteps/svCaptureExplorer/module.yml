@@ -45,39 +45,15 @@ settings:
                 - duplex
                 - blue
             value: type
+        Property_Y_Axis:
+            type: selectInput
+            choices:
+                - SV size
+                - matched proper
+            value: SV size  
         Max_Microhomology:
             type: numericInput
             value:  40
             min:    10
             max:    100
             step:   10      
-mapSettings:
-    Map_Settings:
-        Pixels_Per_Base:
-            type:   numericInput
-            value:  2
-            min:    1
-            max:    10
-            step:   1
-        Clip_Mode:
-            type: selectInput
-            choices:
-                - Faded Colors            
-                - Greyed Out
-                - Hidden
-            value: Faded Colors
-alignmentSettings:
-    Alignment_Settings:
-        Bases_Per_Line:
-            type:   numericInput
-            value:  100
-            min:    10
-            max:    500
-            step:   10
-        Display_Mode:
-            type: selectInput
-            choices:
-                - Evidence Consensus            
-                - Reference Molecule
-                - All Molecules
-            value: Evidence Consensus

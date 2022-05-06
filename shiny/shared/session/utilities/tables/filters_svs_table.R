@@ -28,10 +28,13 @@ filteredSvsTableServer <- function(id, input, filteredSvs){
                 nGap = N_GAPS,
                 nClip = N_OUTER_CLIPS,
                 nDpx = N_DUPLEX_GS,
+                fPrp = round(SHARED_PROPER / 2, 2),
                 #---------------
                 count = STRAND_COUNT_GS,
                 count1 = STRAND_COUNT1,
                 count2 = STRAND_COUNT2,
+                #---------------
+                mapQ = MAX_MAPQ,
                 #---------------
                 chr1 = CHROM_1,
                 pos1 = POS_1,

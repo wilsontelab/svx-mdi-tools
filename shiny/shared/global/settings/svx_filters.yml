@@ -1,3 +1,4 @@
+# all default values are ~unfiltered, i.e, all SVs
 SV_Filters:
     Min_SV_Size:
         type:   numericInput
@@ -37,12 +38,21 @@ SV_Filters:
         step:   1  
     # SPACER_1:
     #     type: spacer   
+    Include_Clips_In_Total:
+        type:   checkboxInput
+        value:  false
     Min_Split_Reads:
         type:   numericInput
         value:  0
         min:    0
         max:    1000
         step:   1     
+    Min_Map_Quality:
+        type:   numericInput
+        value:  0
+        min:    0
+        max:    60
+        step:   5    
     SV_Type:
         type:   checkboxGroupInput
         choices:
@@ -54,4 +64,5 @@ SV_Filters:
             - Del
             - Dup
             - Inv
+            - Trans
         inline: TRUE

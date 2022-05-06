@@ -1,3 +1,4 @@
+# all default values are ~unfiltered, i.e, all SVs
 Capture_Filters:
     Min_Read_Count:
         type:   numericInput
@@ -6,11 +7,17 @@ Capture_Filters:
         max:    100
         step:   1 
     # SPACER_1:
-    #     type: spacer       
+    #     type: spacer   
+    Max_Frac_Shared_Proper:
+        type:   numericInput
+        value:  1
+        min:    0
+        max:    1
+        step:   0.05         
     Target_Class:
         type:   selectInput
         choices:
             - both on target
             - one on target
             - all SVs
-        value: both on target   
+        value: one on target   

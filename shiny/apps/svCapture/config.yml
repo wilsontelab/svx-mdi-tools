@@ -61,8 +61,8 @@ appSteps:
                     nLevels: 1:10
     libraryQC:
         module: libraryQC
-    svExplorer:
-        module: svExplorer
+    svCaptureExplorer:
+        module: svCaptureExplorer
     aggregatePlots:
         module: aggregatePlots
     analyzeInsertions:

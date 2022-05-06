@@ -26,10 +26,26 @@ getFilteredSvs <- function(settings, sampleSelector, isCapture = FALSE){
               SV_SIZE <= svFilters$Max_SV_Size$value)) &
             N_SAMPLES >= svFilters$Min_Samples_With_SV$value &
             N_SAMPLES <= svFilters$Max_Samples_With_SV$value &
-            N_TOTAL >= svFilters$Min_Source_Molecules$value &
-            N_TOTAL <= svFilters$Max_Source_Molecules$value & 
             N_SPLITS >= svFilters$Min_Split_Reads$value
+        ]        
+        nTotal <- if(svFilters$Include_Clips_In_Total$value) x$N_TOTAL else x$N_SPLITS + x$N_GAPS
+        x <- x[
+            nTotal >= svFilters$Min_Source_Molecules$value &
+            nTotal <= svFilters$Max_Source_Molecules$value            
         ]
+        minMapQ <- svFilters$Min_Map_Quality$value # at least one molecule must pass Min_Map_Quality on both sides 
+        mapQ <- mapply(function(MAPQ_1, MAPQ_2){
+            mapQ1 <- as.integer(strsplit(MAPQ_1, ",")[[1]])
+            mapQ2 <- as.integer(strsplit(MAPQ_2, ",")[[1]])
+            molPassed <- mapQ1 >= minMapQ & mapQ2 >= minMapQ
+            svPassed <- any(molPassed)
+            c(
+                if(svPassed) max(mapQ1[molPassed] + mapQ2[molPassed]) else NA,
+                svPassed + 0L 
+            )
+        }, x$MAPQ_1, x$MAPQ_2, SIMPLIFY = TRUE)
+        x[, MAX_MAPQ := mapQ[1, ] ]  
+        x <- x[ mapQ[2, ] == 1 ]
 
         # apply capture filters, if applicable
         if(isCapture){
@@ -37,7 +53,8 @@ getFilteredSvs <- function(settings, sampleSelector, isCapture = FALSE){
             targetClasses <- SVX$targetClasses[[captureFilters$Target_Class$value]]
             x <- x[
                 TARGET_CLASS %in% targetClasses &
-                STRAND_COUNT >= captureFilters$Min_Read_Count$value 
+                STRAND_COUNT >= captureFilters$Min_Read_Count$value & 
+                SHARED_PROPER / 2 <= captureFilters$Max_Frac_Shared_Proper$value
             ]  
         }
 
@@ -54,7 +71,7 @@ getFilteredSvs <- function(settings, sampleSelector, isCapture = FALSE){
             x[, matchesSamples := TRUE]
         }   
         x[, PROJECT_SAMPLES := lapply(strsplit(SAMPLES, ","), function(x) paste(project, x, sep = ":"))]  
-        x[matchesSamples == TRUE, .SD, .SDcols = c(names(SVX$find$structural_variants), "PROJECT_SAMPLES") ]
+        x[matchesSamples == TRUE, .SD, .SDcols = c(names(SVX$find$structural_variants), "PROJECT_SAMPLES", "MAX_MAPQ") ]
     }))
     stopSpinner(session, 'getFilteredSvs')
     x[sample.int(.N)] # randomize the list for optimized plotting
