@@ -3,6 +3,7 @@
 # expects:
 #     source $MODULES_DIR/scan/set_genome_vars.sh
 #     source $MODULES_DIR/scan/set_alignment_vars.sh
+#     source $MODULES_DIR/utilities/shell/create_temp_dir.sh
 #     extract/extract_nodes.sh
 #     $MIN_CLIP
 # input:
@@ -135,8 +136,5 @@ $MASK_NODES |
 $PIGZ |
 $SLURP_OUT $COMPILE_PREFIX.outer_clips.gz
 checkPipe
-
-# clean up
-rm -r $TMP_DIR_WRK
 
 echo "done"

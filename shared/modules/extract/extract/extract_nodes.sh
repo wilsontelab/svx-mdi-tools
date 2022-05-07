@@ -39,7 +39,4 @@ bedtools groupby -g 1 -c 2,3,4,5,6 -o sum |
 Rscript $ACTION_DIR/extract/insertSizes.R
 checkPipe
 
-# clean up
-rm -rf $TMP_DIR_WRK/*
-
 echo "done"

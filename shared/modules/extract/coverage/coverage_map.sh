@@ -3,6 +3,7 @@
 # expects:
 #     source $GENOMEX_MODULES_DIR/scan/set_genome_vars.sh
 #     source $GENOMEX_MODULES_DIR/scan/set_alignment_vars.sh
+#     source $MODULES_DIR/utilities/shell/create_temp_dir.sh
 #     extract/extract_nodes.sh
 # input:
 #     $EXTRACT_PREFIX.spans.*.gz
@@ -27,7 +28,6 @@ perl $ACTION_DIR/coverage/base_coverage.pl
 checkPipe
 
 # clean up
-rm -rf $TMP_DIR_WRK/*
 # rm -rf $EXTRACT_PREFIX.spans.*.gz
 
 echo "done"
