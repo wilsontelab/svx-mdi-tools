@@ -166,6 +166,8 @@ find$structural_variants <- list( # FOR REFERENCE ONLY; last columns are sample-
     #---------------
     'GEN_REF_1' =  'character',
     'GEN_REF_2' =  'character',
+    'GEN_COV_1' =  'character',
+    'GEN_COV_2' =  'character',
     #---------------
     'TARGET_REGION' =  'character',
     'TARGET_POS_1'  =  'integer',

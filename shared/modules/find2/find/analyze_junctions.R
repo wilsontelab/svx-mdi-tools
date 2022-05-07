@@ -160,6 +160,8 @@ characterizeSvJunction <- function(svIdx){
         #-------------
         GEN_REF_1       = getRefSeq_padded(revChromIndex[[chrom1[refMolI]]], pos1[refMolI], faidx_padding),
         GEN_REF_2       = getRefSeq_padded(revChromIndex[[chrom2[refMolI]]], pos2[refMolI], faidx_padding),
+        GEN_COV_1       =  '', # placeholder for now
+        GEN_COV_2       =  '',
         #-------------
         TARGET_REGION = paste(
             sort(unique(c(
