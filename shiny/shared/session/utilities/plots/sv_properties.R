@@ -13,9 +13,11 @@ svPropertiesPlotServer <- function(settings, svPointColors, filteredSvs){
         'svProperties', 
         legend = TRUE,
         immediate = TRUE,
+        template = read_yaml(file.path(app$sources$suiteGlobalDir, "settings", "properties_plot.yml")),
         create = function(...){
             svFilters <- settings$SV_Filters()
-            stepSettings <- settings$Plot_Settings()  
+            stepSettings <- settings$Plot_Settings()
+            axisSettings <- plot$settings$Axis_Settings()
             svPointColors <- svPointColors()        
             svs <- filteredSvs()[, .(
                 plotted = JXN_BASES != "*", # MICROHOM_LEN meaningless if not a sequenced junction
@@ -30,15 +32,15 @@ svPropertiesPlotServer <- function(settings, svPointColors, filteredSvs){
                 SV_SIZE := rnorm(.N, svFilters$Max_SV_Size$value, svFilters$Max_SV_Size$value / 10)
             ]
             par(mar = c(4.1, 4.1, 0.1, 1.1))
-            maxX <- stepSettings$Max_Microhomology$value
+            maxX <- axisSettings$Max_Microhomology$value
             xlim <- c(-maxX, maxX)
-            yType <- if(stepSettings$Property_Y_Axis$value == "SV size") list(
+            yType <- if(axisSettings$Property_Y_Axis$value == "SV size") list(
                 ylab = "log10 SV Size (bp)",
                 ylim = log10(c(max(svFilters$Min_SV_Size$value, 1), svFilters$Max_SV_Size$value * 1.5)),
                 yval = log10(svs[plotted == TRUE, SV_SIZE])
             ) else list(
                 ylab = "Frac. Ends Shared with Proper",
-                ylim = c(0, 1.05),
+                ylim = c(-0.05, 1.05),
                 yval = svs[plotted == TRUE, jitter(SHARED_PROPER / 2, amount = 0.05)]
             )
             plot(

@@ -44,16 +44,4 @@ settings:
                 - target
                 - duplex
                 - blue
-            value: type
-        Property_Y_Axis:
-            type: selectInput
-            choices:
-                - SV size
-                - matched proper
-            value: SV size  
-        Max_Microhomology:
-            type: numericInput
-            value:  40
-            min:    10
-            max:    100
-            step:   10      
+            value: type    

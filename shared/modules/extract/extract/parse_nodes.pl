@@ -90,7 +90,7 @@ my $gapDelLimit =  2 * $MAX_TLEN - 2 * $READ_LEN; # these are conservative, i.e.
 my $gapDupLimit = -2 * $READ_LEN;
 my $collapseStrands = ($LIBRARY_TYPE eq 'TruSeq'); # otherwise, Nextera, where same signatures on opposite strands are unique source molecules
 my $isFR = !$IS_COLLATED;
-my @outerPos;
+my (@outerPos, @outerPosWrk);
 
 #===================================================================================================
 # top level molecule parsers, called by main thread loop
@@ -262,12 +262,15 @@ sub printJunction {
     my ($read1, $read2, $umi1, $umi2, $isOuterClip1, $isOuterClip2) =
         (READ1, READ2, UMI1, UMI2, IS_OUTER_CLIP1, IS_OUTER_CLIP2);
     my $isCanonical = isCanonicalStrand($jxnType, $nodeClass, @alns);   
-    if(!$isCanonical){
+    if($isCanonical){
+        @outerPosWrk = @outerPos;
+    } else {
+        @outerPosWrk = reverse @outerPos;
         ($read1, $read2, $umi1, $umi2, $isOuterClip1, $isOuterClip2) =
         (READ2, READ1, UMI2, UMI1, IS_OUTER_CLIP2, IS_OUTER_CLIP1);
         $alns[$read1][FLAG] ^= (_REVERSE + _FIRST_IN_PAIR + _SECOND_IN_PAIR);
-        $alns[$read2][FLAG] ^= (_REVERSE + _FIRST_IN_PAIR + _SECOND_IN_PAIR);    
-    }    
+        $alns[$read2][FLAG] ^= (_REVERSE + _FIRST_IN_PAIR + _SECOND_IN_PAIR);            
+    }
 
     # undo the RC action that aligner did to one of the pair of our inversion alignments
     # thus, both SEQs always exit relative to the source molecule on the canonical strand
@@ -402,7 +405,7 @@ sub printOuterEndpoints {
 
     # generate two identifying outer positions per source molecule
     # these are what the node position would have been had any outer clip been aligned
-    @outerPos = (
+    @outerPosWrk = @outerPos = (
         $$outData1[_POS] + ($$outData1[_SIDE] eq 'L' ? 1 : -1) * $$outData1[_CLIP],
         $$outData2[_POS] + ($$outData2[_SIDE] eq 'L' ? 1 : -1) * $$outData2[_CLIP],
     );
@@ -480,7 +483,7 @@ sub printNode {
         $nodeClass,                                  # node-level data
         $jxnType, $jxnN,                             # edge/junction-level data 
         @mol[MOL_ID, IS_MERGED..SHARED_PROPER],      # molecule-level data
-        @outerPos # first OUT_POS matches the first clip node in the file as written
+        @outerPosWrk # first OUT_POS matches the first clip node in the file as written
     ), "\n";
 }
 #===================================================================================================

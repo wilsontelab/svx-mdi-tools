@@ -111,7 +111,7 @@ svsTable <- filteredSvsTableServer(id, input, filteredSvs)
 # expanded views of the selected junction
 # ----------------------------------------------------------------------
 junctionMapServer(output, junctionMap, mapSettings)
-junctionNodesPlotServer(svMols)
+nodesPlot <- junctionNodesPlotServer(svMols)
 junctionAlignmentServer(output, junctionMap, alignmentSettings)
 
 # ----------------------------------------------------------------------
@@ -129,6 +129,7 @@ observe({
         locationsPlot$settings$replace(bm$outcomes$locationsPlotSettings)
         propertiesPlot$settings$replace(bm$outcomes$propertiesPlotSettings)
         mapSettings$replace(bm$outcomes$mapSettings)
+        nodesPlot$settings$replace(bm$outcomes$nodesPlotSettings)
         alignmentSettings$replace(bm$outcomes$alignmentSettings)
     }
 })
@@ -145,6 +146,7 @@ list(
         locationsPlotSettings  = locationsPlot$settings$all_(),
         propertiesPlotSettings = propertiesPlot$settings$all_(),
         mapSettings = mapSettings$all_(),
+        nodesPlotSettings = nodesPlot$settings$all_(),
         alignmentSettings = alignmentSettings$all_()
     ) }),
     isReady  = reactive({ getStepReadiness(options$source, outcomes) })

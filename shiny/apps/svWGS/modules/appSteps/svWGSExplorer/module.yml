@@ -41,13 +41,5 @@ settings:
             choices:
                 - type
                 - sample
-                - target
-                - duplex
                 - blue
-            value: type
-        Max_Microhomology:
-            type: numericInput
-            value:  40
-            min:    10
-            max:    100
-            step:   10      
+            value: type 

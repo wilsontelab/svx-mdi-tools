@@ -203,204 +203,8 @@ svsTable <- filteredSvsTableServer(id, input, filteredSvs)
 # expanded views of the selected junction
 # ----------------------------------------------------------------------
 junctionMapServer(output, junctionMap, mapSettings)
-junctionNodesPlotServer(svMols)
+nodesPlot <- junctionNodesPlotServer(svMols)
 junctionAlignmentServer(output, junctionMap, alignmentSettings)
-
-
-# #----------------------------------------------------------------------
-# # SV junction properties plot
-# #----------------------------------------------------------------------
-# propertiesPlot <- staticPlotBoxServer(
-#     'svProperties', 
-#     legend = TRUE,
-#     immediate = TRUE,
-#     create = function(...){
-#         filters <- settings$SV_Filters()
-#         stepSettings <- settings$Plot_Settings()   
-#         svPointColors <- svPointColors()        
-#         svs <- filteredSvs()[, .(
-#             plotted = JXN_BASES != "*", # MICROHOM_LEN meaningless if not a sequenced junction
-#             color = svPointColors$colors,
-#             MICROHOM_LEN, 
-#             SV_SIZE,
-#             JXN_TYPE
-#         )]
-#         svs[JXN_TYPE == "T", SV_SIZE := rnorm(.N, filters$Max_SV_Size$value, filters$Max_SV_Size$value / 10)]
-#         par(mar = c(4.1, 4.1, 0.1, 1.1))
-#         maxX <- stepSettings$Max_Microhomology$value
-#         xlim <- c(-maxX, maxX)
-#         ylim <- log10(c(max(filters$Min_SV_Size$value, 1), filters$Max_SV_Size$value * 1.5))
-#         plot(
-#             NA, 
-#             NA,
-#             typ = "n",
-#             xlim = xlim,
-#             ylim = ylim,
-#             xlab = "Microhomology Length (bp)",
-#             ylab = "log10 SV Size (bp)"
-#         )
-#         abline(h = seq(0, 10, 1), col = "grey60")
-#         abline(v = seq(-100, 100, 10), col = "grey60")
-#         abline(v = 0)
-#         points(
-#             jitter(svs[plotted == TRUE, MICROHOM_LEN], amount = 0.5), # spread points from (i-0.5):(i+0.5)
-#             log10( svs[plotted == TRUE, SV_SIZE]), 
-#             pch = 20, 
-#             cex = stepSettings$Point_Size$value,
-#             col = svs[plotted == TRUE, color]
-#         )
-
-#         # add text to denote microhomology vs. insertions
-#         y <- ylim[1] + (ylim[2] - ylim[1]) * 0.035
-#         # text(xlim[1], y, "insertions", pos = 4, offset = 0.05, cex = 0.95)
-#         # text(xlim[2], y, expression(paste(mu, "homology")), pos = 2, offset = 0.05, cex = 0.95)
-#         mtext("insertion", side = 1, line = 2, at = xlim[1], adj = 0, cex = 0.95)
-#         mtext(expression(paste(mu, "homology")), side = 1, line = 2, at = xlim[2], adj = 1, cex = 0.95)
-
-#         # add a legend
-#         pointColorLegend(stepSettings, propertiesPlot$settings, svPointColors)
-#     }
-# )
-
-# # ----------------------------------------------------------------------
-# # summary table of all filtered SVs from all selected samples
-# # ----------------------------------------------------------------------
-# invalidateTable <- reactiveVal(0)
-# svsTable <- bufferedTableServer(
-#     id = 'svsTable',
-#     parentId = id,
-#     parentInput = input,
-#     selection = 'single',
-#     tableData = reactive({
-#         invalidateTable()
-#         setkey(SVX$jxnTypes, code)
-#         filteredSvs()[, .(
-#             svId = SV_ID,
-#             #---------------
-#             type = SVX$jxnTypes[JXN_TYPE, name],
-#             class = TARGET_CLASS,
-#             target = TARGET_REGION,
-#             #---------------
-#             nSmp = N_SAMPLES,
-#             nTot = N_TOTAL,
-#             nSplit = N_SPLITS,            
-#             nGap = N_GAPS,
-#             nClip = N_OUTER_CLIPS,
-#             nDpx = N_DUPLEX_GS,
-#             #---------------
-#             count = STRAND_COUNT_GS,
-#             count1 = STRAND_COUNT1,
-#             count2 = STRAND_COUNT2,
-#             #---------------
-#             chr1 = CHROM_1,
-#             pos1 = POS_1,
-#             chr2 = CHROM_2,
-#             pos2 = POS_2,
-#             #---------------
-#             svSize = SV_SIZE,
-#             uHom = MICROHOM_LEN,
-#             jxnSeq = JXN_BASES
-#         )]
-#     })
-#     # 'SHARED_PROPER' =  'double',
-#     # 'SHARED_PROPER_GS'  =  'double',
-#     # #---------------
-#     # 'N_AMBIGUOUS'   =  'integer',
-#     # 'N_DOWNSAMPLED' =  'integer',
-#     # 'N_COLLAPSED'   =  'integer',
-#     #     lm[, ':='(
-#     #         FAILED = tableCheckboxes(ns('libraryFailed'), failed ),
-#     #         Failed = failed,
-#     #         nReadPairs = commify(nReadPairs),
-#     #         nSourceMolecules = commify(nSourceMolecules),
-#     #         onTargetCoverage = commify(round(onTargetCoverage, 0)),
-#     #         offTargetCoverage = round(offTargetCoverage, 3),
-#     #         enrichment = commify(round(enrichment, 0)),
-#     #         efficiency = round(efficiency, 3)
-#     #     )]
-#     # editBoxes = list( # handle the libraryFailed checkbox
-#     #     libraryFailed = list(
-#     #         type = 'checkbox',
-#     #         boxColumn = 1,
-#     #         rawColumn = 2,
-#     #         handler = function(checked){ # enter the new failure value into our outcomes
-#     #             ss <- sampleSet$input$sampleSet
-#     #             failed <- outcomes[[ss]]
-#     #             failed[checked$selectedRow] <- checked$newValue
-#     #             outcomes[[ss]] <- failed # must replace the entire value for outcomes invalidation
-#     #             checked
-#     #         }
-#     #     )
-#     # )
-# )
-
-# # ----------------------------------------------------------------------
-# # plot of outer endpoints of all molecules matching the selected junction
-# # ----------------------------------------------------------------------
-# junctionNodesPlot <- staticPlotBoxServer(
-#     'junctionNodes', 
-#     legend = TRUE,
-#     points = TRUE,
-#     margins = TRUE,
-#     immediate = TRUE,
-#     create = function(...){
-#         x <- svMols()
-#         req(x)
-#         xAllowedLim <- x$sv$POS_1 + c(-1, 1) * x$maxTLen
-#         yAllowedLim <- x$sv$POS_2 + c(-1, 1) * x$maxTLen
-#         x$mols <- x$mols[ # in case molecule has >1 jxn; only plot this junction
-#             OUT_POS1 %between% xAllowedLim & 
-#             OUT_POS2 %between% yAllowedLim
-#         ]
-#         junctionNodesPlot$initializeFrame(
-#             xlim = range(c(x$sv$POS_1, x$mols$OUT_POS1)) / 1e6,
-#             ylim = range(c(x$sv$POS_2, x$mols$OUT_POS2)) / 1e6,
-#             xlab = "Junction Coordinate 1 (Mbp)",
-#             ylab = "Junction Coordinate 2 (Mbp)"
-#         )
-#         abline(h = x$sv$POS_2 / 1e6) # crosshairs at the junction point
-#         abline(v = x$sv$POS_1 / 1e6)   
-#         junctionNodesPlot$addPoints(
-#             x = c(x$sv$POS_1, x$mols$OUT_POS1) / 1e6, 
-#             y = c(x$sv$POS_2, x$mols$OUT_POS2) / 1e6,
-#             col = c(
-#                 CONSTANTS$plotlyColors$red, # red dot at the junction point
-#                 SVX$getMolColors(x$mols$NODE_CLASS)
-#             )
-#         )
-#         junctionNodesPlot$addLegend(
-#             legend = names(SVX$nodeClassColors),
-#             col   = unlist(SVX$nodeClassColors)
-#         )
-#     }
-# )
-
-# # ----------------------------------------------------------------------
-# # colored-image representation of all molecules supporting and SV junction
-# # ----------------------------------------------------------------------
-# output$junctionMapImage <- renderImage({
-#     map <- junctionMap()
-#     req(map)
-#     pngFile <- file.path(sessionDirectory, "junctionMapImage.png")
-#     pixels <- mapSettings$get("Map_Settings", "Pixels_Per_Base")
-#     suppressWarnings(
-#         imager::as.cimg(map$image[map$usedPos, , ]) %>% 
-#         expandImg(h = pixels, v = pixels) %>%
-#         imager::save.image(pngFile)        
-#     )
-#     list(src = pngFile)
-# }, deleteFile = FALSE)
-
-# # ----------------------------------------------------------------------
-# # text representation of all an SV junction consensus sequence vs. genome references
-# # ----------------------------------------------------------------------
-# output$junctionAlignment <- renderText({
-#     getJunctionAlignment(
-#         junctionMap(),
-#         alignmentSettings$get("Alignment_Settings", "Bases_Per_Line"),
-#         alignmentSettings$get("Alignment_Settings", "Display_Mode")
-#     )
-# })
 
 # ----------------------------------------------------------------------
 # define bookmarking actions
@@ -417,6 +221,7 @@ observe({
         locationsPlot$settings$replace(bm$outcomes$locationsPlotSettings)
         propertiesPlot$settings$replace(bm$outcomes$propertiesPlotSettings)
         mapSettings$replace(bm$outcomes$mapSettings)
+        nodesPlot$settings$replace(bm$outcomes$nodesPlotSettings)
         alignmentSettings$replace(bm$outcomes$alignmentSettings)
     }
 })
@@ -433,6 +238,7 @@ list(
         locationsPlotSettings  = locationsPlot$settings$all_(),
         propertiesPlotSettings = propertiesPlot$settings$all_(),
         mapSettings = mapSettings$all_(),
+        nodesPlotSettings = nodesPlot$settings$all_(),
         alignmentSettings = alignmentSettings$all_()
     ) }),
     isReady  = reactive({ getStepReadiness(options$source, outcomes) })
