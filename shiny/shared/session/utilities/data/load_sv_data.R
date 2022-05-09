@@ -3,14 +3,18 @@
 #----------------------------------------------------------------------
 
 # get the data.table of called SVs matching the current filter set
-getFilteredSvs <- function(settings, sampleSelector, isCapture = FALSE){
+getFilteredSvs <- function(settings, sampleSelector, 
+                           isCapture = FALSE, targetClasses = NULL, noSize = FALSE){
     assignments <- sampleSelector$selectedAssignments() # Source_ID	Project	Sample_ID	Category1	Category2	uniqueId
     req(assignments)
     req(nrow(assignments) > 0)
     startSpinner(session, 'getFilteredSvs')
     svFilters <- settings$SV_Filters()
+    if(noSize) {
+        svFilters$Min_SV_Size$value <- 0
+        svFilters$Max_SV_Size$value <- 1e9
+    }
     samples <- sampleSelector$selectedSamples()
-    isAllSamples <- all(sampleSelector$allSamples() %in% samples)
     setkey(SVX$jxnTypes, name)
     x <- do.call(rbind, lapply(assignments[, unique(Source_ID)], function(sourceId){
         project <- assignments[Source_ID == sourceId][1, Project]
@@ -27,7 +31,7 @@ getFilteredSvs <- function(settings, sampleSelector, isCapture = FALSE){
             N_SAMPLES >= svFilters$Min_Samples_With_SV$value &
             N_SAMPLES <= svFilters$Max_Samples_With_SV$value &
             N_SPLITS >= svFilters$Min_Split_Reads$value
-        ]        
+        ]   
         nTotal <- if(svFilters$Include_Clips_In_Total$value) x$N_TOTAL else x$N_SPLITS + x$N_GAPS
         x <- x[
             nTotal >= svFilters$Min_Source_Molecules$value &
@@ -49,27 +53,27 @@ getFilteredSvs <- function(settings, sampleSelector, isCapture = FALSE){
 
         # apply capture filters, if applicable
         if(isCapture){
-            captureFilters <- if(isCapture) settings$Capture_Filters() else list()
-            targetClasses <- SVX$targetClasses[[captureFilters$Target_Class$value]]
+            captureFilters <- settings$Capture_Filters()
+            if(is.null(targetClasses)) targetClasses <- SVX$targetClasses[[captureFilters$Target_Class$value]]
             x <- x[
                 TARGET_CLASS %in% targetClasses &
                 STRAND_COUNT >= captureFilters$Min_Read_Count$value & 
-                SHARED_PROPER / 2 <= captureFilters$Max_Frac_Shared_Proper$value
+                SHARED_PROPER / 2 <= captureFilters$Max_Frac_Shared_Proper$value &
+                switch(
+                    captureFilters$Duplex_Filter$value,
+                    allSVs = TRUE,
+                    duplexOnly = N_DUPLEX_GS > 0,
+                    singleStrandOnly = N_DUPLEX_GS == 0
+                )
             ]  
         }
 
-        # apply sample filters, unless showing all samples
-        if(!isAllSamples){
-            x[, matchesSamples := FALSE]
-            for(sample in samples){
-                d <- strsplit(sample, ":")[[1]]
-                if(d[1] == project) x[, 
-                    matchesSamples := matchesSamples | x[[d[2]]] > 0
-                ]
-            }
-        } else {
-            x[, matchesSamples := TRUE]
-        }   
+        # apply sample filters
+        x[, matchesSamples := FALSE]
+        for(sample in samples){
+            d <- strsplit(sample, ":")[[1]]
+            if(d[1] == project) x[,  matchesSamples := matchesSamples | x[[d[2]]] > 0]
+        }  
         x[, PROJECT_SAMPLES := lapply(strsplit(SAMPLES, ","), function(x) paste(project, x, sep = ":"))]  
         x[matchesSamples == TRUE, .SD, .SDcols = c(names(SVX$find$structural_variants), "PROJECT_SAMPLES", "MAX_MAPQ") ]
     }))

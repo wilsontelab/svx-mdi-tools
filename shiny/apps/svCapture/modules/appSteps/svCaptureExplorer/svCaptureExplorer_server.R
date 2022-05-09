@@ -78,6 +78,8 @@ externalSvs <- reactive({
 #----------------------------------------------------------------------
 locationsPlot <- staticPlotBoxServer(
     'svLocations', 
+    title = TRUE,
+    margins = TRUE,
     legend = TRUE,
     immediate = TRUE,
     create = function(...){
@@ -108,17 +110,15 @@ locationsPlot <- staticPlotBoxServer(
         } else {
             targets[, .(x = endI - paddedStartI + 1), by = regionName][, max(x)]
         })
-        plot(
-            NA, NA, typ = "n",
+        locationsPlot$initializeFrame(
             xlim = xlim,
             ylim = ylim,
             xlab = "SV Center (Mbp)",
             ylab = "SV Size (bp)",
             xaxs = "i", 
             yaxs = "i",
-            xaxt = "n"
+            xaxt = "n"              
         )
-
         # shade and demarcate the capture target regions
         targets[, {
             xinc <- ylim[2] / 2
@@ -132,7 +132,7 @@ locationsPlot <- staticPlotBoxServer(
                 y = c(ylim[1], ylim[2], ylim[2], ylim[1], ylim[1]), 
                 border = NA, col = "grey90"
             )
-            mtext(paste(regionName, chrom, sep = ","), side = 1, line = 2.25, at = centerI, cex = 1)
+            mtext(paste(regionName, chrom, sep = ","), side = 1, line = 2, at = centerI, cex = 1)
             paddedSize <- paddedEndI - paddedStartI + 1
             unit <- paddedSize / 10
             at <- seq(unit, paddedSize - unit, unit)
@@ -144,9 +144,9 @@ locationsPlot <- staticPlotBoxServer(
         }
 
         # plot the SV points on top
-        points(
-            svs[, centerI], 
-            svs[, size], 
+        locationsPlot$addPoints(
+            x = svs[, centerI], 
+            y = svs[, size], 
             pch = 20, 
             cex = stepSettings$Point_Size$value,
             col = svPointColors$colors
@@ -161,9 +161,9 @@ locationsPlot <- staticPlotBoxServer(
                 targets[, which.min(ifelse(chrom == svChrom, abs(center - svCenter), 1e9))]
             }, externalSvs$chrom, externalSvs$center)
             externalSvs[, centerI := center - targets[targetIs[.I], start - startI]] # convert to I coordinates
-            points(
-                externalSvs[, centerI], 
-                externalSvs[, size], 
+            locationsPlot$addPoints(
+                x = externalSvs[, centerI], 
+                y = externalSvs[, size], 
                 pch = 1, 
                 cex = 2, # stepSettings$Point_Size$value,
                 col = CONSTANTS$plotlyColors$black
@@ -175,9 +175,9 @@ locationsPlot <- staticPlotBoxServer(
                 size = abs(TARGET_POS_2 - TARGET_POS_1 + 1),
                 centerI = pmin(TARGET_POS_1, TARGET_POS_2) + abs(TARGET_POS_2 - TARGET_POS_1 + 1) / 2
             )]
-            points(
-                selectedSv[, centerI], 
-                selectedSv[, size], 
+            locationsPlot$addPoints(
+                x = selectedSv[, centerI], 
+                y = selectedSv[, size], 
                 pch = 1, 
                 cex = 2, # stepSettings$Point_Size$value,
                 col = CONSTANTS$plotlyColors$red

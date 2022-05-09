@@ -11,6 +11,8 @@ svPropertiesPlotUI <- function(ns, width){
 svPropertiesPlotServer <- function(settings, svPointColors, filteredSvs){
     plot <- staticPlotBoxServer(
         'svProperties', 
+        title = TRUE,
+        margins = TRUE,
         legend = TRUE,
         immediate = TRUE,
         template = read_yaml(file.path(app$sources$suiteGlobalDir, "settings", "properties_plot.yml")),
@@ -43,19 +45,16 @@ svPropertiesPlotServer <- function(settings, svPointColors, filteredSvs){
                 ylim = c(-0.05, 1.05),
                 yval = svs[plotted == TRUE, jitter(SHARED_PROPER / 2, amount = 0.05)]
             )
-            plot(
-                NA, 
-                NA,
-                typ = "n",
+            plot$initializeFrame(
                 xlim = xlim,
                 ylim = yType$ylim,
                 xlab = "Microhomology Length (bp)",
-                ylab = yType$ylab
+                ylab = yType$ylab                
             )
             abline(h = seq(0, 10, 1), col = "grey60")
             abline(v = seq(-100, 100, 10), col = "grey60")
             abline(v = 0)
-            points(
+            plot$addPoints(
                 jitter(svs[plotted == TRUE, MICROHOM_LEN], amount = 0.5), # spread points from (i-0.5):(i+0.5)
                 yType$yval, 
                 pch = 20, 

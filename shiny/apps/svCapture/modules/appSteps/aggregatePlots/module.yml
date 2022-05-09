@@ -33,6 +33,13 @@ settings:
         Transpose:
             type:   checkboxInput
             value:  false
+        Distribute:
+            type:  selectInput
+            choices: 
+                - byGroup
+                - bySample
+                - allSamplesTogether
+            value: byGroup      
         Cumulative:
             type:   checkboxInput
             value:  true
