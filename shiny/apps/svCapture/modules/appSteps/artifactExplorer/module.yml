@@ -1,0 +1,47 @@
+#----------------------------------------------------------------------
+# ui
+#----------------------------------------------------------------------
+
+# label shown on dashboard menu 
+shortLabel: "Artifact Explorer"
+
+# description shown on the Overview page
+shortDescription: "Analyze the extent and properties of library SV artifacts."
+
+# label shown at top of appStep tab  
+longLabel: "Analyze library SV artifacts"
+
+#----------------------------------------------------------------------
+# server
+#----------------------------------------------------------------------
+
+# names of the type(s) of this module ...
+types:
+    - artifactExplorer
+    
+# ... and of its dependencies
+sourceTypes:
+    - assign
+
+# #----------------------------------------------------------------------
+# # settings: use camel case and '_' in names (it is replaced with a space in the UI)
+# #----------------------------------------------------------------------
+# # most of the default settings are fairly promiscuous to show ~all SVs
+# #----------------------------------------------------------------------
+# settings:
+#     Plot_Settings:
+#         Point_Size:
+#             type:   numericInput
+#             value:  1
+#             min:    0.25
+#             max:    2
+#             step:   0.25 
+#         Point_Color:
+#             type: selectInput
+#             choices:
+#                 - type
+#                 - sample
+#                 - target
+#                 - duplex
+#                 - blue
+#             value: type    

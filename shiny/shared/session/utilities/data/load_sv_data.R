@@ -4,16 +4,12 @@
 
 # get the data.table of called SVs matching the current filter set
 getFilteredSvs <- function(settings, sampleSelector, 
-                           isCapture = FALSE, targetClasses = NULL, noSize = FALSE){
+                           isCapture = FALSE, targetClasses = NULL){
     assignments <- sampleSelector$selectedAssignments() # Source_ID	Project	Sample_ID	Category1	Category2	uniqueId
     req(assignments)
     req(nrow(assignments) > 0)
     startSpinner(session, 'getFilteredSvs')
     svFilters <- settings$SV_Filters()
-    if(noSize) {
-        svFilters$Min_SV_Size$value <- 0
-        svFilters$Max_SV_Size$value <- 1e9
-    }
     samples <- sampleSelector$selectedSamples()
     setkey(SVX$jxnTypes, name)
     x <- do.call(rbind, lapply(assignments[, unique(Source_ID)], function(sourceId){

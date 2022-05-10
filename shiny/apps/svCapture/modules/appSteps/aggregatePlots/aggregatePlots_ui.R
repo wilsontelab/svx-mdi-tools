@@ -31,49 +31,35 @@ aggregatePlotsUI <- function(id, options) {
             sampleSelectorUI(ns('sampleSelector'))
         ) ),
         
-        # # composite views of all filtered SVs
-        # fluidRow(
-        #     staticPlotBoxUI(
-        #         ns('svRates'),
-        #         width = 8,
-        #         title = "SV Rates"
-        #     ),
-        #     staticPlotBoxUI(
-        #         ns('sizeDistribution'),
-        #         width = 6,
-        #         title = "SV Size Distribution"
-        #     ),
-        #     staticPlotBoxUI(
-        #         ns('microhomologyDistribution'),
-        #         width = 6,
-        #         title = "Microhomology Length Distribution"
-        #     )
-        # ),
-        
-        # # table of plotted values
-        # fluidRow(
-        #     column(
-        #         width = 12,
-        #         style = unpad,
-        #         box(
-        #             width = 12,
-        #             bufferedTableUI(ns('ratesTable'))
-        #         )
-        #     )
-        # ),
-        
-        # figures related to t- SVs
+        # composite views of all filtered SVs
         fluidRow(
             staticPlotBoxUI(
-                ns('distancePlot'),
-                width = 6,
-                title = "SV 2nd End Distance"
+                ns('svRates'),
+                width = 8,
+                title = "SV Rates"
             ),
             staticPlotBoxUI(
-                ns('ligationArtifactPlot'),
+                ns('sizeDistribution'),
                 width = 6,
-                title = "Ligation Artifact Microhomology"
-            ) 
+                title = "SV Size Distribution"
+            ),
+            staticPlotBoxUI(
+                ns('microhomologyDistribution'),
+                width = 6,
+                title = "Microhomology Length Distribution"
+            )
+        ),
+        
+        # table of plotted values
+        fluidRow(
+            column(
+                width = 12,
+                style = unpad,
+                box(
+                    width = 12,
+                    bufferedTableUI(ns('ratesTable'))
+                )
+            )
         )
     )    
 }
