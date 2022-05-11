@@ -57,9 +57,7 @@ SVX$jxnTypes <- data.table(
 SVX$targetClasses <- list(
     "both on target" = c("TT", "TA", "AA"),
     "one on target"  = c("TT", "TA", "AA", "tt", "ta", "aa"),
-    "all SVs"        = c("TT", "TA", "AA", "tt", "ta", "aa", "t-", "a-", "--"),
-    "distancePlot"   = c("TT", "TA", "t-"),
-    "ligationArtifactPlot" = c("t-")
+    "all SVs"        = c("TT", "TA", "AA", "tt", "ta", "aa", "t-", "a-", "--")
 )
 
 #----------------------------------------------------------------------

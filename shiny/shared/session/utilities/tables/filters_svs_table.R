@@ -7,7 +7,7 @@ filteredSvsTableUI <- function(ns, width){
         bufferedTableUI(ns('svsTable'))
     )  
 }
-filteredSvsTableServer <- function(id, input, filteredSvs){
+filteredSvsTableServer <- function(id, input, svs){
     bufferedTableServer(
         id = 'svsTable',
         parentId = id,
@@ -15,7 +15,7 @@ filteredSvsTableServer <- function(id, input, filteredSvs){
         selection = 'single',
         tableData = reactive({
             setkey(SVX$jxnTypes, code)
-            filteredSvs()[, .(
+            svs()[, .(
                 svId = SV_ID,
                 #---------------
                 type = SVX$jxnTypes[JXN_TYPE, name],

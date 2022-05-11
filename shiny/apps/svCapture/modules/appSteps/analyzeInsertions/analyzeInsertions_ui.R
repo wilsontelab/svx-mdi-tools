@@ -15,9 +15,6 @@ analyzeInsertionsUI <- function(id, options) {
     leaderText <- tagList(
         tags$p(HTML(options$leaderText))
     )
-    
-    # unpad columns with boxes
-    unpad <- "padding-left: 0; padding-right: 0;"
 
     # return the UI contents
     standardSequentialTabItem(
@@ -48,6 +45,26 @@ analyzeInsertionsUI <- function(id, options) {
                 width = 12,
                 title = "Templated Insertion Locations"
             )
+        ),
+
+        # sortable table of SVs
+        fluidRow(
+            filteredSvsTableUI(ns, width = 12)
         )
+        # ,
+
+        # # dotplot alignments of junction and genome reference sequences
+        # fluidRow(
+        #     staticPlotBoxUI(
+        #         ns('jxn_side1'),
+        #         width = 6,
+        #         title = "Junction vs. Left Side"
+        #     ),
+        #     staticPlotBoxUI(
+        #         ns('jxn_side2'),
+        #         width = 6,
+        #         title = "Junction vs. Right Side"
+        #     )
+        # )
     )    
 }

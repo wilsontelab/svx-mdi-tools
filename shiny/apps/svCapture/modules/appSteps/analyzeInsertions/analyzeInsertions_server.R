@@ -17,8 +17,11 @@ analyzeInsertionsServer <- function(id, options, bookmark, locks) {
 settings <- settingsServer( # display settings not stored in the UI, exposed by gear icon click
     id = 'settings',
     parentId = id,
-    templates = list(file.path(app$sources$suiteGlobalDir, "settings", "svx_filters.yml"), id), 
+    templates = list(
+        file.path(app$sources$suiteGlobalDir, "settings", "svx_filters.yml"), 
         file.path(app$sources$suiteGlobalDir, "settings", "svCapture_filters.yml"),
+        id
+    ),
     fade = FALSE
 )
 sampleSelector <- sampleSelectorServer( # selectors to pick one or more samples from a sample set
@@ -35,7 +38,7 @@ filteredSvs <- reactive({
 })
 
 #----------------------------------------------------------------------
-# analyze the insertsion in the filtered SVs
+# analyze the insertions in the filtered SVs
 #----------------------------------------------------------------------
 analyzeInsertion <- function(
     microhomologyLength, minRefWidth, padding,
@@ -77,15 +80,14 @@ analyzeInsertion <- function(
         match2rc = paste(gregexpr(rcSearchSeq, GEN_REF_2)[[1]], collapse = ",") 
     )
 }
-insertions <- reactive({ # get the SVs with accepted insertions
+insertions <- reactive({
     svs <- filteredSvs()
     req(svs)
     properties <- settings$Junction_Properties()
     svs <- svs[
         -MICROHOM_LEN >= properties$Min_Insertion_Size$value & 
         -MICROHOM_LEN <= properties$Max_Insertion_Size$value
-    ]
-    req(svs)
+    ]    
     minRefWidth <- svs[, min(nchar(GEN_REF_1))]    
     padding <- (minRefWidth - 1) / 2
     svs <- cbind(svs, t(svs[, mapply(
@@ -93,6 +95,16 @@ insertions <- reactive({ # get the SVs with accepted insertions
         properties$Flanking_Microhomology$value, minRefWidth, padding, 
         JXN_BASES, GEN_REF_1, GEN_REF_2, SIDE_1, SIDE_2
     )]))
+    svs[, ':='(
+        nCombinations = 4 ** (-MICROHOM_LEN + properties$Flanking_Microhomology$value * 2), 
+        nMatches = mapply(function(match1, match1rc, match2, match2rc){
+            sum(strsplit(match1,   ",")[[1]] != "-1") + # total number of times search sequence was found
+            sum(strsplit(match1rc, ",")[[1]] != "-1") + 
+            sum(strsplit(match2,   ",")[[1]] != "-1") + 
+            sum(strsplit(match2rc, ",")[[1]] != "-1")
+        }, match1, match1rc, match2, match2rc)
+    )]
+    svs[, found := nMatches > 0] # whether or not each SV's search sequence was found
     list(
         refWidth = minRefWidth,
         padding = padding,
@@ -141,16 +153,6 @@ templateYield <- staticPlotBoxServer(
         req(insertions)
         properties <- settings$Junction_Properties()
         searchSpace <- 4 * insertions$refWidth # two genome references searched on both strands
-        insertions$svs[, ':='(
-            nCombinations = 4 ** (-MICROHOM_LEN + properties$Flanking_Microhomology$value * 2), 
-            nMatches = mapply(function(match1, match1rc, match2, match2rc){
-                sum(strsplit(match1,   ",")[[1]] != "-1") + # total number of times search sequence was found
-                sum(strsplit(match1rc, ",")[[1]] != "-1") + 
-                sum(strsplit(match2,   ",")[[1]] != "-1") + 
-                sum(strsplit(match2rc, ",")[[1]] != "-1")
-            }, match1, match1rc, match2, match2rc)
-        )]
-        insertions$svs[, found := nMatches > 0] # whether or not each SV's search sequence was found
         yield <- insertions$svs[, .(
             nCombinations = nCombinations[1],
             nSvs = .N,           # number of trials ...
@@ -295,9 +297,97 @@ templateLocations <- staticPlotBoxServer(
             horiz = TRUE,
             x.intersp = 0
         )
-        
     }
 )
+
+# ----------------------------------------------------------------------
+# summary table of all filtered SVs from all selected samples
+# ----------------------------------------------------------------------
+foundInsertions <- reactive({ 
+    insertions <- insertions()
+    req(insertions)
+    insertions$svs[found == TRUE] 
+})
+svsTable <- filteredSvsTableServer(id, input, foundInsertions)
+
+# # ----------------------------------------------------------------------
+# # dotplot alignments of junction and genome reference sequences
+# # ----------------------------------------------------------------------
+# # the one working SV the user has clicked on
+# selectedSv <- reactive({ 
+#     rowI <- svsTable$rows_selected()
+#     if(is.null(rowI) || rowI == 0) return(NULL) # req(rowI)
+#     foundInsertions()[rowI]
+# })
+# # complete supporting molecule evidence on selectedSv()
+# svMols <- reactive({ getSVMolecules(sampleSelector, selectedSv) })
+# # map of all base positions at and around the selected SV junction
+# junctionMap <- reactive({ 
+#     map <- getJunctionMap(svMols()) 
+#     req(map)
+#     startSpinner(session, 'expanding junctionMap combinations') 
+#     map$consensus <- getJunctionConsensus(map$text)
+#     map$pairs <- expand.grid(
+#         x = (map$leftRefI + 1 - 10):(map$rightRefI - 1),
+#         y = 1:(length(map$consensus) + map$sv$MICROHOM_LEN)
+#     )
+#     stopSpinner(session) 
+#     map    
+# })
+# dotPlotBoxServer <- function(id, x, y, xlab, ylab){
+#     plot <- staticPlotBoxServer(
+#         id, 
+#         points = TRUE,
+#         margins = TRUE,
+#         title = TRUE,
+#         immediate = TRUE,
+#         create = function(...){
+#             map <- junctionMap()
+#             req(map)
+#             startSpinner(session, paste("dotPlotBoxServer", id)) 
+#             xseq <- toupper(sapply(map$pairs$x, function(i) 
+#                 paste(map[[x]][i:(i - map$sv$MICROHOM_LEN - 1)], collapse = "") 
+#             ))
+#             yseq <- toupper(sapply(map$pairs$y, function(i) 
+#                 paste(map[[y]][i:(i - map$sv$MICROHOM_LEN - 1)], collapse = "") 
+#             ))
+#             match   <- xseq ==    yseq
+#             matchrc <- xseq == rc(yseq)
+#             stopSpinner(session) 
+#             plot$initializeFrame(
+#                 xlim = range(map$pairs$x),
+#                 ylim = range(map$pairs$y),
+#                 xlab = xlab,
+#                 ylab = ylab
+#             )
+#             cols <- CONSTANTS$plotlyColors            
+#             abline(v = c(map$leftRefI, map$rightRefI), col = cols$grey)
+#             abline(h = c(map$leftRefI, map$rightRefI), col = cols$grey)
+#             plot$addPoints(
+#                 x = map$pairs$x,
+#                 y = map$pairs$y,
+#                 pch = ifelse(match, ".", NA),
+#                 col = ifelse(map$pairs$x == map$pairs$y, cols$grey, cols$blue)
+#             )
+#             plot$addPoints(
+#                 x = map$pairs$x,
+#                 y = map$pairs$y,
+#                 pch = ifelse(matchrc, ".", NA),
+#                 col = ifelse(map$pairs$x == map$pairs$y, cols$grey, cols$red)
+#             )
+#         }
+#     )
+# }
+# jxn_side1 <- dotPlotBoxServer(
+#     'jxn_side1', 
+#     "consensus", "GEN_REF_1", 
+#     "Junction Sequence", "Genome Reference, Left"
+# )
+# jxn_side2 <- dotPlotBoxServer(
+#     'jxn_side2', 
+#     "consensus", "GEN_REF_2", 
+#     "Junction Sequence", "Genome Reference, Right"
+# )
 
 # ----------------------------------------------------------------------
 # define bookmarking actions

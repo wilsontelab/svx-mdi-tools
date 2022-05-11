@@ -132,19 +132,22 @@ getJunctionMap <- function(x, clipMode = "Faded Colors"){
 # ----------------------------------------------------------------------
 # create an alignment betweeen junction molecules, their consensus, and the genome reference
 # ----------------------------------------------------------------------
+getJunctionConsensus <- function(text){
+    apply(text, 1, function(x){
+        x <- x[!is.na(x)]
+        if(length(x) == 0) return("~")
+        xx <- x[!(x %in% CONSTANTS$clipBases)] # insertions are also lower case
+        if(length(xx) == 0) xx <- x
+        agg <- aggregate(xx, list(xx), length)
+        agg[which.max(agg[[2]]), 1]
+    })
+}
 getJunctionAlignment <- function(map, charPerLine = 100, mode = "Evidence Consensus"){
     req(map)    
 
     # consensus mode
     if(mode == "Evidence Consensus"){
-        consensus <- apply(map$text, 1, function(x){
-            x <- x[!is.na(x)]
-            if(length(x) == 0) return("~")
-            xx <- x[!(x %in% CONSTANTS$clipBases)] # insertions are also lower case
-            if(length(xx) == 0) xx <- x
-            agg <- aggregate(xx, list(xx), length)
-            agg[which.max(agg[[2]]), 1]
-        })
+        consensus <- getJunctionConsensus(map$text)
         match1 <- ifelse(toupper(map$GEN_REF_1) == toupper(consensus), "|", "~")
         match2 <- ifelse(toupper(map$GEN_REF_2) == toupper(consensus), "|", "~")
         match1[map$leftRefI]  <- "[" 

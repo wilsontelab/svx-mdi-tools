@@ -23,25 +23,41 @@ types:
 sourceTypes:
     - assign
 
-# #----------------------------------------------------------------------
-# # settings: use camel case and '_' in names (it is replaced with a space in the UI)
-# #----------------------------------------------------------------------
-# # most of the default settings are fairly promiscuous to show ~all SVs
-# #----------------------------------------------------------------------
-# settings:
-#     Plot_Settings:
-#         Point_Size:
-#             type:   numericInput
-#             value:  1
-#             min:    0.25
-#             max:    2
-#             step:   0.25 
-#         Point_Color:
-#             type: selectInput
-#             choices:
-#                 - type
-#                 - sample
-#                 - target
-#                 - duplex
-#                 - blue
-#             value: type    
+#----------------------------------------------------------------------
+# settings: use camel case and '_' in names (it is replaced with a space in the UI)
+#----------------------------------------------------------------------
+# most of the default settings are fairly promiscuous to show ~all SVs
+#----------------------------------------------------------------------
+settings:
+    Parameters:
+        Genome_Bin_Size:
+            type:   numericInput
+            value:  100000
+            min:    0
+            max:    100000000
+            step:   50000
+        Number_of_Bins_from_Center:
+            type:   numericInput
+            value:  100
+            min:    1
+            max:    1000
+            step:   1    
+        Max_Microhomology:
+            type:   numericInput
+            value:  20
+            min:    1
+            max:    100
+            step:   1    
+        Duplex_Filter:
+            type:   selectInput
+            choices:
+                - duplexOnly
+                - singleStrandOnly
+                - allSVs
+            value: allSVs    
+        True_SV_Types:
+            type:   selectInput
+            choices:
+                - deletionOnly
+                - allSVs
+            value: deletionOnly   

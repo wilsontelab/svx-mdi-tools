@@ -15,9 +15,6 @@ artifactExplorerUI <- function(id, options) {
     leaderText <- tagList(
         tags$p(HTML(options$leaderText))
     )
-    
-    # unpad columns with boxes
-    unpad <- "padding-left: 0; padding-right: 0;"
 
     # return the UI contents
     standardSequentialTabItem(
@@ -37,13 +34,12 @@ artifactExplorerUI <- function(id, options) {
                 ns('distancePlot'),
                 width = 6,
                 title = "SV 2nd End Distance"
-            )
-            # ,
-            # staticPlotBoxUI(
-            #     ns('ligationArtifactPlot'),
-            #     width = 6,
-            #     title = "Ligation Artifact Microhomology"
-            # ) 
+            ),
+            staticPlotBoxUI(
+                ns('microhomologyPlot'),
+                width = 6,
+                title = "Artifact Microhomology"
+            ) 
         )
     )    
 }
