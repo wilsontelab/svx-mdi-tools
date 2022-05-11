@@ -70,8 +70,14 @@ getFilteredSvs <- function(settings, sampleSelector,
             d <- strsplit(sample, ":")[[1]]
             if(d[1] == project) x[,  matchesSamples := matchesSamples | x[[d[2]]] > 0]
         }  
-        x[, PROJECT_SAMPLES := lapply(strsplit(SAMPLES, ","), function(x) paste(project, x, sep = ":"))]  
-        x[matchesSamples == TRUE, .SD, .SDcols = c(names(SVX$find$structural_variants), "PROJECT_SAMPLES", "MAX_MAPQ") ]
+        x[, ":="(
+            PROJECT = project,
+            PROJECT_SAMPLES = lapply(strsplit(SAMPLES, ","), function(x) paste(project, x, sep = ":"))
+        )]  
+        x[matchesSamples == TRUE, .SD, .SDcols = c(
+            names(SVX$find$structural_variants), 
+            "PROJECT", "PROJECT_SAMPLES", "MAX_MAPQ"
+        ) ]
     }))
     stopSpinner(session, 'getFilteredSvs')
     x[sample.int(.N)] # randomize the list for optimized plotting

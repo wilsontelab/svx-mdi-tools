@@ -159,7 +159,7 @@ svsByGroup <- reactive({
             },
             allSamplesTogether = "allSamplesTogether"
         )
-    ), by = SV_ID]
+    ), by = c("PROJECT", "SV_ID")]
 })
 plotFrequencyDistribution <- function(
     plot,

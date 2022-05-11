@@ -110,7 +110,7 @@ distancePlot <- staticPlotBoxServer(
                 x <- x[which.max(abs(x))]
                 as.integer(abs(x) / binSize) * binSize * sign(x)
             }
-        ), by = SV_ID]
+        ), by = c("PROJECT", "SV_ID")] 
 
         # calculate the binned Tx SV count, normalized to TT Proper
         x <- svs[
@@ -133,6 +133,7 @@ distancePlot <- staticPlotBoxServer(
             xlab = "Distance of 2nd End from Capture Target (bp)",
             ylab = "Normalized Bin SV Count"
         )
+
         # rect(targetX[1], ylim[1], targetX[2], ylim[2], col = CONSTANTS$plotlyColors$grey, border = NA)
         abline(v = 0, col = CONSTANTS$plotlyColors$black)       
         isZero <- x$normalizedSvCount == 0        
