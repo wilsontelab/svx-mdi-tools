@@ -23,3 +23,8 @@ export FIND_GLOB_PREFIX=$TASK_DIR/*/*.$GENOME.find
 
 # manifest
 export MANIFEST_PREFIX=$DATA_GENOME_PREFIX.manifest
+
+# genotype
+export GENOTYPE_PREFIX=$DATA_GENOME_PREFIX.genotype
+export CONSTITUTIVE_VCF=$GENOTYPE_PREFIX.constitutive.vcf.gz
+export PADDED_TARGETS_BED=$DATA_FILE_PREFIX.padded_targets.bed

@@ -1,3 +1,8 @@
+---
+The svx-mdi-tools suite is still under active development and is 
+not yet considered stable. A stable release is expected summer 2022.
+---
+
 # wilsontelab svx-mdi-tools
 
 The [Michigan Data Interface](https://midataint.github.io/) (MDI) 

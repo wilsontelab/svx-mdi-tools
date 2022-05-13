@@ -40,6 +40,29 @@ actions:
     find:
         order: 4
         module: find2
+    genotype: # or call this haplotype?
+        order: 5
+        condaFamilies: 
+            - base
+            - genomex-mdi-tools//genome
+            - genomex-mdi-tools//variant
+            - r-4.1
+        optionFamilies: 
+            - genomex-mdi-tools//genome
+            - genomex-mdi-tools//bam-format
+            - genomex-mdi-tools//read-filtering
+            - genomex-mdi-tools//variant-calling
+            - genomex-mdi-tools//target-region
+        resources:
+            required:
+                total-ram: 32G
+            recommended: 
+                n-cpu: 8
+                ram-per-cpu: 4G
+        job-manager:
+            recommended:
+                time-limit: 24:00:00
+        description: "genotype the bulk capture regions and score SNVs in SV junction sequences"
 package:
     find: # the pipeline action after which a data package should assembled
         uploadType: svCapture # a signal to the Stage 2 framework regarding the package contents
@@ -63,6 +86,13 @@ package:
             distributionsZip:
                 type: zip-file
                 file: $MANIFEST_PREFIX.distribution_plots.zip
+# package:
+#     genotype: # the pipeline action after which a data package should assembled
+#         extends: find
+#         files:
+#             xxx:
+#                 type: yml
+#                 file: $GENOTYPE_PREFIX.sss
 container:
     supported: false    # set to true if you maintain a container registry for this pipeline [false]
     registry:  ghcr.io  # domain name of your OCI-compatible, oras-accessible, container registry [ghcr.io]
