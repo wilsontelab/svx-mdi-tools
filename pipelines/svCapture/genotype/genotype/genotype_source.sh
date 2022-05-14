@@ -9,11 +9,10 @@
 # input:
 #     $COORDINATE_BAM_FILES (one or more)
 # outputs:
-#     $CONSTITUTIVE_VCF, i.e., xxx.constitutive, vcf.gz
+#     $CONSTITUTIVE_VCF, i.e., xxx.constitutive.vcf.gz
 
 # log file feedback
 echo "finding constitutive SNVs and indels in padded target regions"
-echo "input bam(s): $COORDINATE_BAM_FILES"
 
 # merge coordinate-sorted bam files into a single stream
 samtools merge \
@@ -22,7 +21,7 @@ samtools merge \
 -u -o - \
 $COORDINATE_BAM_FILES |
 
-# read pileup in target regions
+# read pileup in target regions without respect to source samples
 bcftools mpileup \
 --threads $N_CPU \
 --fasta-ref $GENOME_FASTA \
@@ -33,12 +32,11 @@ bcftools mpileup \
 --output-type u \
 - |
 
-# variant calling
+# variant calling    --variants-only \
 bcftools call \
 --threads $N_CPU \
 --ploidy $PLOIDY \
 --multiallelic-caller \
---variants-only \
 --output-type u \
 - |
 

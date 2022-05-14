@@ -1,7 +1,5 @@
 # action:
-#     find heterozygous and homozygous SNVs and other variants in the bulk
-#     capture targets, i.e., in the source individual's constitutive genome,
-#     using reads from all samples in the project, i.e., under $TASK_DIR
+#     make a bi-allelic, unphased haplotype map of all padded target region bases
 # expects:
 #     source $GENOMEX_MODULES_DIR/genome/set_genome_vars.sh
 #     source $GENOMEX_MODULES_DIR/align/set_alignment_vars.sh
@@ -9,14 +7,11 @@
 # input:
 #     $CONSTITUTIVE_VCF
 # outputs:
-#     
+#     $GENOTYPE_PREFIX.unphased_haplotypes.gz
 
 # log file feedback
 echo "assembling genotype calls into constitutive base values per target position"
 Rscript $ACTION_DIR/genotype/build_haplotypes.R
 checkPipe
-
-###############
-exit 1
 
 echo "done"

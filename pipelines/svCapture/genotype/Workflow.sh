@@ -45,7 +45,10 @@ runWorkflowStep 1 sort $GENOMEX_MODULES_DIR/align/sort_bam_file.sh
 
 # call and normalize constitutive variants common to all sample in padded target regions
 runWorkflowStep 2 genotype genotype/genotype_source.sh
-runWorkflowStep 3 genotype genotype/build_haplotypes.sh
+runWorkflowStep 3 build    genotype/build_haplotypes.sh
+
+# find SV molecules with SNVs / indels that cannot be accounted for by the source alleles
+runWorkflowStep 4 find genotype/find_SNVs.sh
 
 # clean up
 rm -fr $TMP_DIR_WRK

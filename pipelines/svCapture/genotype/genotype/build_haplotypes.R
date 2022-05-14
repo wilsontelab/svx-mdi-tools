@@ -1,12 +1,12 @@
-
-# compare structural variants between samples and annotate SV calls with any matching samples
+# make a bi-allelic, unphased haplotype map of all padded target region bases
 
 #=====================================================================================
 # script initialization
 #-------------------------------------------------------------------------------------
 # load packages
+library(parallel)
 library(data.table)
-library(vcfR)
+library(vcfR) # for easy reading of VCF files
 #-------------------------------------------------------------------------------------
 # load, parse and save environment variables
 env <- as.list(Sys.getenv())
@@ -28,7 +28,8 @@ checkEnvVars(list(
     integer = c(
         'N_CPU',
         'REGION_PADDING',
-        'MIN_VARIANT_QUAL'
+        'MIN_VARIANT_QUAL',
+        'MIN_CALL_DEPTH'
     )
 ))
 #-------------------------------------------------------------------------------------
@@ -46,99 +47,105 @@ sourceScripts(file.path(rUtilDir, 'genome'), c('general', 'chroms', 'targets', '
 #=====================================================================================
 # load and initialize reference genome sequence across all padded target positions
 #-------------------------------------------------------------------------------------
+message("loading target regions")
 setCanonicalChroms()
 loadTargetRegions()
+message("loading genome reference sequence")
 loadFaidx()
+message("filling allele map with reference bases")
 map <- unique(do.call(rbind, lapply(seq_len(nrow(targetRegions$bed)), function(i){
     range <- targetRegions$bed[i, c(start - env$REGION_PADDING, end + env$REGION_PADDING)]
     data.table(
-        chrom = targetRegions$bed[i, chrom],
-        pos   = range[1]:range[2],
-        ref   = targetRegions$bed[i, strsplit(getRefSeq(chrom, range), "")[[1]]]
+        CHROM = targetRegions$bed[i, chrom],
+        POS   = range[1]:range[2],
+        REF   = targetRegions$bed[i, strsplit(getRefSeq(chrom, range), "")[[1]]]
     )
 })))
 map[, ":="(
-    hap1 = ref, 
-    hap2 = ref,
-    posKey = paste(chrom, pos, sep = ":")
+    HAP1 = REF, 
+    HAP2 = REF,
+    posKey = paste(CHROM, POS, sep = ":")
 )]
-setkey(map, posKey)
 #=====================================================================================
 
 #=====================================================================================
-# load and structure called variants in the source VCF
+# initial processing of VCF
 #-------------------------------------------------------------------------------------
-vcf <- vcfR2tidy( read.vcfR(env$CONSTITUTIVE_VCF, verbose = FALSE) )
-vcf <- data.table(
-    index    = 1:nrow(vcf$fix),
-    chrom    = vcf$fix$CHROM,
-    pos      = vcf$fix$POS,
-    qual     = vcf$fix$QUAL,      
-    ref      = vcf$fix$REF, 
-    alt      = vcf$fix$ALT, 
-    genotype = vcf$gt$gt_GT
+
+# load and structure called variants in the source VCF
+message("loading VCF file")
+vcf <- suppressWarnings( vcfR2tidy( read.vcfR(env$CONSTITUTIVE_VCF, verbose = FALSE) ) )
+
+message("parsing VCF file")
+vcf <- cbind(
+    as.data.table(vcf$fix[, c(
+        "CHROM",
+        "POS",
+        "REF",
+        "ALT",
+        "QUAL",
+        "DP"
+    )]),
+    as.data.table(vcf$gt[, c(
+        "gt_GT_alleles"
+    ), drop = FALSE])
 )
+
+# record informativity in the base map
+# uninformative bases are in low-coverage, typically adjacent, regions
+message("recording base informativity in allele map")
+map <- merge(
+    map, 
+    vcf[, .(CHROM = CHROM, POS = POS, INF = as.integer(DP >= env$MIN_CALL_DEPTH))],
+    by = c("CHROM", "POS"), 
+    all.x = TRUE
+)
+map[is.na(INF), INF := 0]
+
+# filter the VCF to high-quality, informative variants
+message("filtering low quality allelic variants")
+vcf <- vcf[
+    !is.na(ALT) & 
+    QUAL >= env$MIN_VARIANT_QUAL & 
+      DP >= env$MIN_CALL_DEPTH,
+    .(CHROM, POS, REF, gt_GT_alleles)
+]
+
+message("parsing allele values")
+ALT <- transpose(as.data.table(strsplit(vcf$gt_GT_alleles, "/")))
+setnames(ALT, c("HAP1", "HAP2"))
+vcf <- cbind(vcf, ALT)
+vcf[, index := 1:.N]
 #=====================================================================================
 
 #=====================================================================================
 # loop all variants in vcf and fill into the unphased haplotype base map
 #-------------------------------------------------------------------------------------
-commitVariant <- function(chrom, pos, ref, alt, alleleI, genotype){
-    nRefBases <- nchar(ref)
-    nAltBases <- nchar(alt)
-    altBases <- strsplit(alt, "")[[1]]
-    bases <- if(nRefBases == nAltBases) c( # a SNP
-        altBases
-    ) else if(nRefBases > nAltBases) c( # a deletion
-        altBases, 
-        rep("-", nRefBases - nAltBases)
-    ) else c( # an insertion
-        if(nRefBases > 1) altBases[1:(nRefBases - 1)] else character(),
-        paste(altBases[nRefBases:nAltBases], collapse = "")
-    )
-    posKeys <- paste(chrom, pos:(pos + nRefBases - 1), sep - ":")
-    switch(
-        genotype,
-        "0/1" = {
-            if(alleleI == 1) map[posKeys, ":="(
-                hap1 = bases
-            )]
-        },
-        "1/1" = {
-            if(alleleI == 1) map[posKeys, ":="(
-                hap1 = bases,
-                hap2 = bases
-            )]
-        },
-        "1/2" = {
-            if(alleleI == 1) map[posKeys, ":="(
-                hap1 = bases
-            )] else if(alleleI == 2) map[posKeys, ":="(
-                hap2 = bases
-            )] 
-        },
-        "2/1" = {
-            if(alleleI == 1) map[posKeys, ":="(
-                hap1 = bases
-            )] else if(alleleI == 2) map[posKeys, ":="(
-                hap2 = bases
-            )] 
-        },
-        "2/2" = {
-            if(alleleI == 2) map[posKeys, ":="(
-                hap1 = bases,
-                hap2 = bases
-            )]
-        }
-    )
+message("filling allele values into map")
+setkey(map, posKey)
+for(alleleI in 1:2){
+    hapCol <- paste0("HAP", alleleI)
+    message(paste("  ", hapCol))
+    x <- do.call(rbind, mclapply(vcf$index, function(varI){
+        alt <- vcf[varI][[hapCol]]
+        nAltBases <- nchar(alt)
+        altBases <- strsplit(alt, "")[[1]]
+        nRefBases <- vcf[varI, nchar(REF)]
+        vcf[varI, .(
+            posKey = paste(CHROM, POS:(POS + nRefBases - 1), sep = ":"),
+            base = if(nRefBases == nAltBases) c( # a SNP
+                altBases
+            ) else if(nRefBases > nAltBases) c( # a deletion
+                altBases, 
+                rep("-", nRefBases - nAltBases)
+            ) else c( # an insertion
+                if(nRefBases > 1) altBases[1:(nRefBases - 1)] else character(),
+                paste(altBases[nRefBases:nAltBases], collapse = "")
+            )      
+        )]
+    }, mc.cores = env$N_CPU))
+    map[x$posKey, hapCol] <- x$base
 }
-vcf[qual >= env$MIN_VARIANT_QUAL][, {
-    alt <- strsplit(alt, ",")[[1]]
-    commitVariant(chrom, pos, ref, alt[1], 1, genotype)
-    if(!is.null(alt[2])) {
-        commitVariant(chrom, pos, ref, alt[2], 2, genotype)
-    }
-}, by = index]
 #=====================================================================================
 
 #=====================================================================================
@@ -147,7 +154,7 @@ vcf[qual >= env$MIN_VARIANT_QUAL][, {
 message("writing SV summary table")
 outFile <- paste(env$GENOTYPE_PREFIX, 'unphased_haplotypes', 'gz', sep = ".")
 fwrite(
-    map[, .SD, .SDcols = c("chrom", "pos", "ref", "hap1", "hap2")], 
+    map[, .SD, .SDcols = c("CHROM", "POS", "REF", "HAP1", "HAP2", "INF")], 
     file = outFile, 
     quote = FALSE, 
     sep = "\t",    
@@ -191,3 +198,22 @@ fwrite(
 #   ..$ gt_PL        : chr [1:2436] "110,6,0" "38,3,0" "38,3,0" "38,3,0" ...
 #   ..$ gt_GT        : chr [1:2436] "1/1" "1/1" "1/1" "1/1" ...
 #   ..$ gt_GT_alleles: chr [1:2436] "ATCAC/ATCAC" "C/C" "G/G" "A/A" ...
+
+# Classes ‘data.table’ and 'data.frame':  3750004 obs. of  7 variables:
+#  $ CHROM : chr  "chr1" "chr1" "chr1" "chr1" ...
+#  $ POS   : int  71184317 71184318 71184319 71184320 71184321 71184322 71184323 71184324 71184325 71184326 ...
+#  $ REF   : chr  "T" "T" "A" "A" ...
+#  $ ALT1  : logi  NA NA NA NA NA NA ...
+#  $ ALT2  : logi  NA NA NA NA NA NA ...
+#  $ posKey: chr  "chr1:71184317" "chr1:71184318" "chr1:71184319" "chr1:71184320" ...
+#  $ INF   : int  NA NA NA NA NA NA NA NA NA NA ...
+#  - attr(*, ".internal.selfref")=<externalptr> 
+#  - attr(*, "sorted")= chr [1:2] "CHROM" "POS"
+
+# Classes ‘data.table’ and 'data.frame':  1261 obs. of  6 variables:
+#  $ CHROM: chr  "chr1" "chr1" "chr1" "chr1" ...
+#  $ POS  : int  71234437 71366195 71371514 71371562 71474517 71616708 71684185 71684369 71684600 71684641 ...
+#  $ REF  : chr  "TACAC" "T" "G" "T" ...
+#  $ ALT  : chr  "T,TAC" "TTGTG" "A" "C" ...
+#  $ gt_GT: chr  "1/2" "1/1" "1/1" "1/1" ...
+#  $ index: int  1 2 3 4 5 6 7 8 9 10 ...

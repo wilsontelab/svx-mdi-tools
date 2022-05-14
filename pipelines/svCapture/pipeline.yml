@@ -55,7 +55,7 @@ actions:
             - genomex-mdi-tools//target-region
         resources:
             required:
-                total-ram: 32G
+                total-ram: 8G
             recommended: 
                 n-cpu: 8
                 ram-per-cpu: 4G
