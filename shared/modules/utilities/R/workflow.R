@@ -7,11 +7,13 @@ checkEnvVar <- function(x){
 checkEnvVars <- function(vars = list(
     string  = character(), # var names by type
     integer = character(),
-    double  = character()
+    double  = character(),
+    logical = character()
 )){
     invisible(sapply(unlist(vars), checkEnvVar))
     if(length(vars$integer) > 0) env[vars$integer] <<- as.integer(env[vars$integer])
     if(length(vars$double)  > 0) env[vars$double]  <<- as.double( env[vars$double])
+    if(length(vars$logical) > 0) env[vars$logical] <<- as.logical(as.integer(env[vars$logical]))
 }
 writeEnvJson <- function(prefix){
     jsonlite::write_json(env, paste(prefix, 'environment', 'json', sep = "."))

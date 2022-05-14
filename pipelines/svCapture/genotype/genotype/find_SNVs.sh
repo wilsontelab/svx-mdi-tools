@@ -5,7 +5,7 @@
 # input:
 #     $GENOTYPE_PREFIX.unphased_haplotypes.gz
 # outputs:
-#     $GENOTYPE_PREFIX.snvs_indels.rds
+#     $GENOTYPE_PREFIX.haplotype_comparisons.gz / rds
 
 # log file feedback
 echo "searching for SNVs and indels near called SV junctions"

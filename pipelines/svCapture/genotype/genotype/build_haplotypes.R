@@ -152,15 +152,21 @@ for(alleleI in 1:2){
 # print results
 #-------------------------------------------------------------------------------------
 message("writing SV summary table")
+map <- map[, .SD, .SDcols = c("CHROM", "POS", "REF", "HAP1", "HAP2", "INF")]
 outFile <- paste(env$GENOTYPE_PREFIX, 'unphased_haplotypes', 'gz', sep = ".")
 fwrite(
-    map[, .SD, .SDcols = c("CHROM", "POS", "REF", "HAP1", "HAP2", "INF")], 
+    map, 
     file = outFile, 
     quote = FALSE, 
     sep = "\t",    
     row.names = FALSE,   
     col.names = TRUE, 
     compress = "gzip"
+)
+outFile <- paste(env$GENOTYPE_PREFIX, 'unphased_haplotypes', 'rds', sep = ".")
+saveRDS(
+    map, 
+    file = outFile
 )
 #=====================================================================================
 

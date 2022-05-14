@@ -7,7 +7,7 @@
 # input:
 #     $CONSTITUTIVE_VCF
 # outputs:
-#     $GENOTYPE_PREFIX.unphased_haplotypes.gz
+#     $GENOTYPE_PREFIX.unphased_haplotypes.gz / rds
 
 # log file feedback
 echo "assembling genotype calls into constitutive base values per target position"

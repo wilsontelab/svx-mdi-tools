@@ -24,6 +24,7 @@ junctionTypes <- list(
     UNKNOWN       = "?",
     PROPER        = 'P'    
 )
+clipBases <- c("a", "c", "g", "t", "n")
 
 #----------------------------------------------------------------------
 # compile file columns

@@ -53,6 +53,7 @@ actions:
             - genomex-mdi-tools//read-filtering
             - genomex-mdi-tools//variant-calling
             - genomex-mdi-tools//target-region
+            - duplex
         resources:
             required:
                 total-ram: 8G
@@ -63,6 +64,16 @@ actions:
             recommended:
                 time-limit: 24:00:00
         description: "genotype the bulk capture regions and score SNVs in SV junction sequences"
+optionFamilies:
+    duplex:
+        options:
+            duplex-only: 
+                order: 1
+                short: x
+                type: logical
+                required: false
+                default: false
+                description: "if set, only duplex molecules are used to build junction consensuses" 
 package:
     find: # the pipeline action after which a data package should assembled
         uploadType: svCapture # a signal to the Stage 2 framework regarding the package contents
@@ -86,13 +97,16 @@ package:
             distributionsZip:
                 type: zip-file
                 file: $MANIFEST_PREFIX.distribution_plots.zip
-# package:
-#     genotype: # the pipeline action after which a data package should assembled
-#         extends: find
-#         files:
-#             xxx:
-#                 type: yml
-#                 file: $GENOTYPE_PREFIX.sss
+    genotype: # the pipeline action after which a data package should assembled
+        uploadType: svCapture
+        extends: find # new files will be added to the package from a previous step
+        files:
+            unphasedHaplotypes:
+                type: rds-file
+                file: $GENOTYPE_PREFIX.unphased_haplotypes.rds
+            haplotypeComparisons:
+                type: rds-file
+                file: $GENOTYPE_PREFIX.haplotype_comparisons.rds
 container:
     supported: false    # set to true if you maintain a container registry for this pipeline [false]
     registry:  ghcr.io  # domain name of your OCI-compatible, oras-accessible, container registry [ghcr.io]
