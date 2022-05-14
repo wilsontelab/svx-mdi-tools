@@ -202,7 +202,7 @@ simplifyHaplotype <- Vectorize(function(REF, HAP){
 })
 parseMatches <- Vectorize(function(MATCH){
     switch(
-        matchTypes$HAPLOTYPE + 1,
+        MATCH + 1,
         " ",
         " ",
         "|",
@@ -246,11 +246,13 @@ svData <- do.call(rbind, mclapply(svCalls$SV_ID, function(svId){
     data.table(
         SV_ID = svId,
         MATCH_TYPE = matchType,
+        INF_1   = pasteSequence(hapMap1$INF),
         REF_1   = pasteSequence(hapMap1$REF),
         HAP1_1  = pasteSequence(hapMap1$HAP1),
         HAP2_1  = pasteSequence(hapMap1$HAP2),
         JXN_1   = pasteSequence(hapMap1$JXN),
         MATCH_1 = pasteSequence(hapMap1$MATCH),
+        INF_2   = pasteSequence(hapMap2$INF),
         REF_2   = pasteSequence(hapMap2$REF),
         HAP1_2  = pasteSequence(hapMap2$HAP1),
         HAP2_2  = pasteSequence(hapMap2$HAP2),
