@@ -97,9 +97,7 @@ getGenotypedSvs <- function(settings, sampleSelector, targetClasses = NULL){
         project <- assignments[Source_ID == sourceId][1, Project]
         hapFile <- loadPersistentFile(sourceId = sourceId, contentFileType = "haplotypeComparisons", silent = TRUE) 
         if(is.null(hapFile)) return(NULL)
-        x <- persistentCache[[hapFile]]$data[
-            MATCH_TYPE >= matchThreshold
-        ]
+        x <- persistentCache[[hapFile]]$data[MATCH_TYPE >= matchThreshold]
         x[, PROJECT := project]
         x
     }))

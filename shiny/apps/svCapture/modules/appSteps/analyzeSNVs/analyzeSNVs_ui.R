@@ -22,51 +22,42 @@ analyzeSNVsUI <- function(id, options) {
         # HTML(options$longLabel),
         leaderText,
 
-        # # control visibility depending on whether the 'genotype' action was run
-        # tags$div(
-        #     id = ns("no-data-message"),
-        #     tags$p("Action not available as this data pacakage does not include")
-        # ),
-        # tags$div(
-        #     id = ns("step-widgets"),
-
-            # box for selecting sample sources
-            fluidRow( box(
+        # box for selecting sample sources
+        fluidRow( box(
+            width = 12,
+            sampleSelectorUI(ns('sampleSelector'))
+        ) ),
+        
+        # sortable table of SVs
+        fluidRow(
+            filteredSvsTableUI(ns, width = 12)
+        ),
+        
+        # expanded views of a single junction
+        fluidRow(
+            box(
                 width = 12,
-                sampleSelectorUI(ns('sampleSelector'))
-            ) ),
-            
-            # sortable table of SVs
-            fluidRow(
-                filteredSvsTableUI(ns, width = 12)
-            ),
-            
-            # expanded views of a single junction
-            fluidRow(
-                box(
-                    width = 12,
-                    collapsible = TRUE,
-                    collapsed = FALSE,
-                    title = tagList(
-                        "Junction Alignment to Source Alleles",
-                        settingsUI(ns('alignmentSettings'))
-                    ),
-                    tags$style(HTML("
-                        .junction { background-color: #ddd;}
-                        .alignment .base_A { color: green; }
-                        .alignment .base_C { color: blue; }
-                        .alignment .base_G { color: brown; }
-                        .alignment .base_T { color: red; }
-                        .matches .mismatch { color: red; }
-                        .referenceGenome { font-style: oblique; }
-                    ")),
-                    div(
-                        htmlOutput(ns("junctionAlignment")),
-                        style = "font-family: monospace; font-weight: bold; width: 100; overflow: auto;"
-                    )
-                )       
-            ),
-            ""
-        # )
+                collapsible = TRUE,
+                collapsed = FALSE,
+                title = tagList(
+                    "Junction Alignment to Source Alleles",
+                    settingsUI(ns('alignmentSettings'))
+                ),
+                tags$style(HTML("
+                    .junction { background-color: #ddd;}
+                    .alignment .base_A { color: green; }
+                    .alignment .base_C { color: blue; }
+                    .alignment .base_G { color: brown; }
+                    .alignment .base_T { color: red; }
+                    .matches .mismatch { color: red; }
+                    .referenceGenome { font-style: oblique; }
+                ")),
+                div(
+                    htmlOutput(ns("junctionAlignment")),
+                    style = "font-family: monospace; font-weight: bold; width: 100; overflow: auto;"
+                )
+            )       
+        ),
+        ""
     )    
 }

@@ -3,10 +3,24 @@ alnCols1 <-     c("INF_1", "REF_1", "HAP1_1", "HAP2_1", "MATCH_1", "JXN_1")
 alnCols2 <- rev(c("INF_2", "REF_2", "HAP1_2", "HAP2_2", "MATCH_2", "JXN_2"))
 refCols  <- c("REF", "HAP1", "HAP2")
 parseSide <- function(sv, sideI, charPerLine){
+
+    # parse the columns for this junction side
     alnCols <- if(sideI == 1) alnCols1 else alnCols2
     alnColI <- as.list(seq_along(alnCols))
     names(alnColI) <- gsub(paste0("_", sideI), "", alnCols)
+
+    # split the display lines to vectors for parsing
+    # complement the side of the junction inside an inverted segment
+    # (the genotype action provides all sequences as reversed but not complemented from reference)
     text <- sapply(alnCols, function(col) strsplit(sv[[col]], "")[[1]])
+    if(sv$SIDE_1 == sv$SIDE_2){
+        flipSide <- if(sv$SIDE_1 == "R") 1 else 2
+        if(sideI == flipSide) for(col in c(refCols, "JXN")){
+            text[, alnColI[[col]]] <- rc(text[, alnColI[[col]]])
+        }
+    }
+    
+    # parse the display
     nChar <- nrow(text)   
     nLines <- ncol(text)
     nChunks <- ceiling(nChar / charPerLine)
