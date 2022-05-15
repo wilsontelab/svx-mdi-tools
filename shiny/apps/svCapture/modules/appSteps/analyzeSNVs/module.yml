@@ -1,0 +1,52 @@
+#----------------------------------------------------------------------
+# ui
+#----------------------------------------------------------------------
+
+# label shown on dashboard menu 
+shortLabel: "Analyze SNVS/indels"
+
+# description shown on the Overview page
+shortDescription: "Examine de novo SNVs and indels near SV junctions."
+
+# label shown at top of appStep tab  
+longLabel: "Examine de novo SNVs and indels near SV junctions"
+
+#----------------------------------------------------------------------
+# server
+#----------------------------------------------------------------------
+
+# names of the type(s) of this module ...
+types:
+    - analyzeSNVs
+    
+# ... and of its dependencies
+sourceTypes:
+    - assign
+
+#----------------------------------------------------------------------
+# settings: use camel case and '_' in names (it is replaced with a space in the UI)
+#----------------------------------------------------------------------
+# most of the default settings are fairly promiscuous to show ~all SVs
+#----------------------------------------------------------------------
+settings:
+    Variant_Filters:
+        Require_Novel_Variants:
+            type:   checkboxInput
+            value:  true
+        Allow_Reference_Matches:
+            type:   checkboxInput
+            value:  true    
+# locationSettings:
+#     Distance:
+#         Max_Plotted_Distance:
+#             type:   numericInput
+#             value:  500 
+#             min:    10
+#             max:    10000
+#             step:   10
+#         Distance_Grid_Spacing:
+#             type:   numericInput
+#             value:  100        
+#             min:    10
+#             max:    1000
+#             step:   10

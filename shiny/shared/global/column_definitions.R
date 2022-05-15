@@ -59,6 +59,13 @@ SVX$targetClasses <- list(
     "one on target"  = c("TT", "TA", "AA", "tt", "ta", "aa"),
     "all SVs"        = c("TT", "TA", "AA", "tt", "ta", "aa", "t-", "a-", "--")
 )
+SVX$matchTypes <- list(
+    UNSEQUENCED   = 0, # base was in a read gap or an insertion, nothing to compare
+    UNINFORMATIVE = 1, # junction base did not match reference, no haplotype calls existed at this base
+    HAPLOTYPE     = 2, # junction base matched at least one source allele (the most common outcome)
+    REFERENCE     = 3, # junction base did not match either source allele, but did match the reference
+    MISMATCH      = 4  # junction base matched neither a source allele nor the genome reference
+)
 
 #----------------------------------------------------------------------
 # compile file columns

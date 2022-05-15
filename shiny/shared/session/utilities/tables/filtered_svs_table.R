@@ -7,15 +7,17 @@ filteredSvsTableUI <- function(ns, width){
         bufferedTableUI(ns('svsTable'))
     )  
 }
-filteredSvsTableServer <- function(id, input, svs){
+filteredSvsTableServer <- function(id, input, svs, matchThreshold = NULL){
     bufferedTableServer(
         id = 'svsTable',
         parentId = id,
         parentInput = input,
         selection = 'single',
         tableData = reactive({
+            svs <- svs()
+            if(is.null(svs)) return( data.frame(message = "analysis not available for these data") )     
             setkey(SVX$jxnTypes, code)
-            svs()[, .(
+            svs[, .(
                 svId = SV_ID,
                 #---------------
                 type = SVX$jxnTypes[JXN_TYPE, name],
@@ -35,6 +37,7 @@ filteredSvsTableServer <- function(id, input, svs){
                 count2 = STRAND_COUNT2,
                 #---------------
                 mapQ = MAX_MAPQ,
+                snv = if(is.null(matchThreshold)) "-" else ifelse(MATCH_TYPE >= matchThreshold(), "*", "-"),
                 #---------------
                 chr1 = CHROM_1,
                 pos1 = POS_1,

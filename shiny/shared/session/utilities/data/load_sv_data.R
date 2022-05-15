@@ -73,14 +73,39 @@ getFilteredSvs <- function(settings, sampleSelector,
         x[, ":="(
             PROJECT = project,
             PROJECT_SAMPLES = lapply(strsplit(SAMPLES, ","), function(x) paste(project, x, sep = ":"))
-        )]  
+        )]
         x[matchesSamples == TRUE, .SD, .SDcols = c(
             names(SVX$find$structural_variants), 
             "PROJECT", "PROJECT_SAMPLES", "MAX_MAPQ"
-        ) ]
+        )]
     }))
     stopSpinner(session, 'getFilteredSvs')
     x[sample.int(.N)] # randomize the list for optimized plotting
+}
+
+# get the data.table of called SVs matching the current filter set, including any available genotyping
+getGenotypedSvs <- function(settings, sampleSelector, targetClasses = NULL){
+    svs <- getFilteredSvs(settings, sampleSelector, isCapture = TRUE, targetClasses = targetClasses)
+    req(svs)
+    startSpinner(session, 'getSVGenotypes')    
+    assignments <- sampleSelector$selectedAssignments() # Source_ID	Project	Sample_ID	Category1	Category2	uniqueId
+    svFilters <- settings$Variant_Filters()
+    matchThreshold <- if(svFilters$Require_Novel_Variants$value) {
+        if(svFilters$Allow_Reference_Matches$value) SVX$matchTypes$MISMATCH else SVX$matchTypes$REFERENCE
+    } else 0
+    x <- do.call(rbind, lapply(assignments[, unique(Source_ID)], function(sourceId){
+        project <- assignments[Source_ID == sourceId][1, Project]
+        hapFile <- loadPersistentFile(sourceId = sourceId, contentFileType = "haplotypeComparisons", silent = TRUE) 
+        if(is.null(hapFile)) return(NULL)
+        x <- persistentCache[[hapFile]]$data[
+            MATCH_TYPE >= matchThreshold
+        ]
+        x[, PROJECT := project]
+        x
+    }))
+    stopSpinner(session, 'getSVGenotypes')
+    if(is.null(x)) return(NULL)
+    merge(svs, x, by = c("PROJECT", "SV_ID"))
 }
 
 # get a data.table of molecules that support the currently selected SV
