@@ -256,36 +256,35 @@ sub printJunction {
     
     # get the junction type
     my $jxnType = getJxnType($alns[READ1], $alns[READ2], $innData[READ1], $innData[READ2], $nodeClass);  
-    $jxnN++;
 
-    # reorient alignment pairs to always reflect the canonical junction strand
-    my ($read1, $read2, $umi1, $umi2, $isOuterClip1, $isOuterClip2) =
-        (READ1, READ2, UMI1, UMI2, IS_OUTER_CLIP1, IS_OUTER_CLIP2);
-    my $isCanonical = isCanonicalStrand($jxnType, $nodeClass, @alns);   
-    if($isCanonical){
+    # reorient alignment pairs to always reflect left-to-right order on the canonical strand
+    my ($read1, $read2, $umi1, $umi2, $isOuterClip1,   $isOuterClip2) =
+        (READ1,  READ2,  UMI1,  UMI2,  IS_OUTER_CLIP1, IS_OUTER_CLIP2);
+    if(isCanonicalStrand($jxnType, $nodeClass, @alns)){
         @outerPosWrk = @outerPos;
     } else {
         @outerPosWrk = reverse @outerPos;
-        ($read1, $read2, $umi1, $umi2, $isOuterClip1, $isOuterClip2) =
-        (READ2, READ1, UMI2, UMI1, IS_OUTER_CLIP2, IS_OUTER_CLIP1);
-        $alns[$read1][FLAG] ^= (_REVERSE + _FIRST_IN_PAIR + _SECOND_IN_PAIR);
-        $alns[$read2][FLAG] ^= (_REVERSE + _FIRST_IN_PAIR + _SECOND_IN_PAIR);            
+        ($read1, $read2, $umi1, $umi2, $isOuterClip1,  $isOuterClip2) =
+         (READ2,  READ1,  UMI2,  UMI1,  IS_OUTER_CLIP2, IS_OUTER_CLIP1);
+        $alns[$read1][FLAG] ^= (_FIRST_IN_PAIR + _SECOND_IN_PAIR);
+        $alns[$read2][FLAG] ^= (_FIRST_IN_PAIR + _SECOND_IN_PAIR); 
+        if(!isFRGap($nodeClass)){
+            $alns[$read1][FLAG] ^= (_REVERSE);
+            $alns[$read2][FLAG] ^= (_REVERSE); 
+        }
     }
 
-    # undo the RC action that aligner did to one of the pair of our inversion alignments
+    # undo the RC action that the aligner did to the read segment inside an inversion (not the one flanking it)
     # thus, both SEQs always exit relative to the source molecule on the canonical strand
-    if(($isFR and $nodeClass == GAP) ?
-       ($alns[$read1][FLAG] & _REVERSE) == ($alns[$read2][FLAG] & _REVERSE) :
-       ($alns[$read1][FLAG] & _REVERSE) != ($alns[$read2][FLAG] & _REVERSE)){
-        my $rcRead = $isCanonical ? # TODO: this may still need fixing for uncollated gaps?
-            (($alns[$read1][FLAG] & _REVERSE) ? $read1 : $read2) :
-            (($alns[$read1][FLAG] & _REVERSE) ? $read2 : $read1);
+    if (isInversionPair($nodeClass, @alns)){
+        my $rcRead = ($alns[$read1][FLAG] & _REVERSE) ? $read1 : $read2;
         rc(\$alns[$rcRead][SEQ]);
         my @cigar = ($alns[$rcRead][CIGAR] =~ m/(\d+\D)/g); # reverse CIGAR also
         $alns[$rcRead][CIGAR] = join("", reverse(@cigar));  # FLAG for strand no longer informative!
     } 
 
     # print rectified nodes and edges    
+    $jxnN++;
     printNode($umi1, $alns[$read1], $innData[$read1], 
               $nodeClass, $jxnType, $jxnN);
     printNode($umi2, $alns[$read2], $innData[$read2], 
@@ -296,6 +295,11 @@ sub printJunction {
 #===================================================================================================
 # utility functions for characterizing SV junctions
 #---------------------------------------------------------------------------------------------------
+# for these purposes, consider the genome as one contiguous reference unit
+#   i.e., with chromosomes conjoined in numerical index order
+#       ---chr1---|---chr2---|--- etc.
+#   such that ~half of translocations are handled as del/dup, half as inv
+#---------------------------------------------------------------------------------------------------
 # check to confirm that alignments truly do flank a SV and report its type
 sub getJxnType {
     my ($aln1, $aln2, $innData1, $innData2, $nodeClass) = @_;  
@@ -304,16 +308,12 @@ sub getJxnType {
     $$aln1[RNAME_INDEX] != $$aln2[RNAME_INDEX] and return TRANSLOCATION;
 
     # inversions determined by unexpected read orientiations
-    if($isFR and $nodeClass == GAP){
-        # special case of unmerged FR alignment pairs, expect two PDL alignments to be on opposite strands
-        ($$aln1[FLAG] & _REVERSE) == ($$aln2[FLAG] & _REVERSE) and return INVERSION;
-    } else { 
-        # for a sequenced junction or after collation, two PDL alignments are expected to be from the same strand of the source molecule
-        ($$aln1[FLAG] & _REVERSE) != ($$aln2[FLAG] & _REVERSE) and return INVERSION;   
-    }
+    isInversionPair($nodeClass, $aln1, $aln2) and return INVERSION;
 
-    # PDL are distinguish based on their position along the chromosome
-    my $dist = $$aln1[FLAG] & _REVERSE ? $$innData1[_POS] - $$innData2[_POS] : $$innData2[_POS] - $$innData1[_POS];
+    # PDL are distinguish based on their position along the conjoined chromosomes
+    my $dist = $$aln1[FLAG] & _REVERSE ? 
+                    $$innData1[_POS] - $$innData2[_POS] : # non-canonical strand
+                    $$innData2[_POS] - $$innData1[_POS];  # canonical PDL strand
     if($nodeClass == GAP){ # based on TLEN=insertSize (since we lack a junction)
         $dist < $gapDupLimit and return DUPLICATION;
         $dist > $gapDelLimit and return DELETION;
@@ -344,24 +344,40 @@ sub getMoleculeStrand {
 }
 # determine if an alignment pair is from the canonical strand of a junction fragment
 # this is a junction-level property and thus could differ from the moleculeStrand
+#   the canonical strand is:
+#       the top genome strand for PDL and tranlocations handled as PDL
+#       the top genome strand for the alignment NOT in the inverted segment
+#           e.g., the top strand to the left of the left inversion junction and vice versa
 sub isCanonicalStrand {
     my ($jxnType, $nodeClass, $aln1, $aln2) = @_;  
     if($jxnType eq DELETION or 
-       $jxnType eq DUPLICATION){
+       $jxnType eq DUPLICATION){ # same condition for collated RR (expect FF) and non-collated RF (expect FR)
         return $$aln1[FLAG] & _REVERSE ? 0 : 1;
-    } elsif($jxnType eq INVERSION) {
+    } elsif($jxnType eq INVERSION){
         return $$aln1[POS] > $$aln2[POS] ? 0 : 1;
     } elsif($jxnType eq TRANSLOCATION){
-        if(($isFR and $nodeClass == GAP) ? 
-           ($$aln1[FLAG] & _REVERSE) != ($$aln2[FLAG] & _REVERSE) : 
-           ($$aln1[FLAG] & _REVERSE) == ($$aln2[FLAG] & _REVERSE)){ 
-            return $$aln1[FLAG] & _REVERSE ? 0 : 1;
-        } else {
+        if(isInversionPair($nodeClass, $aln1, $aln2)){ 
             return $$aln1[RNAME_INDEX] > $$aln2[RNAME_INDEX] ? 0 : 1;
+        } else {
+            return $$aln1[FLAG] & _REVERSE ? 0 : 1;
         }
     } else { # unknown, extremely rare
         return 1;
     }
+}
+# determine whether an alignment pair is being handled as an inversion
+sub isInversionPair {
+    my ($nodeClass, $aln1, $aln2) = @_;
+    isFRGap($nodeClass) ? 
+        ($$aln1[FLAG] & _REVERSE) == ($$aln2[FLAG] & _REVERSE) : # alignments flanking an FR gap
+        ($$aln1[FLAG] & _REVERSE) != ($$aln2[FLAG] & _REVERSE)   # contiguous splits and collated libraries
+}
+# determine whether the junction falls in the alignment gap of a non-collated library
+# such alignment pairs do _not_ need strand flipping when converting non-canonical to canonical strands
+# isFRGap is false for split alignment pairs and gaps in collated libraries
+sub isFRGap {
+    my ($nodeClass) = @_;
+    $isFR and $nodeClass == GAP;
 }
 #===================================================================================================
 

@@ -92,16 +92,7 @@ getJunctionMap <- function(sv, mols){
     mapWidth  <- refWidth + 1 - microhomologyLength
     nAln <- mols[, .N + sum(!isOuterClip)]
     yOffset <- 1
-    baseMap <- matrix(NA, nrow = mapWidth, ncol = nAln)
-
-    # adjust actual node positions based on microhomology / insertion
-    if(microhomologyLength > 0){ 
-        left  <- leftRefI - microhomologyLength + 1
-        right <- leftRefI
-    } else if(microhomologyLength < 0){
-        left  <- leftRefI + 1
-        right <- leftRefI - microhomologyLength
-    }    
+    baseMap <- matrix(NA, nrow = mapWidth, ncol = nAln)   
     
     # add all alignments to map
     processNode <- function(nodeN, isRef, jxnSide, jxnPos, CIGAR, SEQ, pos){
@@ -126,25 +117,24 @@ getJunctionMap <- function(sv, mols){
     firstUsedPos <- usedPos[1]
 
     # set chrom posiitions, including reverse complement
-    POS_1 <- sv$POS_1 - faidxPadding
-    POS_2 <- sv$POS_2 - faidxPadding
-    POS_1 <- POS_1:(POS_1 + refWidth - 1)
-    POS_2 <- POS_2:(POS_2 + refWidth - 1)
     isRC1 <- FALSE
     isRC2 <- FALSE
-    if(sv$SIDE_1 == sv$SIDE_2){ # flip one reference strand for inversion
+    if(sv$SIDE_1 == sv$SIDE_2){
         if(sv$SIDE_1 == "L") {
-            POS_2 <- rev(POS_2)
+            POS_1 <- (sv$POS_1 - faidxPadding):(sv$POS_1 + faidxPadding)
+            POS_2 <- (sv$POS_2 + faidxPadding):(sv$POS_2 - faidxPadding)      
             isRC2 <- TRUE
         } else {
-            POS_1 <- rev(POS_1)
+            POS_1 <- (sv$POS_1 + faidxPadding):(sv$POS_1 - faidxPadding)
+            POS_2 <- (sv$POS_2 - faidxPadding):(sv$POS_2 + faidxPadding)      
             isRC1 <- TRUE
         }
+    } else {
+        POS_1 <- (sv$POS_1 - faidxPadding):(sv$POS_1 + faidxPadding)
+        POS_2 <- (sv$POS_2 - faidxPadding):(sv$POS_2 + faidxPadding)       
     }
-    POS_2 <- rev(POS_2)
     POS_1 <- POS_1[1:mapWidth]
-    POS_2 <- POS_2[1:mapWidth]
-    POS_2 <- rev(POS_2)
+    POS_2 <- rev(rev(POS_2)[1:mapWidth])
 
     # finish and return the results
     list(
@@ -166,7 +156,7 @@ getJunctionConsensus <- function(matrix){
     apply(matrix, 1, function(x){
         x[x %in% clipBases] <- NA # insertions are also lower case
         x <- x[!is.na(x)]
-        if(length(x) == 0) return(NA)
+        if(length(x) == 0) return("N")
         agg <- aggregate(x, list(x), length)
         agg[which.max(agg[[2]]), 1]
     })
@@ -186,7 +176,6 @@ getJunctionConsensus <- function(matrix){
 # 7:    +     1
 # 8:    -    13
 compareSequences <- function(REF, HAP1, HAP2, INF, JXN){
-    if(is.na(JXN)) return(matchTypes$UNSEQUENCED)
     if("N" %in% c(HAP1, HAP2, JXN)) return(matchTypes$UNSEQUENCED)
     if(JXN == HAP1 || # includes both base matches and deleted bases
        JXN == HAP2 ||
@@ -203,8 +192,8 @@ simplifyHaplotype <- Vectorize(function(REF, HAP){
 parseMatches <- Vectorize(function(MATCH){
     switch(
         MATCH + 1,
-        " ",
-        " ",
+        "~",
+        "~",
         "|",
         ".",
         "X"
@@ -224,6 +213,8 @@ message("comparing junction sequence to source alleles")
 svData <- do.call(rbind, mclapply(svCalls$SV_ID, function(svId){
     sv   <- svCalls[SV_ID == svId]
     mols <- jxnMols[SV_ID == svId]
+    if(nrow(mols) == 0) return(NULL) # e.g., if DUPLEX_ONLY is set and is not duplex
+    if(mols[, sum(!isOuterClip)] == 0) return(NULL) # or the only duplex molecules were outer clips
     jxnMap <- getJunctionMap(sv, mols)
     consensus <- getJunctionConsensus(jxnMap$matrix)
     pos1 <- 1:jxnMap$leftRefI
@@ -243,6 +234,16 @@ svData <- do.call(rbind, mclapply(svCalls$SV_ID, function(svId){
     hapMap2[, HAP2 := simplifyHaplotype(REF, HAP2)]
     hapMap1[, MATCH := parseMatches(MATCH)]
     hapMap2[, MATCH := parseMatches(MATCH)]
+
+# if(svId == "29730:1"){
+#     str(sv)
+#     str(mols)
+#     str(jxnMap)
+#     print(consensus)
+#     str(hapMap1)
+#     str(hapMap2)
+# }
+
     data.table(
         SV_ID = svId,
         MATCH_TYPE = matchType,
@@ -259,7 +260,7 @@ svData <- do.call(rbind, mclapply(svCalls$SV_ID, function(svId){
         JXN_2   = pasteSequence(hapMap2$JXN),
         MATCH_2 = pasteSequence(hapMap2$MATCH)
     )
-}, mc.cores = env$N_CPU))
+}, mc.cores = env$N_CPU)) # 
 #=====================================================================================
 
 #=====================================================================================
