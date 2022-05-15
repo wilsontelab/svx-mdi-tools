@@ -31,6 +31,10 @@ uploadTypes:
                 required: true
             distributionsZip:
                 required: false
+            haplotypeComparisons:
+                required: false
+            unphasedHaplotypes:
+                required: false
 #----------------------------------------------------------------------
 # labels and definitions for all sequential analysis steps shown in sidebar
 #----------------------------------------------------------------------
@@ -69,3 +73,5 @@ appSteps:
         module: aggregatePlots
     analyzeInsertions:
         module: analyzeInsertions
+    analyzeSNVs:
+        module: analyzeSNVs
