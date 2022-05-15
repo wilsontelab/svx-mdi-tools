@@ -234,16 +234,6 @@ svData <- do.call(rbind, mclapply(svCalls$SV_ID, function(svId){
     hapMap2[, HAP2 := simplifyHaplotype(REF, HAP2)]
     hapMap1[, MATCH := parseMatches(MATCH)]
     hapMap2[, MATCH := parseMatches(MATCH)]
-
-# if(svId == "29730:1"){
-#     str(sv)
-#     str(mols)
-#     str(jxnMap)
-#     print(consensus)
-#     str(hapMap1)
-#     str(hapMap2)
-# }
-
     data.table(
         SV_ID = svId,
         MATCH_TYPE = matchType,
