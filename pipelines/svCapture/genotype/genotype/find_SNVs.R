@@ -199,7 +199,7 @@ parseMatches <- Vectorize(function(MATCH){
         "X"
     )
 })
-pasteSequence <- function(bases, isHaplotype){
+pasteSequence <- function(bases){
     bases <- ifelse(is.na(bases),     "~", bases)
     bases <- ifelse(nchar(bases) > 1, "+", bases)
     paste(bases, collapse = "")
@@ -227,7 +227,7 @@ svData <- do.call(rbind, mclapply(svCalls$SV_ID, function(svId){
     if(jxnMap$isRC2) hapMap2[, JXN := rc(JXN)]
     hapMap1[, MATCH := mapply(compareSequences, REF, HAP1, HAP2, INF, JXN)]
     hapMap2[, MATCH := mapply(compareSequences, REF, HAP1, HAP2, INF, JXN)]
-    matchType <- max(hapMap1[, max(MATCH)], hapMap1[, max(MATCH)])
+    matchType <- max(hapMap1[, max(MATCH)], hapMap2[, max(MATCH)])
     hapMap1[, HAP1 := simplifyHaplotype(REF, HAP1)]
     hapMap1[, HAP2 := simplifyHaplotype(REF, HAP2)]
     hapMap2[, HAP1 := simplifyHaplotype(REF, HAP1)]
