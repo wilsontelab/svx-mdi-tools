@@ -64,6 +64,16 @@ matchThreshold <- reactive({
 })
 svsTable <- filteredSvsTableServer(id, input, filteredSvs, matchThreshold = matchThreshold)
 
+
+bufferedTableServer(
+    id = 'aggregatesTable',
+    parentId = id,
+    parentInput = input,
+    selection = 'single',
+    tableData = reactive({ tabulateSmallVariants(filteredSvs, settings) })
+)
+
+
 # ----------------------------------------------------------------------
 # alignment of junction bases to reference genome and the two source haplotypes
 # ----------------------------------------------------------------------

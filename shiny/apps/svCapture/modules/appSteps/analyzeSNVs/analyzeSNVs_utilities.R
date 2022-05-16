@@ -53,3 +53,52 @@ parseSide <- function(sv, sideI, charPerLine){
     x <- gsub('-', '&#8209;', x)
     x
 }
+
+# tabulate SNV/indel counts and rates
+informativeSeqCols <- c("INF_1",   "INF_2")
+informativeSeqCols <- c("MATCH_1", "MATCH_1")
+
+alnCols1 <-     c("", "REF_1", "HAP1_1", "HAP2_1", "MATCH_1", "JXN_1")
+alnCols2 <- rev(c("", "REF_2", "HAP1_2", "HAP2_2", "MATCH_1", "JXN_2"))
+
+tabulateSmallVariants <- function(filteredSvs, settings){
+    svs <- filteredSvs()
+    req(svs)
+    svFilters <- settings$Variant_Filters()
+    req(svFilters)
+    if(svFilters$Allow_Reference_Matches$value) {
+        matchThreshold <- SVX$matchTypes$MISMATCH
+        variantBaseSymbols <- c("X")
+    } else {
+        matchThreshold <- SVX$matchTypes$REFERENCE
+        variantBaseSymbols <- c("X", ".")
+    }
+    setkey(SVX$jxnTypes, code)   
+
+
+
+    svs[, .(
+        JXN_TYPE = SVX$jxnTypes[JXN_TYPE, name],
+        hasSmallVariant = ifelse(MATCH_TYPE >= matchThreshold, TRUE, FALSE),
+        nBasesInterrogated = {
+            sum(
+                strsplit(MATCH_1, "")[[1]] != "~" & 
+                strsplit(INF_1, "")[[1]]   == "1"
+            ) + 
+            sum(
+                strsplit(MATCH_2, "")[[1]] != "~" & 
+                strsplit(INF_2, "")[[1]]   == "1"
+            )
+        },
+        nVariantBases = {
+            sum(
+                strsplit(MATCH_1, "")[[1]] %in% variantBaseSymbols & 
+                strsplit(INF_1, "")[[1]]   == "1"
+            ) + 
+            sum(
+                strsplit(MATCH_2, "")[[1]] %in% variantBaseSymbols & 
+                strsplit(INF_2, "")[[1]]   == "1"
+            )
+        }
+    ), by = SV_ID]
+}

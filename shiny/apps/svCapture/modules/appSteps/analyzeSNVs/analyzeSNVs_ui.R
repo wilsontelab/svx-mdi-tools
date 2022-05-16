@@ -30,9 +30,17 @@ analyzeSNVsUI <- function(id, options) {
         
         # sortable table of SVs
         fluidRow(
+            box(
+                width = 12,
+                bufferedTableUI(ns('aggregatesTable'))
+            )  
+        ),
+
+        # sortable table of SVs
+        fluidRow(
             filteredSvsTableUI(ns, width = 12)
         ),
-        
+
         # expanded views of a single junction
         fluidRow(
             box(
