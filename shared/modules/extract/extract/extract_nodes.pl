@@ -97,9 +97,7 @@ use constant {
 # working variables
 our $isTargeted = ($TARGETS_BED and $TARGETS_BED ne "null") ? 1 : 0;
 our $isCountStrands = ($IS_COLLATED and $isTargeted); # e.g., svCapture
-our ($fwdSide2, $revSide2) = $IS_COLLATED ? # collated source molecules were grouped and re-aligned in FF orientation, like svCapture
-    (RIGHT,     LEFT) : # FF orientation, same handling as merged, i.e, all source sequences from same strand of molecule
-    (LEFT,      RIGHT); # FR orientation, handle read 2 in the opposite orientation, i.e., was from opposite strand as read 1
+our $isFR = !$IS_COLLATED; # TODO: in future, expose support for a priori FF/FR/RF/RR libraries?
 my @initCollated   = ('X', undef, 0, 0, 'X', 0);
 my @initUncollated = (0, 0, 0, @initCollated);
 
@@ -166,11 +164,21 @@ sub parseReadPair {
                             @initUncollated);            # IS_DUPLEX to SHARED_PROPER
                 }
 
+                # flip the called strand of all alignments arising from the 2nd read of an FR pair (even orphans)
+                # from this point forward, all libraries are handled as FF libraries
+                if($isFR){
+                    foreach my $aln(@alns){
+                        if($$aln[FLAG] & _SECOND_IN_PAIR){
+                            $$aln[FLAG] ^= _REVERSE;
+                        } 
+                    }
+                }
+
                 # identify pairs as proper or SV-containing and act accordingly
                 if($alns[0][FLAG] & _IS_PAIRED){ # unmerged read pairs, expect 2 alignments flagged as proper
                     if(@alns == 2 and ($alns[0][FLAG] & _PROPER)){ 
                         my ($read1, $read2) = ($alns[READ1][FLAG] & _FIRST_IN_PAIR) ? (READ1, READ2) : (READ2, READ1);
-                        commitProperMolecule($alns[$read1], $alns[$read2], $fwdSide2, $revSide2); 
+                        commitProperMolecule($alns[$read1], $alns[$read2]); 
                     } elsif(@alns == 2 and !($alns[0][FLAG] & _UNMAPPED) and !($alns[1][FLAG] & _UNMAPPED)) {
                         parseUnmergedHiddenJunction();
                     } else {
@@ -179,7 +187,7 @@ sub parseReadPair {
                 } else { # merged or orphaned reads, expect just one alignment; any supplemental = SV
                     if(@alns == 1){ # equivalent to a _PROPER flag for merged/singleton reads
                         $alns[MERGED_READ][FLAG] & _UNMAPPED or # unmapped singleton reads are discarded
-                            commitProperMolecule($alns[MERGED_READ], $alns[MERGED_READ], RIGHT, LEFT);
+                            commitProperMolecule($alns[MERGED_READ], $alns[MERGED_READ]);
                     } else {
                         parseMergedSplit();
                     }                  
