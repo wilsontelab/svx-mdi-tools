@@ -29,24 +29,16 @@ sourceTypes:
 # most of the default settings are fairly promiscuous to show ~all SVs
 #----------------------------------------------------------------------
 settings:
-    Variant_Filters:
+    Variant_Options:
         Require_Novel_Variants:
             type:   checkboxInput
-            value:  true
+            value:  false
         Allow_Reference_Matches:
             type:   checkboxInput
             value:  true    
-# locationSettings:
-#     Distance:
-#         Max_Plotted_Distance:
-#             type:   numericInput
-#             value:  500 
-#             min:    10
-#             max:    10000
-#             step:   10
-#         Distance_Grid_Spacing:
-#             type:   numericInput
-#             value:  100        
-#             min:    10
-#             max:    1000
-#             step:   10
+        Aggregate_Counts:
+            type:   checkboxInput
+            value:  true
+        SV_Ids_To_Exclude:
+            types:  textInput
+            value:  null

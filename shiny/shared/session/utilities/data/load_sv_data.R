@@ -44,9 +44,13 @@ getFilteredSvs <- function(settings, sampleSelector,
                 svPassed + 0L 
             )
         }, x$MAPQ_1, x$MAPQ_2, SIMPLIFY = TRUE)
-        x[, MAX_MAPQ := mapQ[1, ] ]  
-        x <- x[ mapQ[2, ] == 1 ]
-
+        if(nrow(x) > 0) {
+            x[, MAX_MAPQ := mapQ[1, ] ] 
+            x <- x[ mapQ[2, ] == 1 ]
+        } else {
+            x[, MAX_MAPQ := integer() ]  
+        }
+        
         # apply capture filters, if applicable
         if(isCapture){
             captureFilters <- settings$Capture_Filters()
@@ -89,15 +93,20 @@ getGenotypedSvs <- function(settings, sampleSelector, targetClasses = NULL){
     req(svs)
     startSpinner(session, 'getSVGenotypes')    
     assignments <- sampleSelector$selectedAssignments() # Source_ID	Project	Sample_ID	Category1	Category2	uniqueId
-    svFilters <- settings$Variant_Filters()
-    matchThreshold <- if(svFilters$Require_Novel_Variants$value) {
-        if(svFilters$Allow_Reference_Matches$value) SVX$matchTypes$MISMATCH else SVX$matchTypes$REFERENCE
+    options <- settings$Variant_Options()
+    matchThreshold <- if(options$Require_Novel_Variants$value) {
+        if(options$Allow_Reference_Matches$value) SVX$matchTypes$MISMATCH else SVX$matchTypes$REFERENCE
     } else 0
+    excludedIds <- options$SV_Ids_To_Exclude$value
+    if(is.null(excludedIds)) excludedIds <- ""
     x <- do.call(rbind, lapply(assignments[, unique(Source_ID)], function(sourceId){
         project <- assignments[Source_ID == sourceId][1, Project]
         hapFile <- loadPersistentFile(sourceId = sourceId, contentFileType = "haplotypeComparisons", silent = TRUE) 
         if(is.null(hapFile)) return(NULL)
-        x <- persistentCache[[hapFile]]$data[MATCH_TYPE >= matchThreshold]
+        x <- persistentCache[[hapFile]]$data[
+            MATCH_TYPE >= matchThreshold & 
+            !(SV_ID %in% strsplit(excludedIds, "\\s+")[[1]])
+        ]
         x[, PROJECT := project]
         x
     }))

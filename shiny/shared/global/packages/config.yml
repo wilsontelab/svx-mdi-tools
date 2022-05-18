@@ -6,4 +6,5 @@ packages:
     - data.table
     - imager
     - abind
+    - twosamples
   Bioconductor: null

@@ -28,12 +28,20 @@ analyzeSNVsUI <- function(id, options) {
             sampleSelectorUI(ns('sampleSelector'))
         ) ),
         
-        # sortable table of SVs
+        # summaries of SNV counts, rates and distances from junctions
         fluidRow(
-            box(
-                width = 12,
-                bufferedTableUI(ns('aggregatesTable'))
-            )  
+            bufferedTableUI(
+                ns('aggregatesTable'), 
+                title = "SNV/indel summaries",             
+                downloadable = TRUE,
+                width = 8, 
+                collapsible = TRUE
+            ),
+            staticPlotBoxUI(
+                ns('snvLocations'),
+                width = 4,
+                title = "SNV Locations"
+            )
         ),
 
         # sortable table of SVs

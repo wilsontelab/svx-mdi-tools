@@ -21,8 +21,6 @@ settings <- settingsServer( # display settings not stored in the UI, exposed by 
         file.path(app$sources$suiteGlobalDir, "settings", "svx_filters.yml"), 
         file.path(app$sources$suiteGlobalDir, "settings", "svCapture_filters.yml"),
         id
-        # ,
-        # id
     ),
     fade = FALSE
 )
@@ -55,16 +53,8 @@ selectedSv <- reactive({
 })
 
 # ----------------------------------------------------------------------
-# summary table of all filtered SVs from all selected samples
+# susummary counts and SNV rates
 # ----------------------------------------------------------------------
-matchThreshold <- reactive({
-    svFilters <- settings$Variant_Filters()
-    req(svFilters)
-    if(svFilters$Allow_Reference_Matches$value) SVX$matchTypes$MISMATCH else SVX$matchTypes$REFERENCE
-})
-svsTable <- filteredSvsTableServer(id, input, filteredSvs, matchThreshold = matchThreshold)
-
-
 bufferedTableServer(
     id = 'aggregatesTable',
     parentId = id,
@@ -73,6 +63,30 @@ bufferedTableServer(
     tableData = reactive({ tabulateSmallVariants(filteredSvs, settings) })
 )
 
+#----------------------------------------------------------------------
+# SV locations plot
+#----------------------------------------------------------------------
+locationsPlot <- staticPlotBoxServer(
+    'snvLocations', 
+    lines = TRUE,
+    title = TRUE,
+    margins = TRUE,
+    legend = TRUE,
+    immediate = TRUE,
+    create = function(...){
+        plotSnvsByDistance(filteredSvs, settings, locationsPlot)
+    }
+)
+
+# ----------------------------------------------------------------------
+# summary table of all filtered SVs from all selected samples
+# ----------------------------------------------------------------------
+matchThreshold <- reactive({
+    svFilters <- settings$Variant_Options()
+    req(svFilters)
+    if(svFilters$Allow_Reference_Matches$value) SVX$matchTypes$MISMATCH else SVX$matchTypes$REFERENCE
+})
+svsTable <- filteredSvsTableServer(id, input, filteredSvs, matchThreshold = matchThreshold)
 
 # ----------------------------------------------------------------------
 # alignment of junction bases to reference genome and the two source haplotypes
@@ -100,6 +114,7 @@ observe({
     if(!is.null(bm$outcomes)) {
         outcomes <<- listToReactiveValues(bm$outcomes)
         sampleSelector$setSelectedSamples(sampleSet, bm$outcomes$samples)
+        locationsPlot$settings$replace(bm$outcomes$locationsPlotSettings)
         alignmentSettings$replace(bm$outcomes$alignmentSettings)
     }
 })
@@ -113,6 +128,7 @@ list(
     samples  = sampleSelector$selectedSamples,
     outcomes = reactive({ list(
         samples = sampleSelector$selectedSamples(),
+        locationsPlotSettings  = locationsPlot$settings$all_(),
         alignmentSettings = alignmentSettings$all_()
     ) }),
     isReady  = reactive({ getStepReadiness(options$source, outcomes) })

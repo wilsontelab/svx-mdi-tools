@@ -27,6 +27,19 @@ CONSTANTS$clipBases <- c('a', 'c', 'g', 't', 'n')
 getJunctionMap <- function(x, clipMode = "Faded Colors"){
     req(x)
     req(x$sv$JXN_BASES != "*")
+    # dstr(x$sv[, .(
+    #     JUNCTION_NAME,
+    #     CHROM_1, SIDE_1, POS_1,
+    #     CHROM_2, SIDE_2, POS_2,
+    #     POS_2 - POS_1, SV_SIZE
+    # )])
+    # dstr(x$mols[NODE_CLASS == SVX$nodeClasses$SPLIT, .(
+    #     MOL_ID, JXN_N, MOL_STRAND,
+    #     NODE_1, NODE_2,
+    #     FLAG_1, FLAG_2,
+    #     CIGAR_1, CIGAR_2,
+    #     OUT_POS1, OUT_POS2
+    # )])
     startSpinner(session, 'getJunctionMap') 
 
     # initialize map and dimensions

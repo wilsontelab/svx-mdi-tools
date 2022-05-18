@@ -37,6 +37,7 @@ filteredSvsTableServer <- function(id, input, svs, matchThreshold = NULL){
                 count2 = STRAND_COUNT2,
                 #---------------
                 mapQ = MAX_MAPQ,
+                # MATCH_TYPE = MATCH_TYPE,
                 snv = if(is.null(matchThreshold)) "-" else ifelse(MATCH_TYPE >= matchThreshold(), "*", "-"),
                 #---------------
                 chr1 = CHROM_1,
