@@ -1,13 +1,8 @@
----
-The svx-mdi-tools suite is still under active development and is 
-not yet considered stable. A stable release is expected summer 2022.
----
-
 # wilsontelab svx-mdi-tools
 
 The [Michigan Data Interface](https://midataint.github.io/) (MDI) 
-is a framework for developing, installing and running a variety of 
-HPC data analysis pipelines and interactive R Shiny data visualization 
+is a framework for developing, installing, and running 
+HPC data analysis pipelines and R Shiny data visualization 
 applications within a standardized design and implementation interface.
 
 Data analysis in the MDI is separated into 
@@ -17,8 +12,7 @@ Collectively, pipelines and apps are referred to as **tools**.
 
 ## Repository contents
 
-This **svx** repository contains public 
-pipelines and apps
+This **svx** repository contains public pipelines and apps
 for genome structural variant analysis by different library strategies
 from the 
 [Thomas Wilson laboratory](https://wilsonte-umich.github.io)
@@ -109,9 +103,9 @@ suites:
     - wilsontelab/svx-mdi-tools
 ```
 
-and re-run <code>install.sh</code>, which will go faster
-the second time. Alternatively, you can install this suite from within the 
-Stage 2 web server, or run the following from the command line:
+and re-run <code>install.sh</code>. Alternatively, you can install 
+this suite from within the Stage 2 web server, or run the following 
+from the command line:
 
 ```bash
 svx add -p -s wilsontelab/svx-mdi-tools

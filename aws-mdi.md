@@ -24,7 +24,7 @@ with the following properties:
 
 ### Install this tool suite
 
-Add GIT_USER/SUITE_NAME to the suites list:
+Add wilsontelab/svx-mdi-tools to the suites list:
 
 ```bash
 server edit suites.yml
@@ -35,14 +35,6 @@ Then:
 ```bash
 server build
 server install
-```
-
-### Download/install resources (optional)
-
-```bash
-cd /srv/mdi/resource-scripts
-git clone https://github.com/GIT_USER/RESOURCES_NAME.git
-server resource RESOURCES_NAME/SCRIPT_NAME.sh
 ```
 
 ### Save the image
