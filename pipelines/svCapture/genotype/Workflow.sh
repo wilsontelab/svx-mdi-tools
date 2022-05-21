@@ -40,16 +40,21 @@ awk 'BEGIN{OFS="\t"}{
     print $1, $2, $3;
 }' $TARGETS_BED > $PADDED_TARGETS_BED
 
-# sort the input bam/cram file(s), in series
-runWorkflowStep 1 sort $GENOMEX_MODULES_DIR/align/sort_bam_file.sh
+# skip first pipeline actions if using any externally provided haplotype file
+if [[ "$HAPLOTYPE_FILE" == "" || "$HAPLOTYPE_FILE" == "NA" ||  "$HAPLOTYPE_FILE" == "null" ]]; then
 
-# call and normalize constitutive variants common to all sample in padded target regions
-runWorkflowStep 2 genotype genotype/genotype_source.sh
-runWorkflowStep 3 build    genotype/build_haplotypes.sh
+    # sort the input bam/cram file(s), in series
+    runWorkflowStep 1 sort $GENOMEX_MODULES_DIR/align/sort_bam_file.sh # samtools sort
+
+    # call and normalize constitutive variants common to all sample in padded target regions
+    runWorkflowStep 2 genotype genotype/genotype_source.sh # bcftools mpileup/call/norm
+    runWorkflowStep 3 build    genotype/build_haplotypes.sh 
+
+    export HAPLOTYPE_FILE=$GENOTYPE_PREFIX.unphased_haplotypes.rds
+fi
 
 # find SV molecules with SNVs / indels that cannot be accounted for by the source alleles
 runWorkflowStep 4 find genotype/find_SNVs.sh
 
 # clean up
 rm -fr $TMP_DIR_WRK
-# rm -f  $CONSENSUS_PREFIX.*.fq.gz

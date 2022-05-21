@@ -17,7 +17,8 @@ checkEnvVars(list(
         'MODULES_DIR',
         'ACTION_DIR',
         'FIND_PREFIX',
-        'GENOTYPE_PREFIX'
+        'GENOTYPE_PREFIX',
+        'HAPLOTYPE_FILE'
     ),
     integer = c(
         'N_CPU'
@@ -51,8 +52,7 @@ matchTypes <- list(
 # load required data
 #-------------------------------------------------------------------------------------
 message("loading unphased haplotype map")
-hapFile <- paste(env$GENOTYPE_PREFIX, 'unphased_haplotypes', 'rds', sep = ".")
-hapMap <- readRDS(hapFile)
+hapMap <- readRDS(env$HAPLOTYPE_FILE)
 hapMap[, posKey := paste(CHROM, POS, sep = ":")]
 setkey(hapMap, posKey)
 
@@ -177,6 +177,7 @@ getJunctionConsensus <- function(matrix){
 # 8:    -    13
 compareSequences <- function(REF, HAP1, HAP2, INF, JXN){
     if("N" %in% c(HAP1, HAP2, JXN)) return(matchTypes$UNSEQUENCED)
+    if(is.na(INF)) return(matchTypes$UNINFORMATIVE) # present in TA JXN but not hapMap
     if(JXN == HAP1 || # includes both base matches and deleted bases
        JXN == HAP2 ||
        (nchar(HAP1) > 1 && JXN == "+") || # not matching insertion sequences, just presence
@@ -187,6 +188,7 @@ compareSequences <- function(REF, HAP1, HAP2, INF, JXN){
     matchTypes$MISMATCH
 }
 simplifyHaplotype <- Vectorize(function(REF, HAP){
+    if(is.na(REF)) return("~") # present in TA JXN but not hapMap
     if(REF == HAP) "." else HAP
 })
 parseMatches <- Vectorize(function(MATCH){

@@ -3,7 +3,8 @@
 # expects:
 #     genotype/build_haplotypes.sh
 # input:
-#     $GENOTYPE_PREFIX.unphased_haplotypes.gz
+#     $GENOTYPE_PREFIX.unphased_haplotypes.gz, or
+#     $HAPLOTYPE_FILE
 # outputs:
 #     $GENOTYPE_PREFIX.haplotype_comparisons.gz / rds
 
