@@ -7,9 +7,6 @@ alnCols1 <-     c("INF_1", "REF_1", "HAP1_1", "HAP2_1", "MATCH_1", "JXN_1")
 alnCols2 <- rev(c("INF_2", "REF_2", "HAP1_2", "HAP2_2", "MATCH_2", "JXN_2"))
 refCols  <- c("REF", "HAP1", "HAP2")
 parseSide <- function(sv, sideI, charPerLine){
-    
-
-    # dprint(sv)
 
     # parse the columns for this junction side
     alnCols <- if(sideI == 1) alnCols1 else alnCols2
@@ -20,14 +17,6 @@ parseSide <- function(sv, sideI, charPerLine){
     # complement the side of the junction inside an inverted segment
     # (the genotype action provides all sequences as reversed but not complemented from reference)
     text <- sapply(alnCols, function(col) strsplit(sv[[col]], "")[[1]])
-# dmsg(nchar(sv$JXN_1))
-# dmsg(nchar(sv$INF_1))
-# dmsg(nchar(sv$JXN_2))
-# dmsg(nchar(sv$INF_2))
-# dstr(text)
-# return("X")
-# # SOMETIMES JXN is coming up short, twice out of 342 on JXN_2
-
     if(sv$SIDE_1 == sv$SIDE_2){
         flipSide <- if(sv$SIDE_1 == "R") 1 else 2
         if(sideI == flipSide) for(col in c(refCols, "JXN")){
@@ -153,6 +142,9 @@ plotSnvsByDistance <- function(filteredSvs, settings, plot){
     req(nrow(svs) > 0)
     options <- settings$Variant_Options()
     req(options)
+    startSpinner(session, 'plotSnvsByDistance')
+
+    # collect vectors of interrogated and variant base distances from junction
     variantBaseSymbols <- if(options$Allow_Reference_Matches$value) c("X") else c("X", ".")
     interrogated <- unlist(sapply(svs$SV_ID, function(svID){
         svs[SV_ID == svID, .(pos = c(
@@ -167,16 +159,33 @@ plotSnvsByDistance <- function(filteredSvs, settings, plot){
         )), by = SV_ID][, pos]
     }))
 
+    # determine whether the position distributions appear the same or different
+    test <- plot$settings$get("Statistics", "Test_Statistic")
+    isTest <- test != "none"
+    if(isTest){
+        iter <- plot$settings$get("Statistics", "N_Iterations")        
+        test <- switch(test,
+            "none" = NA,
+            "DTS" = twosamples::dts_test,
+            "Anderson-Darling" = twosamples::ad_test,
+            "Cramer-Von Mises" = twosamples::cvm_test,
+            "Kolmogorov-Smirnov" = twosamples::ks_test
+        )   
+        result <- test(variant, interrogated, nboots = iter)
+        pValue <- result["P-Value"]             
+    }
+
+    # plot the two ECXFs
     interrogated <- ecdf(interrogated)
     variant      <- ecdf(variant)
-
+    stopSpinner(session, 'plotSnvsByDistance')
     y <- interrogated(knots(interrogated))
-
     plot$initializeFrame(
         xlim = c(0, max(which(y <= 0.975))),
         ylim = c(0, 1),
         xlab = "Distance from Junction (bp)",
-        ylab = "Cumulative Frequency"            
+        ylab = "Cumulative Frequency",
+        title = if(isTest) paste("p", pValue, sep = " = ") else NULL     
     )
     plot(
         interrogated, 

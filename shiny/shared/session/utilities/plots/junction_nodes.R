@@ -36,8 +36,8 @@ junctionNodesPlotServer <- function(svMols){
             plot$initializeFrame(
                 xlim = c(xmin, xmax) / 1e6,
                 ylim = c(ymin, ymax) / 1e6,
-                xlab = "Junction Coordinate 1 (Mbp)",
-                ylab = "Junction Coordinate 2 (Mbp)"
+                xlab = "Junction Position 1 (Mb)",
+                ylab = "Junction Position 2 (Mb)"
             )
             abline(h = x$sv$POS_2 / 1e6) # crosshairs at the junction point
             abline(v = x$sv$POS_1 / 1e6)   

@@ -73,6 +73,7 @@ locationsPlot <- staticPlotBoxServer(
     margins = TRUE,
     legend = TRUE,
     immediate = TRUE,
+    template = read_yaml(file.path(app$sources$suiteGlobalDir, "settings", "variant_location_stats.yml")),
     create = function(...){
         plotSnvsByDistance(filteredSvs, settings, locationsPlot)
     }
