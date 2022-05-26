@@ -1,8 +1,12 @@
 #!/bin/bash
 
 # if a collated find, force name-sorted source file to the re-alignment bam
-if [ "$IS_COLLATED" != ""  ]; then
-    if [ "$USE_CRAM" = "" ]; then SUFFIX=bam; else SUFFIX=cram; fi
+if [ "$IS_COLLATED" != "" ]; then
+    if [[ "$USE_CRAM" = "" || "$USE_CRAM" = "0" || "$USE_CRAM" = "null" ]]; then
+        SUFFIX=bam
+    else 
+        SUFFIX=cram
+    fi
     export BAM_FILE=$DATA_FILE_PREFIX.$GENOME.name.realigned.$SUFFIX
 fi
 
