@@ -99,12 +99,11 @@ libraryQCUI <- function(id, options) {
         
         # box with sortable table of samples with FAILED checkboxes
         fluidRow(
-            column(
-                width = 12,
-                style = unpad,
-                box(width = 12,
-                    bufferedTableUI(ns('librariesTable'))
-                )
+            bufferedTableUI(
+                ns('librariesTable'), 
+                title = "Summary Statistics",
+                downloadable = TRUE,
+                width = 12
             )
         ),
 

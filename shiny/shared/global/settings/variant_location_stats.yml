@@ -1,0 +1,16 @@
+Statistics:
+    Test_Statistic:
+        type:   selectInput
+        value:  none
+        choices:
+            - none
+            - DTS
+            - Anderson-Darling
+            - Cramer-Von Mises
+            - Kolmogorov-Smirnov
+    N_Iterations:
+        type:   numericInput
+        value:  250
+        min:    250
+        max:    5000
+        step:   250
