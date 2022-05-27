@@ -5,19 +5,14 @@ published: false
 ## Conda runtime environments
 
 **\<suite\>/shared/environments** carries Anaconda/Miniconda run-time environment
-configuration files that may be called by pipeline configs. Create
-one subfolder for each environment type, which will carry potentially multiple
-versioned YAML files for that environment, to allow legacy environments to
-be preserved even when current program versions advance.
-
-Load an environment as follows:
+configuration files that may be called by pipeline configs as follows:
 
 ```yml
 # pipeline.yml
 actions:
     actionName: # replace 'actionName' with the name of your action
         condaFamilies:
-            - base-0.1 
+            - base
             - my-conda
 condaFamilies:
     my-conda: # defines the 'my-conda' environment component
@@ -27,51 +22,70 @@ condaFamilies:
             - xyz=1.16.3
 ```
 
-In the example above, 'base-0.1' must exist as a shared component. 'my-conda'
-might be fully private to the pipeline, or could also be a shared environment
+In the example above, 'base' must exist as a shared component, 
+i.e., file 'shared/environments/base.yml' must exist. 'my-conda' might 
+be fully private to the pipeline, or could also be a shared environment
 for which the author needs to override a dependency version, etc.
 
-The total set of condaFamilies are aggregated to create the final runtime
-environment, i.e., installed programs, available to the action. The order 
-in which the named conda families are listed under
-"actions: actionName: condaFamilies:" are the order they are
-loaded, i.e. the last one has highest precedence (e.g., to override
-to a specific program version).
+The total set of condaFamilies is aggregated to create the final runtime
+environment, i.e., installed programs, that are available to the action. 
+The order in which the named conda families are listed under
+"actions: actionName: condaFamilies:" is the order they are
+loaded, i.e., the last one has highest precedence (e.g., to override
+to a specific program version). However, conda entries for an action
+in pipeline.yml will override entries in any shared environment file. 
 
-### Versioning
+## Creating shared environments
 
-Conda family version numbers should be incremented whenever any of the
-program versions within it are updated, or when the channels list
-changes. It is not necessary to increment the family version when
-a new program dependency (i.e., one that was previously omitted) is
-added. That program may get added to the environment of existing
-pipelines, but shouldn't interfere with other programs. Moreover,
-if a pipeline had already declared that program as a dependency,
-it's version will take precedence over that from the family.
+Shared environments are defined in YAML configuration files in 
+'shared/environments' using the following syntax, where 
+the name of the file is the name of the conda family. 
 
-R and Python family versions (and others for which it makes sense)
-should match the major.minor version of R or Python, respectively. Other
-families are incremented from 0.1 with each update.
+```yml
+# shared/environments/NAME.yml = a single conda family called NAME
+channels: ... # often omitted if defined upstream
+dependencies: ...
+```
 
-If a version is not specified (e.g., 'base'), the latest version
-is used. However, it is recommended to always declare
-explicit versions in all pipeline configurations.
+## Available conda families
 
-All older, i.e., now outdated, environment files must always be maintained
-to allow users to run legacy versions of all code.
-
-Finally, when a new conda family version is used by a pipeline,
-it is important to remember to advance the minor version of the pipeline
-and its parent tool suite to reflect the new set of program dependencies. 
-Among other things, this ensures that container versions will be updated to 
-include the new conda environments.
-
-### Available conda families
-
-The following environment families are provided by the template
-as they are typical for many data analysis needs and support the 
+The following environment families are provided by the MDI suite template
+as they are typical for many data analysis needs or support the 
 demo, i.e., '_template', pipeline.
 
-- **base** establishes common conda channels and data tools
-- **r-essentials** adds R and a set of commonly used data packages
-- **python-essentials** adds Python and a set of commonly used data packages
+- **base** = establishes common conda channels and data tools
+- **empty** = establishes common conda channels only
+- **r-4.1** = adds R and a set of commonly used data packages
+
+## Environment versioning
+
+The version of a shared conda family is implicitly derived from the version of 
+its parent suite, i.e., setting the version of a tool suite always yields 
+the same, specific version of an environment config. 
+
+When a conda family changes the version of a program in its environment,
+it is important to advance the minor version of any pipelines that use it 
+as well as the parent tool suite, to reflect the new set of program 
+dependencies. Among other things, this ensures that container versions 
+will be updated to reflect the new conda environments.
+
+For external shared conda families, the environment version can be set by requiring 
+a specific version of the external suite at the pipeline level:
+
+```yml
+# pipeline.yml
+suiteVersions: 
+    suiteName: v0.0.0 
+```
+
+For internal shared environments, if two pipelines in your tool suite require different 
+versions of a similar conda family they must have different names so that
+they can be called differently by the two pipelines.
+Alternatively, one pipeline could override part of the conda family in its pipeline.yml file,
+e.g., setting a specific version of one program in the environment.
+
+For R, Python, and similar versioned languages or platforms, 
+it is recommended to include the language version in the name of the 
+conda family, e.g. 'R-4.1'. That way, a suite can easily maintain
+environments for different language versions and the version in use
+is clear to everyone.

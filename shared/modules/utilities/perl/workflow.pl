@@ -21,7 +21,7 @@ sub fillEnvVar {
     my ($var, $varName, $allowNull, $default) = @_;
     my $val = $ENV{$varName};
     $val and $val eq 'null' and $val = undef;
-    defined $val or $allowNull or die getActionName()." error: missing environment variable: $varName\n";
+    defined $val or $allowNull or throwError("missing environment variable: $varName");
     !defined $val and defined $default and $val = $default;
     $$var = $val;
 }

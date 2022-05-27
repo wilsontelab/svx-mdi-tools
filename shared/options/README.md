@@ -27,17 +27,29 @@ optionFamilies:
                 order: 1
                 short: x
                 type: string
-                required: true
+                required: true # set to false if a default is provided
                 default: null
                 description: "short description of the option's effect"
 ```
 
-In the example above, 'shared-options' must exist as a shared component. 
+In the example above, 'shared-options' must exist as a shared component, 
+i.e., file 'shared/options/shared-options.yml' must exist. 
 'my-options' might be fully private to the pipeline, or could also be a 
 shared option family for which the author needs to override some configuration
 detail such as changing 'required' from true to false while providing
 a 'default' value.
 
-The 'order' key:value pair allows you to control the order the families and their options are listed on help screens.
+The 'order' key:value pairs allows you to control the order the families 
+and their options are listed on help screens.
 
-Note that option families do not have or need version control.
+## Creating shared option families
+
+Shared option families are defined in YAML configuration files as follows:
+
+```yml
+# shared/options/NAME.yml = a single option family called NAME
+order: 1 # optional
+options: # required
+    option-1: ...
+    option-2: ...
+```
