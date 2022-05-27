@@ -136,56 +136,77 @@ tabulateSmallVariants <- function(filteredSvs, settings){
 #----------------------------------------------------------------------
 # frequency of SNVs occurence by distance from junction
 #----------------------------------------------------------------------
+distanceSimulation <- function(variant, interrogated, nboots){
+    agg <- aggregate(interrogated, list(interrogated), length)
+    agg$freq <- agg[[2]] / sum(agg[[2]])
+    nVariant <- length(variant)
+    medianVariant <- median(variant)
+    lessThanMedianVariant <- sapply(1:nboots, function(i){
+        x <- sample(agg[[1]], nVariant, replace = TRUE, prob = agg$freq)
+        median(x) < medianVariant 
+    })
+    list("P-Value" = max(sum(lessThanMedianVariant), 1) / nboots)
+}
+distanceMannWhitney <- function(variant, interrogated, nboots){
+    list("P-Value" = wilcox.test(variant, interrogated)$p.value)
+}
 plotSnvsByDistance <- function(filteredSvs, settings, plot){
     svs <- filteredSvs()
     req(svs)
+    svs <- svs[HAS_VARIANT == TRUE]
     req(nrow(svs) > 0)
     options <- settings$Variant_Options()
     req(options)
     startSpinner(session, 'plotSnvsByDistance')
 
-    # collect vectors of interrogated and variant base distances from junction
+    # collect vectors of interrogated and variant base _distances_ from junction over all SVs in the set
     variantBaseSymbols <- if(options$Allow_Reference_Matches$value) c("X") else c("X", ".")
-    interrogated <- unlist(sapply(svs$SV_ID, function(svID){
-        svs[SV_ID == svID, .(pos = c(
-            which(rev(isInterrogatedPos(INF_1, JXN_1, MATCH_1))),
-            which(    isInterrogatedPos(INF_2, JXN_2, MATCH_2) )
-        )), by = SV_ID][, pos]
-    }))
-    variant <- unlist(sapply(svs$SV_ID, function(svID){
-        svs[SV_ID == svID, .(pos = c(
-            which(rev(isInterrogatedPos(INF_1, JXN_1, MATCH_1) & isSvVariantPos(MATCH_1, variantBaseSymbols))),
-            which(    isInterrogatedPos(INF_2, JXN_2, MATCH_2) & isSvVariantPos(MATCH_2, variantBaseSymbols) )
-        )), by = SV_ID][, pos]
-    }))
+    interrogated <- svs[, .(distance = c(
+        which(rev(isInterrogatedPos(INF_1, JXN_1, MATCH_1))),
+        which(    isInterrogatedPos(INF_2, JXN_2, MATCH_2) )
+    )), by = SV_ID][, distance]
+    variant <- svs[, .(distance = c(
+        which(rev(isInterrogatedPos(INF_1, JXN_1, MATCH_1) & isSvVariantPos(MATCH_1, variantBaseSymbols))),
+        which(    isInterrogatedPos(INF_2, JXN_2, MATCH_2) & isSvVariantPos(MATCH_2, variantBaseSymbols) )
+    )), by = SV_ID][, distance]
 
-    # determine whether the position distributions appear the same or different
+    # determine whether the distance distributions appear the same or different
     test <- plot$settings$get("Statistics", "Test_Statistic")
     isTest <- test != "none"
     if(isTest){
         iter <- plot$settings$get("Statistics", "N_Iterations")        
-        test <- switch(test,
+        testFn <- switch(test,
             "none" = NA,
-            "DTS" = twosamples::dts_test,
-            "Anderson-Darling" = twosamples::ad_test,
-            "Cramer-Von Mises" = twosamples::cvm_test,
+            "Simulated Median"   = distanceSimulation,
+            "Mann-Whitney"       = distanceMannWhitney, # for consistency with twosamples     
+            "DTS"                = twosamples::dts_test,
+            "Anderson-Darling"   = twosamples::ad_test,
+            "Cramer-Von Mises"   = twosamples::cvm_test,
             "Kolmogorov-Smirnov" = twosamples::ks_test
         )   
-        result <- test(variant, interrogated, nboots = iter)
-        pValue <- result["P-Value"]             
+        result <- testFn(variant, interrogated, nboots = iter)
+        pValue <- result["P-Value"]
+
     }
 
-    # plot the two ECXFs
+    # plot the two ECDFs
     interrogated <- ecdf(interrogated)
     variant      <- ecdf(variant)
+    y <- interrogated(knots(interrogated))    
     stopSpinner(session, 'plotSnvsByDistance')
-    y <- interrogated(knots(interrogated))
     plot$initializeFrame(
-        xlim = c(0, max(which(y <= 0.975))),
+        xlim = c(0, max(which(y <= 0.99))),
         ylim = c(0, 1),
         xlab = "Distance from Junction (bp)",
         ylab = "Cumulative Frequency",
-        title = if(isTest) paste("p", pValue, sep = " = ") else NULL     
+        title = paste(
+            plot$settings$get("Plot_Frame", "Title"),
+            if(isTest) paste0(
+                "(p <= ", 
+                format(pValue, digits = 2, scientific = pValue < 1 / 1000),
+                ")"
+            ) else ""   
+        )  
     )
     plot(
         interrogated, 

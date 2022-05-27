@@ -1,7 +1,7 @@
 #----------------------------------------------------------------------
 # set SV plot point colors
 #----------------------------------------------------------------------
-getSvPointColors <- function(filteredSvs, settings, isCapture = FALSE){
+getSvPointColors <- function(filteredSvs, settings, sampleSelector, isCapture = FALSE){
     reactive({
         svs <- filteredSvs()
         req(svs)
@@ -23,8 +23,13 @@ getSvPointColors <- function(filteredSvs, settings, isCapture = FALSE){
             },
             sample = {
                 samples <- svs[N_SAMPLES == 1, sort(unique(SAMPLES))]
-                sampleColors <- seq_along(samples)
-                names(sampleColors) <- samples
+                sampleColors <- unlist(CONSTANTS$plotlyColors[seq_along(samples)])
+                names(sampleColors) <- samples                
+                assignments <- sampleSelector$selectedAssignments()
+                sampleLabels <- sapply(samples, function(sample){
+                    id <- assignments[Sample_ID == sample, uniqueId]
+                    getSampleNames(sampleUniqueIds = id)
+                })
                 list(
                     colors = svs[, ifelse(
                         N_SAMPLES == 1, 
@@ -32,7 +37,7 @@ getSvPointColors <- function(filteredSvs, settings, isCapture = FALSE){
                         CONSTANTS$plotlyColors$grey
                     )],
                     color = sampleColors,
-                    label = samples
+                    label = sampleLabels
                 )
             },
             target = {

@@ -94,9 +94,7 @@ getGenotypedSvs <- function(settings, sampleSelector, targetClasses = NULL){
     startSpinner(session, 'getSVGenotypes')    
     assignments <- sampleSelector$selectedAssignments() # Source_ID	Project	Sample_ID	Category1	Category2	uniqueId
     options <- settings$Variant_Options()
-    matchThreshold <- if(options$Require_Novel_Variants$value) {
-        if(options$Allow_Reference_Matches$value) SVX$matchTypes$MISMATCH else SVX$matchTypes$REFERENCE
-    } else 0
+    matchThreshold <- if(options$Allow_Reference_Matches$value) SVX$matchTypes$MISMATCH else SVX$matchTypes$REFERENCE
     excludedIds <- options$SV_Ids_To_Exclude$value
     if(is.null(excludedIds)) excludedIds <- ""
     x <- do.call(rbind, lapply(assignments[, unique(Source_ID)], function(sourceId){
@@ -104,10 +102,12 @@ getGenotypedSvs <- function(settings, sampleSelector, targetClasses = NULL){
         hapFile <- loadPersistentFile(sourceId = sourceId, contentFileType = "haplotypeComparisons", silent = TRUE) 
         if(is.null(hapFile)) return(NULL)
         x <- persistentCache[[hapFile]]$data[
-            MATCH_TYPE >= matchThreshold & 
             !(SV_ID %in% strsplit(excludedIds, "\\s+")[[1]])
         ]
-        x[, PROJECT := project]
+        x[, ":="(
+            PROJECT = project,
+            HAS_VARIANT = MATCH_TYPE >= matchThreshold
+        )]
         x
     }))
     stopSpinner(session, 'getSVGenotypes')

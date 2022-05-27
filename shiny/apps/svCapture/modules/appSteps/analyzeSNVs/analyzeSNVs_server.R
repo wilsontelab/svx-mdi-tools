@@ -44,11 +44,17 @@ outcomes <- reactiveValues()
 #----------------------------------------------------------------------
 # the set of SV junction passing the query filters
 filteredSvs <- reactive({ getGenotypedSvs(settings, sampleSelector) })
+tabulatedSvs <- reactive({
+    svs <- filteredSvs()
+    req(svs)
+    reqVar <- settings$get("Variant_Options", "Require_Novel_Variants")
+    if(reqVar) svs[HAS_VARIANT == TRUE] else svs
+})
 # the one working SV the user has clicked on
 selectedSv <- reactive({ 
     rowI <- svsTable$rows_selected()
     if(is.null(rowI) || rowI == 0) return(NULL)
-    svs <- filteredSvs()
+    svs <- tabulatedSvs()
     svs[rowI]
 })
 
@@ -72,7 +78,7 @@ locationsPlot <- staticPlotBoxServer(
     title = TRUE,
     margins = TRUE,
     legend = TRUE,
-    immediate = TRUE,
+    immediate = FALSE,
     template = read_yaml(file.path(app$sources$suiteGlobalDir, "settings", "variant_location_stats.yml")),
     create = function(...){
         plotSnvsByDistance(filteredSvs, settings, locationsPlot)
@@ -87,7 +93,7 @@ matchThreshold <- reactive({
     req(svFilters)
     if(svFilters$Allow_Reference_Matches$value) SVX$matchTypes$MISMATCH else SVX$matchTypes$REFERENCE
 })
-svsTable <- filteredSvsTableServer(id, input, filteredSvs, matchThreshold = matchThreshold)
+svsTable <- filteredSvsTableServer(id, input, tabulatedSvs, matchThreshold = matchThreshold)
 
 # ----------------------------------------------------------------------
 # alignment of junction bases to reference genome and the two source haplotypes

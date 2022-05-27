@@ -49,7 +49,7 @@ junctionMap <- reactive({ getJunctionMap(
     svMols(), 
     mapSettings$get("Map_Settings", "Clip_Mode")) 
 })
-svPointColors <- getSvPointColors(filteredSvs, settings, isCapture = FALSE)
+svPointColors <- getSvPointColors(filteredSvs, settings, sampleSelector, isCapture = FALSE)
 
 #----------------------------------------------------------------------
 # SV locations plot
