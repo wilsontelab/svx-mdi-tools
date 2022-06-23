@@ -84,7 +84,7 @@ getFilteredSvs <- function(settings, sampleSelector,
         )]
     }))
     stopSpinner(session, 'getFilteredSvs')
-    x[sample.int(.N)] # randomize the list for optimized plotting
+    x[sample.int(.N)] # randomize the list for optimized overplotting
 }
 
 # get the data.table of called SVs matching the current filter set, including any available genotyping

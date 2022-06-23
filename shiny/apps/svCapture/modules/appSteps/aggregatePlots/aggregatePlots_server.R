@@ -46,7 +46,7 @@ svRates <- reactive({
     # get samples and their categorical assignments
     samples <- sampleSelector$selectedSamples() 
     req(samples)       
-    assignments <- sampleSelector$selectedAssignments()
+    assignments <- copy(sampleSelector$selectedAssignments())
     req(assignments)
     req(nrow(assignments) > 0)   
 
@@ -142,24 +142,52 @@ svsByGroup <- reactive({
     svRates <- copy(svRates())
     req(svRates)
     setkey(svRates, uniqueId)  
-    ps <- svRates$uniqueId
-    filteredSvs()[, .(
+    uniqueIds <- svRates$uniqueId # all sv ids in plotted samples 
+    groupType <- settings$get("Data", "Distribute")
+
+    # expand SVs across samples or groups
+    # a SV will have multiple rows in the output if it is assigned to multiple samples or groups
+    expandedSvs <- filteredSvs()[, .( 
         sequenced = JXN_BASES != "*",
         MICROHOM_LEN, 
         SV_SIZE,
         group = switch(
-            settings$get("Data", "Distribute"),
+            groupType,
             byGroup = {
                 x <- unlist(PROJECT_SAMPLES)
-                unique(svRates[x[x %in% ps], group])
+                unique(svRates[x[x %in% uniqueIds], group])
             },
             bySample = {
                 x <- unlist(PROJECT_SAMPLES)
-                x[x %in% ps]
+                x[x %in% uniqueIds]
             },
             allSamplesTogether = "allSamplesTogether"
         )
     ), by = c("PROJECT", "SV_ID")]
+
+    # add columns for sorting and naming in legends
+    if(groupType == "byGroup"){
+        expandedSvs <- merge(
+            expandedSvs,
+            unique(svRates[, .(group, Category1, Category2)]),
+            all.x = TRUE,
+            by = "group"
+        )
+    } else if(groupType == "bySample"){
+        expandedSvs <- merge(
+            expandedSvs,
+            svRates[, .(uniqueId, Category1, Category2, Sample_ID)],
+            all.x = TRUE,
+            by.x = "group",
+            by.y = "uniqueId"
+        )
+    } else {
+        expandedSvs[, ":="(
+            Category1 = 1,
+            Category2 = 1
+        )]
+    }
+    expandedSvs[order(Category1, Category2)]
 })
 plotFrequencyDistribution <- function(
     plot,
@@ -170,14 +198,12 @@ plotFrequencyDistribution <- function(
     modifyPlotBase = function(...) NULL
 ){
     svsByGroup <- copy(svsByGroup()) # since we might modify it...
-    req(svsByGroup)
+    req(svsByGroup)   
     isCum <- settings$get("Data", "Cumulative")    
     modifyData(svsByGroup, isCum)
     filter <- if(column == "MICROHOM_LEN") svsByGroup$sequenced else TRUE
-
-    d <- svsByGroup[filter, .N, keyby = c("group", column)]
-
-    d[, Frequency := N / sum(N), keyby = group]
+    d <- svsByGroup[filter, .N, keyby = c("Category1", "Category2", "group", column)]
+    d[, Frequency := N / sum(N), keyby = c("Category1", "Category2", "group")]
     ymax <- if(isCum) 1 else max(d$Frequency) * 1.05
     plot$initializeFrame(
         xlim = xlim,
@@ -196,9 +222,11 @@ plotFrequencyDistribution <- function(
             col = CONSTANTS$plotlyColors[[i]]
         )
     }  
-    if(settings$get("Data", "Distribute") != "allSamplesTogether"){
+    groupType <- settings$get("Data", "Distribute")
+    if(groupType != "allSamplesTogether"){
         plot$addLegend(
-            legend = groups,
+            legend = if(groupType == "byGroup") gsub("\n", ", ", groups) 
+                     else getSampleNames(sampleUniqueIds = groups),
             col = unlist(CONSTANTS$plotlyColors[seq_along(groups)])
         )
     }
@@ -259,10 +287,10 @@ ratesTable <- bufferedTableServer(
         svRates <- svRates()
         req(svRates)
         svRates[, .(
+            Project     = Project,
+            Sample      = getSampleNames(sampleUniqueIds = uniqueId),   
             Group       = Category1Name,
             Category    = Category2Name,
-            Project     = Project,
-            Sample      = Sample_ID,
             nSvs        = nSvs, 
             onTargetCoverage = onTargetCoverage,
             svRate      = svRate

@@ -22,10 +22,18 @@ getSvPointColors <- function(filteredSvs, settings, sampleSelector, isCapture = 
                 )                
             },
             sample = {
-                samples <- svs[N_SAMPLES == 1, sort(unique(SAMPLES))]
-                sampleColors <- unlist(CONSTANTS$plotlyColors[seq_along(samples)])
-                names(sampleColors) <- samples                
                 assignments <- sampleSelector$selectedAssignments()
+                svs_1 <- svs[N_SAMPLES == 1]
+                svs_1[, uniqueId := unlist(PROJECT_SAMPLES)]
+                svs_1 <- merge(
+                    svs_1, 
+                    assignments[, .(uniqueId, Category1, Category2)],
+                    all.x = TRUE,
+                    by = "uniqueId"
+                )
+                samples <- svs_1[, sort(unique(SAMPLES)), keyby = c("Category1", "Category2")][[3]]
+                sampleColors <- unlist(CONSTANTS$plotlyColors[seq_along(samples)])
+                names(sampleColors) <- samples     
                 sampleLabels <- sapply(samples, function(sample){
                     id <- assignments[Sample_ID == sample, uniqueId]
                     getSampleNames(sampleUniqueIds = id)
@@ -43,7 +51,7 @@ getSvPointColors <- function(filteredSvs, settings, sampleSelector, isCapture = 
             target = {
                 if(isCapture){
                     targets <- svs[!grepl(',', TARGET_REGION), sort(unique(TARGET_REGION))]
-                    targetColors <- seq_along(targets)
+                    targetColors <- unlist(CONSTANTS$plotlyColors[seq_along(targets)])
                     names(targetColors) <- targets
                     list(
                         colors = svs[, ifelse(
