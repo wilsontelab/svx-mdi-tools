@@ -1,6 +1,6 @@
 ---
 pipeline:
-    name: linCNV
+    name: linCNV # TESTING
     description: "Analyze 10x scCNV data for single-cell and clonal copy number variants"
     # version: v0.0.1
 # suiteVersions:
