@@ -1,0 +1,34 @@
+#------------------------------------------------------------------------------
+# These definition file sections must be completed for each pipeline
+# that offers Singularity containers, otherwise this file may be ignored.
+#------------------------------------------------------------------------------
+# The same container is used to execute all actions in a pipeline. If different 
+# containers are required for different actions, they must be in different pipelines.
+#------------------------------------------------------------------------------
+# https://sylabs.io/guides/latest/user-guide/definition_files.html
+#------------------------------------------------------------------------------
+
+# initialize the container base, typically a Linux image pulled from Docker Hub
+Bootstrap: docker
+From: ubuntu:20.04
+Stage: build
+# alternatively, update a previous major.minor version of this pipeline's container:
+# Bootstrap: oras
+# From: ghcr.io/GIT_USER/SUITE_NAME/PIPELINE_NAME:v0.0
+# Stage: build
+
+# install system-level requirements such as libraries and common system utilities
+# do not install specialized programs here (use conda definitions in pipeline.yml)
+%post
+    # apt-get update && apt-get install -y \
+    #     PACKAGE_NAME
+
+# if desired, you may include additional definition file sections below, but be aware
+# that common required definition sections will be appended by the pipelines framework
+# usually, only the sections above need to be provided in this file
+
+# avoid placing files into system-defined bind paths within the container,
+# they will likely be overridden in a running container
+#   https://sylabs.io/guides/latest/user-guide/bind_paths_and_mounts.html#system-defined-bind-paths
+#   https://sylabs.io/guides/latest/user-guide/definition_files.html?highlight=best%20practices#best-practices-for-build-recipes
+# instead, add files to a system path such as /opt, /usr, /srv etc.
