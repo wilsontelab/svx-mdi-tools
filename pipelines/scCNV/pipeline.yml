@@ -1,0 +1,110 @@
+---
+pipeline:
+    name: scCNV
+    description: "Analyze 10x scCNV data for single-cell and clonal copy number variants"
+    version: v0.0.0
+suiteVersions:
+    genomex-mdi-tools: main 
+actions: 
+    _global:
+        environment: scCNV
+        condaFamilies:
+            - genomex-mdi-tools//base
+            - r-4.1
+            - cran
+            - bioconductor     
+        optionFamilies:
+            - genomex-mdi-tools//genome
+    extract:
+        order: 1
+        thread: extract
+        # condaFamilies:
+        #     - xxxx-1.0        
+        optionFamilies:
+            - input
+            - extract
+        resources:
+            required:
+                total-ram: 16G
+            recommended: 
+                n-cpu: 8
+                ram-per-cpu: 2G
+        job-manager:
+            recommended:
+                time-limit: 1:00:00
+        description: "Extract and normalize bin counts, call initial single-cell CNVs"      
+condaFamilies:
+    cran:
+        dependencies:
+            - r-zoo=1.8_11
+            - r-mass=7.3_58.1
+    bioconductor:
+        dependencies:
+            - bioconductor-rhdf5=2.38.1 # most recent in conda, requires r-base >=4.1,<4.2.0   
+            - bioconductor-summarizedexperiment=1.24.0  
+optionFamilies:     
+    input:
+        options:
+            input-dir: 
+                order: 1
+                short: i
+                type: string
+                required: true
+                default: null
+                directory:
+                    must-exist: true
+                description: "10x Cell Ranger project output directory, one sample per named sub-directory"  
+            input-name: 
+                order: 2
+                short: I
+                type: string
+                required: true
+                default: null
+                description: "name of the sub-directory of input-dir with data from one sample"  
+    extract:
+        options:
+            ploidy: 
+                order: 1
+                short: P
+                type: integer
+                required: false
+                default: 2
+                description: "expected copy number for autosomes"  
+            n-sd-halfCN: 
+                order: 2
+                short: S
+                type: double
+                required: false
+                default: 2.5
+                description: "number of standard deviations at CN == --ploidy + 0.5" 
+            max-window-bins: 
+                order: 3
+                short: W
+                type: integer
+                required: false
+                default: 51
+                description: "discard cells requiring more than -W 20kb bins per window" 
+            min-mappability: 
+                order: 4
+                short: M
+                type: double
+                required: false
+                default: 0.9
+                description: "ignore windows with less than -M fractional mappability"
+
+# package:
+#     uploadType: xxxx  # a signal to the Stage 2 framework regarding the package contents
+#     packageAction: do # the pipeline action after which the package should assembled
+#     files:
+#         xxxx: # a contentFileType of any name you choose; 'manifestFile' has special meaning
+#             type: xxxx # additional information as to the file type
+#             file: $DATA_FILE_PREFIX.xxxx
+#         manifestFile: # a sample manifest
+#             type: manifest-file
+#             manifestType: xxxx
+#             file: $XXXX.xxxx
+# container:
+#     supported: false    
+#     registry:  ghcr.io  # domain name of your OCI-compatible, oras-accessible, container registry [ghcr.io]
+#     owner:     xxxxxxxx # REQUIRED: the name of the owner, e.g., user or organization, at 'registry'
+#     installer: apt-get  # the installer program used by the container OS, typically apt-get or yum [apt-get]

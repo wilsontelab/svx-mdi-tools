@@ -4,6 +4,19 @@
 #----------------------------------------------------------------------
 
 #----------------------------------------------------------------------
+# vector tools
+#----------------------------------------------------------------------
+collapseVector <- function(v, n) { # sum every n adjacent elements of a vector
+    cv <- unname(tapply(v, (seq_along(v) - 1) %/% n, sum))
+    tailLength <- length(v) %% n # number of input elements summed into incomplete last output element    
+    if(tailLength != 0){
+        cvLength <- length(cv) # expand incomplete last element to same scale as all others
+        cv[cvLength] <- cv[cvLength] * n / tailLength          
+    }
+    cv
+}
+
+#----------------------------------------------------------------------
 # data frame tools
 #----------------------------------------------------------------------
 
