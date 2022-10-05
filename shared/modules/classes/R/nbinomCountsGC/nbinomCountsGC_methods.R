@@ -56,7 +56,7 @@ viterbi.nbinomCountsGC <- function(
     nb, # a nbinomCountsGC model
     binCounts, 
     fractionGC, # similar to original arguments of constructor
-    percentile = NULL, # optional result of a batch effect normalization, to adjust mu=readsPerAllele # nolint
+    percentile = NULL, # bin medians, optional result of a batch effect normalization, to adjust mu=readsPerAllele # nolint
     maxCN = 6, 
     transProb = 1e-6, # options for the HMM
     chroms = NULL, # if a vector, use keyedViterbi by chromosome
