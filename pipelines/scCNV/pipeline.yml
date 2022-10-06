@@ -102,12 +102,12 @@ optionFamilies:
                 default: 1e-7
                 description: "state transition probability in the CNV hidden Markov model"
 package:
-    uploadType: scCNV  # a signal to the Stage 2 framework regarding the package contents
-    packageAction: do # the pipeline action after which the package should assembled
-    files:
-        normalizeFile: # a contentFileType of any name you choose; 'manifestFile' has special meaning
-            type: RData # additional information as to the file type
-            file: $DATA_FILE_PREFIX.normalize.RData
+    do: # the pipeline action after which a data package should assembled
+        uploadType: scCNV # a signal to the Stage 2 framework regarding the package contents
+        files:
+            normalizeFile:
+                type: RData
+                file: $DATA_FILE_PREFIX.normalize.RData
 # container:
 #     supported: false    
 #     registry:  ghcr.io  # domain name of your OCI-compatible, oras-accessible, container registry [ghcr.io]

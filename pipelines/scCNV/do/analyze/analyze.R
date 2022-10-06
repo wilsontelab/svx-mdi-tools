@@ -176,6 +176,7 @@ names(cellFits) <- cell_ids
 
 # assemble and organize the per-cell data
 message('recording cell metadata')
+colData[, window_size := 0L] # needed to prevent errors if first cell has window_size == NA
 colData[, ':='(
     rejected    = cellFits[[cell_id]]$rejected,
     window_size = cellFits[[cell_id]]$window_size
