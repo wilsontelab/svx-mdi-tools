@@ -14,7 +14,7 @@ source $GENOMEX_MODULES_DIR/genome/set_genome_vars.sh
 # TODO: add scCNV to these names
 export EXTRACT_FILE=$DATA_FILE_PREFIX.extract.RData
 export ANALYZE_FILE=$DATA_FILE_PREFIX.analyze.RData
-export NORMALIZE_FILE=$DATA_FILE_PREFIX.normalize.RData
+export NORMALIZE_FILE=$DATA_FILE_PREFIX.normalize.rds
 # export OUTPUT_FILE=$DATA_FILE_PREFIX.output.RData
 
 # extract and reformat data from 10x Cell Ranger DNA input
@@ -27,7 +27,7 @@ runWorkflowStep 2 analyze analyze/analyze.sh
 runWorkflowStep 3 normalize normalize/normalize.sh
 
 # # cluster cells and call CNVs shared by multiple cells
-# runWorkflowStep 4 aggregate aggregate/aggregate.sh
+# runWorkflowStep 4 cluster cluster/cluster.sh
 
 # clean up
 # TODO

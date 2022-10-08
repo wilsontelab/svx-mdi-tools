@@ -1,15 +1,15 @@
 #----------------------------------------------------------------------
-# UI components for the markCells appStep module
+# UI components for the sampleSummary appStep module
 #----------------------------------------------------------------------
 
 # module ui function
-markCellsUI <- function(id, options) {
+sampleSummaryUI <- function(id, options) {
 
     # initialize namespace
     ns <- NS(id)
     
     # override missing options to module defaults
-    options <- setDefaultOptions(options, stepModuleInfo$markCells)
+    options <- setDefaultOptions(options, stepModuleInfo$sampleSummary)
 
     # return the UI contents
     standardSequentialTabItem(
@@ -34,7 +34,17 @@ markCellsUI <- function(id, options) {
             collapsible = TRUE
         ),
 
-        # individual cell plots
-        mdiInteractivePlotUI(ns("cellPlots"))
+        # summary stats and plots
+        uiOutput(ns("metrics")),
+        fluidRow(
+            staticPlotBoxUI(
+                ns("windowSizes"), 
+                "Window Sizes",
+                # ...,   
+                documentation = serverEnv$IS_DEVELOPER,
+                code = serverEnv$IS_DEVELOPER,
+                console = serverEnv$IS_DEVELOPER
+            )
+        )
     )
 }

@@ -84,13 +84,15 @@ rowRanges <- do.call(rbind, mclapply(seq_along(constants$chroms), function(i){
         end   = as.integer(start + constants$bin_size - 1),
         gc_fraction = as.double(genome_tracks$gc_fraction[[chrom]]), 
         mappability = as.double(genome_tracks$mappability[[chrom]]),
-        autosome    = chrom %in% autosomes
+        autosome    = chrom %in% autosomes,
+        chrom_bin_n = 1:nBins  
     )
     badRegions <- badRegions[chrom == constants$chroms[i], 2:3]
     setkey(badRegions, start, end)     
     dt[, bad_region := !is.na(foverlaps(dt, badRegions, type = "any", mult = "first", which = TRUE))]
     dt
 }, mc.cores = env$N_CPU))
+rowRanges[, bin_n := 1:.N]
 rm(autosomes, badRegions, genome_tracks)
 # -------------------------------------------------------------------------------------
 message("parsing cell metrics")
@@ -112,8 +114,9 @@ setnames(raw_counts, cell_ids)
 # permanently remove bins in bad genome regions; windows will span them
 #-------------------------------------------------------------------------------------
 message("removing bins in bad genome regions")
+bad_bin_n  <-  rowRanges[bad_region == TRUE, bin_n]
 raw_counts <- raw_counts[rowRanges$bad_region == FALSE]
-rowRanges  <-  rowRanges[rowRanges$bad_region == FALSE]
+rowRanges  <-  rowRanges[bad_region == FALSE]
 #=====================================================================================
 
 #=====================================================================================
@@ -122,15 +125,11 @@ rowRanges  <-  rowRanges[rowRanges$bad_region == FALSE]
 message("pre-calculating bin corrections for all required window sizes")
 window_sizes <- seq(1, env$MAX_WINDOW_BINS, 2)
 rollingRanges <- mclapply(window_sizes, function(window_size){
-    rmean <- function(x) rollmean( x, window_size, na.pad = TRUE, align = "center")
-    window_flank <- (window_size - 1) / 2
-    startUnit  <- c(TRUE, rep(FALSE, window_size - 1))
-    endUnit    <- c(rep(FALSE, window_size - 1), TRUE)    
+    rmean <- function(x) rollmean(x, window_size, na.pad = TRUE, align = "center")
+    window_flank <- (window_size - 1) / 2  
     windowUnit <- c(rep(FALSE, window_flank), TRUE, rep(FALSE, window_flank))
     rowRanges[,
         .(
-            start = rep(startUnit, ceiling(.N / window_size))[1:.N],
-            end   = rep(endUnit,   ceiling(.N / window_size))[1:.N],
             gc_fraction = as.double(rmean(gc_fraction)), 
             mappability = as.double(rmean(mappability)),
             reference_window = rep(windowUnit, ceiling(.N / window_size))[1:.N]

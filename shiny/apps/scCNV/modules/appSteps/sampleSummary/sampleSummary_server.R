@@ -1,21 +1,18 @@
 #----------------------------------------------------------------------
-# server components for the markCells appStep module
+# server components for the sampleSummary appStep module
 #----------------------------------------------------------------------
-
-
-
 
 #----------------------------------------------------------------------
 # BEGIN MODULE SERVER
 #----------------------------------------------------------------------
-markCellsServer <- function(id, options, bookmark, locks) { 
+sampleSummaryServer <- function(id, options, bookmark, locks) { 
     moduleServer(id, function(input, output, session) {    
 #----------------------------------------------------------------------
 
 #----------------------------------------------------------------------
 # initialize module
 #----------------------------------------------------------------------
-module <- 'markCells'
+module <- 'sampleSummary'
 appStepDir <- getAppStepDir(module)
 options <- setDefaultOptions(options, stepModuleInfo[[module]])
 settings <- activateMdiHeaderLinks( # uncomment as needed
@@ -39,44 +36,86 @@ projectName <- projectNameReactive(sourceId)
 sampleData <- sampleDataReactive(sourceId)
 
 #----------------------------------------------------------------------
-# individual cell plots
+# metric boxes (a series of info boxes)
 #----------------------------------------------------------------------
-cellPlots <- reactive({
-    sampleData <- structure(sampleData(), class = "scCNV.xyPlots")
+metricBoxCss <- "
+.metric-div {
+    white-space: nowrap;
+    display: inline-block;
+    margin-right: 10px;
+}
+.metric-sub-div {
+    height: 50px;
+    display: inline-block;
+    margin: 0 15px;
+    float: left;    
+}
+.metric-icon {
+    line-height: 50px;
+    font-size: 1.5em;
+}
+.metric-contents p {
+    line-height: 25px;
+    margin: 0;
+}
+"
+metricBox <- function(title, value, iconName, color) tags$div(
+    class = "metric-div",
+    tags$div(
+        class = "metric-sub-div metric-icon",
+        style = paste("color:", color),
+        icon(iconName, verify_fa = FALSE)
+    ),
+    tags$div(
+        class = "metric-div metric-contents",
+        tags$p(tags$strong(title)),
+        tags$p(value)        
+    )
+)
+output$metrics <- renderUI({
+    sampleData <- sampleData()
     req(sampleData)
-
-    nPlottedCells <- 5
-    heightPerCell <- 100
-    dpi <- 96
-    maxCN <- 4
-
-    cellIndices <- 1:nPlottedCells
-
-    list(
-        plotArgs = list(
-            sampleData,
-            cellIndices
-        ),
-        layout = list(
-            width = 1000,
-            height = nPlottedCells * heightPerCell,
-            pointsize = 7,
-            dpi = dpi,
-            mai = c(0, 0.2, 0, 0.05),
-            xlim = range(sampleData$rowRanges$bin_n, na.rm = TRUE), # OR can be read from plotArgs
-            ylim = c(0, maxCN * nPlottedCells)
+    d <- sampleData$constants
+    cellCount <- function(x) paste0(d[[x]], " (", as.integer(d[[x]] / d$num_cells * 100), "%)")
+    tagList(
+        tags$style(metricBoxCss),    
+        fluidRow(
+            style = "margin-bottom: 15px;",
+            metricBox("Total Cells", d$num_cells, "circle", "blue"),
+            metricBox("Good Cells",  cellCount("num_good_cells"), "check",  "green"),
+            metricBox("Bad Cells",   cellCount("num_bad_cells"),  "close",  "#cc0000")
         )
-        # ,
-        # parseLayout = function(x, y) list(x, y, layout) # to convert to plot space in a multi-plot layout
     )
 })
-mdiInteractivePlotServer(
-    "cellPlots",   
-    hover = FALSE,    
-    click = FALSE,
-    brush = FALSE,
-    delay = 500,
-    contents = cellPlots
+
+#----------------------------------------------------------------------
+# aggregate plots of all good cells
+#----------------------------------------------------------------------
+windowSizes <- staticPlotBoxServer(
+    "windowSizes",
+    #----------------------------
+    maxHeight = "400px",
+    immediate = TRUE,
+    #----------------------------
+    envir = parent.frame(),
+    settings = NULL,
+    create = function(){
+        sampleData <- sampleData()
+        req(sampleData)
+        d <- sampleData$colData[rejected == FALSE, .(N = .N), by = window_size]
+        windowSizes$initializeFrame(
+            title = projectName(),
+            xlim = range(d$window_size, na.rm = TRUE),
+            ylim = c(0, max(d$N, na.rm = TRUE) * 1.1),
+            xlab = "Window Size (# of 20kb bins)",
+            ylab = "# of Cells"
+        )
+        windowSizes$addPoints(
+            x = d$window_size,
+            y = d$N,
+            typ = "h"
+        )
+    }
 )
 
 #----------------------------------------------------------------------
@@ -107,23 +146,18 @@ list(
 })}
 #----------------------------------------------------------------------
 
-# Classes ‘data.table’ and 'data.frame':  120949 obs. of  35 variables:
-#  $ chrom      : chr  "chr1" "chr1" "chr1" "chr1" ...
-#  $ start      : int  1 20001 40001 60001 80001 100001 120001 140001 160001 180001 ...
-#  $ end        : int  20000 40000 60000 80000 100000 120000 140000 160000 180000 200000 ...
-#  $ gc_fraction: num  0 0 0 0 0 0 0 0 0 0 ...
-#  $ mappability: num  0 0 0 0 0 0 0 0 0 0 ...
-#  $ autosome   : logi  TRUE TRUE TRUE TRUE TRUE TRUE ...
-#  $ chrom_bin_n: int  1 2 3 4 5 6 7 8 9 10 ...
-#  $ bad_region : logi  FALSE FALSE FALSE FALSE FALSE FALSE ...
-#  $ bin_n      : int  1 2 3 4 5 6 7 8 9 10 ...
-#  $ w_1        : logi  TRUE TRUE TRUE TRUE TRUE TRUE ...
-#  $ w_3        : logi  FALSE TRUE FALSE FALSE TRUE FALSE ...
-#  - attr(*, ".internal.selfref")=<externalptr>
-# List of 5
-#  $ 0  :Classes ‘data.table’ and 'data.frame':   7115 obs. of  4 variables:      
-#   ..$ cn : num [1:7115] NA NA NA NA NA ...
-#   ..$ hmm: int [1:7115] 2 2 2 2 2 2 2 2 2 2 ...
-#   ..$ cnc: num [1:7115] NA NA NA NA NA NA NA NA NA NA ...
-#   ..$ cnv: int [1:7115] NA NA NA NA NA NA NA NA NA NA ...
-#   ..- attr(*, ".internal.selfref")=<externalptr>
+# red
+# yellow
+# aqua
+# blue
+# light-blue
+# green
+# navy
+# teal
+# olive
+# lime
+# orange
+# fuchsia
+# purple
+# maroon
+# black

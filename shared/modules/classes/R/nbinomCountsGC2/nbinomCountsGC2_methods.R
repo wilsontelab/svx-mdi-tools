@@ -1,12 +1,12 @@
 #----------------------------------------------------------------------
-# nbinomCountsGC class generic methods, called as method(obj)
+# nbinomCountsGC2 class generic methods, called as method(obj)
 #----------------------------------------------------------------------
 
-# returns an object with both x and y data (since x may have been our default) binned fraction GC
+# returns readsPerAllele from a set of input GC values (or the model itself)
 predict.nbinomCountsGC2 <- function(
     nb, 
     fractionGC = NULL, 
-    type = c('mu', 'peak', 'adjustedPeak'), 
+    type = c('mu', 'peak', 'adjustedPeak', 'theta'), 
     peakThreshold = 10
 ){
     rows <- if(is.null(fractionGC)) TRUE else round(fractionGC * nb$nGcSteps, 0) - nb$gcIndexOffset    
@@ -20,7 +20,7 @@ predict.nbinomCountsGC2 <- function(
 }
 
 # returns a vector of cumulative count probabilities for a set of bins relative to a computed model
-# each bin's value is its lower-tail probability for its actual count based on the nb model for its GC fraction
+# each bin's value is its lower-tail probability, i.e., percentile for its actual count based on the nb model
 cumprob <- function(x, ...) {
     UseMethod("cumprob", x)
 }
@@ -47,12 +47,12 @@ cumprob.nbinomCountsGC2 <- function(
     })
 }
 
-# solve for the most likely CN path of a set of bin counts given a nbinomCountsGC model
+# solve for the most likely CN path of a set of bin counts given a nbinomCountsGC2 model
 viterbi <- function(x, ...) {
     UseMethod("viterbi", x)
 }
 viterbi.nbinomCountsGC2 <- function(
-    nb, # a nbinomCountsGC model
+    nb, # a nbinomCountsGC2 model
     binCounts, 
     fractionGC, # similar to original arguments of constructor
     percentile = NULL, # bin medians, optional result of a batch effect normalization, to adjust mu=readsPerAllele # nolint
@@ -64,8 +64,9 @@ viterbi.nbinomCountsGC2 <- function(
 ){ # report results as rle object to minimize object size
 
     # calculate emissProbs
-    size <- nb$theta 
-    rpa <- predict(nb, fractionGC, type = 'mu')
+    rows <- round(fractionGC * nb$nGcSteps, 0) - nb$gcIndexOffset
+    size <- nb$theta[rows]
+    rpa  <- nb$mu[rows]
     if(!is.null(percentile)) rpa <- qnbinom(percentile, size = size, mu = rpa)     
     CNs <- 0:maxCN    
     binCounts[binCounts < 0] <- NA
@@ -97,4 +98,33 @@ viterbi.nbinomCountsGC2 <- function(
         cn = if(asRle) rle(results) else results,
         maxCN = maxCN
     )
+}
+
+# save a plot of the GC bias correction for quality monitoring
+plot.nbinomCountsGC2 <- function(nb, cell, ploidy, filename){
+    png(
+        filename = filename,
+        width = 1.5, 
+        height = 1.5, 
+        units = "in", 
+        pointsize = 6,
+        bg = "white",  
+        res = 300,
+        type = "cairo"
+    )
+    par(mar= c(4.1, 4.1, 0.1, 0.1))
+    plot(cell$gc_wr, cell$NR_map_wr, xlim = c(0.35, 0.55), 
+         pch = 16, cex = 0.25, col = rgb(0, 0, 0, 0.2))
+    col <- if(cell$rejected) "red" else "blue"
+    lines(
+        nb$gcFractions,
+        predict(nb, type = 'adjustedPeak') * ploidy,
+        lty = 1, lwd = 1, col = col
+    )
+    for(percentile in c(0.05, 0.95)) lines(
+        nb$gcFractions, 
+        qnbinom(percentile, size = nb$theta, mu = nb$mu) * ploidy, 
+        lty = 3, lwd = 0.75, col = col
+    )
+    dev.off()
 }

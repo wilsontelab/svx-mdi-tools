@@ -289,7 +289,7 @@ fitCell <- function(cell_id, minBinCount, pass){ # called twice: 1) learn about 
         cn = cn
     )
 }
-cellFits <- mclapply(cell_ids, function(cell_id){
+cells <- mclapply(cell_ids, function(cell_id){
     
     # first pass fit at the sensitivity expected for Poisson without over/under-dispersion
     x1 <- fitCell(cell_id, minBinCount, pass = 1)
@@ -310,13 +310,13 @@ cellFits <- mclapply(cell_ids, function(cell_id){
     # points(1:length(x$cn), x$cn, pch = ".")
     # points(1:length(x$hmm$cn), x$hmm$cn, pch = 16, cex = 0.5, col = "red")
 }, mc.cores = env$N_CPU)
-names(cellFits) <- cell_ids
+names(cells) <- cell_ids
 
 # assemble and organize the per-cell data
 colData[, ':='(
-    rejected    = sapply(cellFits, function(x) 
+    rejected    = sapply(cells, function(x) 
         if(is.list(x)) x$rejected else TRUE),
-    window_size = sapply(cellFits, function(x) 
+    window_size = sapply(cells, function(x) 
         if(is.list(x) && !is.null(x$window_size)) x$window_size else NA)
 )]
 

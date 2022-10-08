@@ -76,7 +76,7 @@ optionFamilies:
                 short: S
                 type: double
                 required: false
-                default: 2.5 # TODO: make this 2?
+                default: 2
                 description: "number of standard deviations at CN == --ploidy + 0.5" 
             max-window-bins: 
                 order: 2
@@ -107,7 +107,7 @@ package:
         files:
             normalizeFile:
                 type: RData
-                file: $DATA_FILE_PREFIX.normalize.RData
+                file: $DATA_FILE_PREFIX.normalize.rds
 # container:
 #     supported: false    
 #     registry:  ghcr.io  # domain name of your OCI-compatible, oras-accessible, container registry [ghcr.io]
