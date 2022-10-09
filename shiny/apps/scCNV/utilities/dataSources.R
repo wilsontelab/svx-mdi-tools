@@ -10,6 +10,11 @@ sampleDataReactive <- function(sourceId){
         sourceId <- sourceId()
         req(sourceId)
         dataFilePath <- getSourceFilePath(sourceId, "normalizeFile")
-        readRDS(dataFilePath)
+        startSpinner(session, message = "loading sample data")
+        x <- readRDS(dataFilePath)
+        setkey(x$colData, "cell_id")
+        x$chromEnds <- x$rowRanges[, max(bin_n, na.rm = TRUE), by = chrom][[2]]
+        stopSpinner(session)
+        x
     }) 
 }

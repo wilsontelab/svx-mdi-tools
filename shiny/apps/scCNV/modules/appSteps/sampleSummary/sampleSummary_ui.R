@@ -35,7 +35,13 @@ sampleSummaryUI <- function(id, options) {
         ),
 
         # summary stats and plots
-        uiOutput(ns("metrics")),
+        fluidRow(
+            box(
+                width = 12,
+                title = "Cell Counts",
+                uiOutput(ns("metrics"))
+            )
+        ),
         fluidRow(
             staticPlotBoxUI(
                 ns("windowSizes"), 

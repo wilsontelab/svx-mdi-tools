@@ -83,7 +83,7 @@ optionFamilies:
                 short: W
                 type: integer
                 required: false
-                default: 51
+                default: 101
                 description: "discard cells requiring more than -W 20kb bins per window" 
             min-mappability: 
                 order: 3

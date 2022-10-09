@@ -40,3 +40,5 @@ appSteps:
         module: sampleSummary 
     mark:
         module: markCells
+    browser:
+        module: genomex-mdi-tools//trackBrowser

@@ -2,9 +2,6 @@
 # server components for the markCells appStep module
 #----------------------------------------------------------------------
 
-
-
-
 #----------------------------------------------------------------------
 # BEGIN MODULE SERVER
 #----------------------------------------------------------------------
@@ -16,6 +13,8 @@ markCellsServer <- function(id, options, bookmark, locks) {
 # initialize module
 #----------------------------------------------------------------------
 module <- 'markCells'
+fileName <- paste0(app$NAME, "-", id, "-", module, ".png")     
+pngFile <- file.path(sessionDirectory, fileName)
 appStepDir <- getAppStepDir(module)
 options <- setDefaultOptions(options, stepModuleInfo[[module]])
 settings <- activateMdiHeaderLinks( # uncomment as needed
@@ -24,7 +23,7 @@ settings <- activateMdiHeaderLinks( # uncomment as needed
     # dir = appStepDir, # for terminal emulator
     envir = environment(), # for R console
     baseDirs = appStepDir, # for code viewer/editor
-    # settings = id, # for step-level settings
+    settings = id, # for step-level settings
     # immediate = TRUE # plus any other arguments passed to settingsServer()
 )
 
@@ -42,29 +41,111 @@ sampleData <- sampleDataReactive(sourceId)
 # individual cell plots
 #----------------------------------------------------------------------
 cellPlots <- reactive({
-    sampleData <- structure(sampleData(), class = "scCNV.xyPlots")
-    req(sampleData)
+    x <- sampleData()
+    req(x)
+    startSpinner(session, message = "plotting cells")
 
-    nPlottedCells <- 5
-    heightPerCell <- 100
-    dpi <- 96
-    maxCN <- 4
+    # set inherited variables
+    settings <- settings$Plot_Options()
+    cellType <- input$cellType
+    nPlottedCells <- input$cellsPerPage
+    heightPerCell <- settings$Track_Height_Pixels$value
+    maxCN <- settings$Maximum_Copy_Number$value
+    width <- settings$Plot_Width_Pixels$value
+    height <- nPlottedCells * heightPerCell
 
-    cellIndices <- 1:nPlottedCells
+    # set the working cells
+    pageNumber <- as.integer(input$pageNumber)
+    plotIndices <- 1:nPlottedCells
+    cellIndices <- plotIndices + nPlottedCells * (pageNumber - 1)
 
+    # set margins
+    axisMarginInches   <- 1
+    nullMarginInches   <- 0.05
+    bottomMarginInches <- axisMarginInches 
+    leftMarginInches   <- axisMarginInches
+    topMarginInches    <- nullMarginInches
+    rightMarginInches  <- nullMarginInches
+
+    # set axis limits
+    xlim <- range(x$rowRanges$bin_n, na.rm = TRUE)
+    ylim <- c(-0.25, maxCN + 0.25)
+
+    # initialize composite plot
+    png(
+        pngFile,
+        width  = width,
+        height = height,
+        units  = "px",
+        pointsize = 6,
+        res = 96,
+        type = "cairo"
+    )
+    layout(matrix(plotIndices, ncol = 1))
+
+    # plot each cell from the working page
+    for(i in cellIndices){
+
+        # initial individual cell plot
+        par(mai = c(nullMarginInches, leftMarginInches, nullMarginInches, rightMarginInches), cex = 1 / 0.66) # of each subplot
+        plot(
+            x = NA,
+            y = NA,
+            typ = "n",
+            xlim = xlim,
+            ylim = ylim,
+            # xlab = if(i == nPlottedCells) "Genome Bin Index (20 kb bins)" else NULL,
+            ylab = "CN",
+            xaxs = "i",
+            yaxs = "i",
+            xaxt = "n",
+            bty = "n"
+        )
+        abline(h = 0:maxCN, col = "black")
+        abline(h = 0:(maxCN - 1) + 0.5, col = "grey50")
+        abline(v = c(0, x$chromEnds), col = "grey30")
+
+        # collect the cell's data (if any available)
+        cell_id <- x$constants[[paste0(cellType, "_cell_ids")]][i]
+        if(is.na(cell_id) || is.null(cell_id)) next
+        cell <- x[[paste0(cellType, "Cells")]][[cell_id]]
+        window_size <- x$colData[cell_id, window_size]
+        if(is.na(window_size)) next
+
+        # get this cell's window x positions
+        ww <- paste("w", window_size, sep = "_")
+        bin_wr <- x$rowRanges[, .SD, .SDcols = ww][[1]]
+        bin_n <- x$rowRanges[bin_wr == TRUE, bin_n]
+
+        # plot the copy number and HMM fit
+        points(
+            bin_n,
+            cell$cn,
+            pch = 16,
+            cex = settings$Point_Size$value,
+            col = "black"           
+        )
+        if(!is.null(cell$hmm)) points(
+            bin_n,
+            cell$hmm,
+            pch = 16,
+            cex = 0.5,
+            col = "red3"         
+        )  
+    }
+    dev.off()
+    stopSpinner(session)
+
+    # send out results to mdiInteractivePlot
     list(
-        plotArgs = list(
-            sampleData,
-            cellIndices
-        ),
+        pngFile = pngFile,
         layout = list(
-            width = 1000,
-            height = nPlottedCells * heightPerCell,
-            pointsize = 7,
-            dpi = dpi,
-            mai = c(0, 0.2, 0, 0.05),
-            xlim = range(sampleData$rowRanges$bin_n, na.rm = TRUE), # OR can be read from plotArgs
-            ylim = c(0, maxCN * nPlottedCells)
+            width = width,
+            height = height,
+            dpi = 96,
+            mai = c(bottomMarginInches, leftMarginInches, topMarginInches, rightMarginInches), # of whole plot
+            xlim = xlim,
+            ylim = c(0, nPlottedCells)
         )
         # ,
         # parseLayout = function(x, y) list(x, y, layout) # to convert to plot space in a multi-plot layout
@@ -78,6 +159,20 @@ mdiInteractivePlotServer(
     delay = 500,
     contents = cellPlots
 )
+
+#----------------------------------------------------------------------
+# pagination control
+#----------------------------------------------------------------------
+observeEvent(input$prevPage, {
+    pageNumber <- as.integer(input$pageNumber)
+    if(pageNumber == 1) return()
+    updateTextInput(session, "pageNumber", value = pageNumber - 1)
+})
+observeEvent(input$nextPage, {
+    pageNumber <- as.integer(input$pageNumber)
+    # if(pageNumber == 1) return()
+    updateTextInput(session, "pageNumber", value = pageNumber + 1)
+})
 
 #----------------------------------------------------------------------
 # define bookmarking actions

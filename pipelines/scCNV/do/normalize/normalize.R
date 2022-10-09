@@ -164,13 +164,16 @@ for(cell_id in constants$good_cell_ids){
 # TODO: create a SummarizedExperiment object, perhaps as hdf5?
 #-------------------------------------------------------------------------------------
 message("saving final data object")
+ww <- paste("w", sort(unique(colData$window_size)), sep = "_")
+rollingRanges <- as.data.table(lapply(ww, function(x) rollingRanges[[x]]$reference_window))
+setnames(rollingRanges, ww)
 saveRDS(list(
     env = env,
     constants = constants,
     metadata = metadata,
-    rowRanges = cbind( # identical for genome + maxMaxWindow
+    rowRanges = cbind(
         rowRanges, 
-        as.data.table(lapply(rollingRanges, function(x) x$reference_window))
+        rollingRanges
     ), 
     colData = colData,
     goodCells = goodCells,  

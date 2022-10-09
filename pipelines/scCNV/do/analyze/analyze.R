@@ -81,7 +81,7 @@ fitCell <- function(cell_id, minBinCount, pass){ # called twice: 1) learn about 
     })))
 
     # process required bin and cell information
-    reference_windows <- rollingRanges$reference_window
+    reference_windows <- rollingRanges$reference_window # logical, never NA
     gc_w   <- rollingRanges$gc_fraction
     gc_wr  <- gc_w[reference_windows]
     gc_wra <- gc_w[reference_windows & rowRanges$autosome]
