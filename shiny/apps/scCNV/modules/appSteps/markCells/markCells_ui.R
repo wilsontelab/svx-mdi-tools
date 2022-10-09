@@ -42,11 +42,11 @@ markCellsUI <- function(id, options) {
             style = "margin-bottom: 15px;",
             tags$div(
                 class = "cellPageInput",
-                radioButtons(ns('cellType'), "", choices = c("good", "bad"), inline = TRUE, width = "125px")
+                radioButtons(ns('Cell_Type'), "", choices = c("good", "bad"), inline = TRUE, width = "125px")
             ),
             tags$div(
                 class = "cellPageInput",
-                numericInput(ns('cellsPerPage'), "Cells Per Page", value = 10, width = "100px"),
+                numericInput(ns('Cells_Per_Page'), "Cells Per Page", value = 10, width = "100px"),
             ),
             tags$div(
                 class = "cellPageInput",
@@ -54,7 +54,7 @@ markCellsUI <- function(id, options) {
             ),
             tags$div(
                 class = "cellPageInput",
-                textInput(ns('pageNumber'), "Page", value = 1, width = "41px"),
+                textInput(ns('Page_Number'), "Page", value = 1, width = "41px"),
             ),
             tags$div(
                 class = "cellPageInput",

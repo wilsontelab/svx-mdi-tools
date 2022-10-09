@@ -38,7 +38,7 @@ appSteps:
         module: sourceFileUpload
     summary:
         module: sampleSummary 
-    mark:
-        module: markCells
+    # mark:
+    #     module: markCells
     browser:
         module: genomex-mdi-tools//trackBrowser
