@@ -23,7 +23,8 @@ rUtilDir <- file.path(env$MODULES_DIR, 'utilities', 'R')
 source(file.path(rUtilDir, 'workflow.R'))
 checkEnvVars(list(
     string = c(
-        'NORMALIZE_FILE'
+        'NORMALIZE_FILE',
+        'PLOT_PREFIX'
     ),
     integer = c(
         "PLOIDY",
@@ -116,12 +117,60 @@ goodCells <- mclapply(constants$good_cell_ids, function(cell_id){
 
     # return copy number profiles for plotting and clustering
     data.table(
+        pre = cell$NR_map_wr / cell$ER_gc * env$PLOIDY,
         cn = cell$NR_map_wr / rpa,        
         hmm = hmm$cn
     )
 }, mc.cores = env$N_CPU)
 names(goodCells) <- constants$good_cell_ids
 #=====================================================================================
+
+png(
+    filename = "/nfs/turbo/path-wilsonte-turbo/mdi/wilsontelab/greatlakes/tmp-output/scCNV/BATCH-TEST.png", #paste0(env$PLOT_PREFIX, ".BATCH.png"),
+    width = 3, height = 3, units = "in", pointsize = 8,
+    bg = "white",  res = 300, 
+    type ="cairo")
+sdPre  <- sapply(goodCells, function(x) sd(x$pre, na.rm = TRUE))
+sdPost <- sapply(goodCells, function(x) sd(x$cn,  na.rm = TRUE))
+plot(
+    NA, NA, typ = "n",
+    xlim = c(0, 6) / 10,
+    ylim = c(0, 6) / 10,
+    xlab = "sd(pre)",
+    ylab = "sd(post)",
+)
+abline(0, 1, col = "blue")
+points(
+    sdPre,
+    sdPost,
+    pch = ".",    
+)
+dev.off()
+
+png(
+    filename = "/nfs/turbo/path-wilsonte-turbo/mdi/wilsontelab/greatlakes/tmp-output/scCNV/BATCH-TEST-CNC.png", #paste0(env$PLOT_PREFIX, ".BATCH.png"),
+    width = 3, height = 3, units = "in", pointsize = 8,
+    bg = "white",  res = 300, 
+    type ="cairo")
+sdPre  <- sapply(goodCells, function(x) sd(x$cn, na.rm = TRUE))
+sdPost <- sapply(goodCells, function(x) sd(x$cn - x$hmm,  na.rm = TRUE))
+plot(
+    NA, NA, typ = "n",
+    xlim = c(0, 6) / 10,
+    ylim = c(0, 6) / 10,
+    xlab = "sd(cn)",
+    ylab = "sd(cnc)",
+)
+abline(0, 1, lty = 3, col = "blue")
+points(
+    sdPre,
+    sdPost,
+    pch = 16,
+    cex = 0.75    
+)
+dev.off()
+
+stop("CHECK THE PLOT")
 
 #=====================================================================================
 # calculate further parameters based on the fit across all cells

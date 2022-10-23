@@ -22,7 +22,7 @@ build.scCNV_cellsTrack <- function(settings, input, reference, coord, layout){
     sourceId <- options$Sample$value
     cellType <- options$Cell_Type$selected
     nPlottedCells <- input$cellsPerPage
-    heightPerCell <- options$Cell_Height_Pixels$value
+    heightPerCell <- options$Cell_Height_Inches$value
     maxCN <- options$Maximum_Copy_Number$value
 
     # set the working cells
@@ -31,27 +31,19 @@ build.scCNV_cellsTrack <- function(settings, input, reference, coord, layout){
     plotIndices <- 1:nPlottedCells
     cellIndices <- plotIndices + nPlottedCells * (pageNumber - 1)
 
-    # set margins
-    axisMarginInches   <- 1
-    nullMarginInches   <- 0
-    bottomMarginInches <- axisMarginInches 
-    leftMarginInches   <- axisMarginInches
-    topMarginInches    <- nullMarginInches
-    rightMarginInches  <- nullMarginInches
-
     # set axis limits, height and margins
     ylim <- c(0, nPlottedCells)    
     ylim_cell <- c(-0.25, maxCN + 0.25)
     padding <- padding(settings, layout)
-    height <- nPlottedCells * heightPerCell /  layout$dpi + padding$total    
+    height <- nPlottedCells * heightPerCell + padding$total    
     mai <- NULL
 
     # set the scCNV data source
-    # TODO: use function to cache this
-    dataFilePath <- getSourceFilePath(sourceId, "normalizeFile")
-    sample <- readRDS(dataFilePath)
+    updateSpinnerMessage(session, message = "loading sample data")
+    sample <- loadScCnvSample(sourceId)
     setkey(sample$colData, "cell_id")
-    sample$chromEnds <- sample$rowRanges[, max(bin_n, na.rm = TRUE), by = chrom][[2]]
+    # sample$chromEnds <- sample$rowRanges[, max(bin_n, na.rm = TRUE), by = chrom][[2]]
+    ploidy <- as.integer(sample$env$PLOIDY)
 
     # use the mdiTrackImage helper function to create the track image
     image <- mdiTrackImage(layout, height, function(...){
@@ -61,11 +53,13 @@ build.scCNV_cellsTrack <- function(settings, input, reference, coord, layout){
         layout(matrix(plotIndices, ncol = 1))
 
         # plot each cell from the working page
+        updateSpinnerMessage(session, message = "plotting cells")
         for(i in cellIndices){
 
             # initial individual cell plot
+            cell_id <- sample$constants[[paste0(cellType, "_cell_ids")]][i]
             par(
-                mai = c(nullMarginInches, mai[2], nullMarginInches, mai[4]),
+                mai = c(0, mai[2], 0, mai[4]),
                 cex = 1
             ) # of each subplot
             plot(
@@ -75,17 +69,17 @@ build.scCNV_cellsTrack <- function(settings, input, reference, coord, layout){
                 bty = "n",
                 xlim = coord$range,
                 ylim = ylim_cell,
-                ylab = "CN",
+                ylab = paste0("#", cell_id, " CN"),
                 xaxs = "i",
                 yaxs = "i",
                 xaxt = "n"
             )
+            rect(coord$start, ploidy - 0.5, coord$end, ploidy + 0.5, col = "grey80")            
             abline(h = 0:maxCN, col = "black")
             abline(h = 0:(maxCN - 1) + 0.5, col = "grey50")
             # abline(v = c(0, sample$chromEnds), col = "grey30")
 
             # collect the cell's data (if any available)
-            cell_id <- sample$constants[[paste0(cellType, "_cell_ids")]][i]
             if(is.na(cell_id) || is.null(cell_id)) next
             cell <- sample[[paste0(cellType, "Cells")]][[cell_id]]
             window_size <- sample$colData[cell_id, window_size]
@@ -115,8 +109,7 @@ build.scCNV_cellsTrack <- function(settings, input, reference, coord, layout){
             if(!is.null(cell$hmm)) lines(
                 x,
                 cell$hmm[plotted],
-                pch = 16,
-                cex = 0.5,
+                lwd = 2,
                 col = "red3"         
             )  
         }
@@ -167,7 +160,25 @@ items.scCNV_cellsTrack <- function(settings, session, input, reference, track){
     )
 }
 
+# implement track-level navigation
+observers.scCNV_cellsTrack <- list()
 navigation.scCNV_cellsTrack <- function(settings, session){
+
+    # handle nav observers, e.g., buttons
+    for(x in observers.scCNV_cellsTrack) x$destroy()
+    input <- session$input
+    observers.scCNV_cellsTrack$prevPage <<- observeEvent(input$prevPage, {
+        pageNumber <- as.integer(input$pageNumber)
+        if(pageNumber == 1) return()
+        updateTextInput(session, "pageNumber", value = pageNumber - 1)
+    })
+    observers.scCNV_cellsTrack$nextPage <<- observeEvent(input$nextPage, {
+        pageNumber <- as.integer(input$pageNumber)
+        # if(pageNumber == 1) return()
+        updateTextInput(session, "pageNumber", value = pageNumber + 1)
+    })
+
+    # return the navigation UI elements
     tagList(
         tags$div(
             class = "trackBrowserInput",

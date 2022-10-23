@@ -1,9 +1,9 @@
 #----------------------------------------------------------------------
-# object class for fitting count data to a negative binomial distribution
+# revised object class for fitting count data to a negative binomial distribution
 # with GC bias correction via glm.nb fit of bin read count to fraction GC
 #----------------------------------------------------------------------
-# in version 2 of the model, i.e., nbinomCountsGC2, both mu and theta
-# are allowed to vary as a function of GC + GC**2
+# in version 2 of the model, i.e., nbinomCountsGC2, both mu _and_ theta
+# are allowed to vary as a function of GC + GC**2 (not just mu)
 #----------------------------------------------------------------------
 # as used in R, the variance of the NBD is: mu + mu**2 / theta
 #----------------------------------------------------------------------
@@ -39,7 +39,7 @@ gcIndices  <- minGcIndex:maxGcIndex # all GC steps in use from min to max value
 gcIndices2 <- gcIndices ** 2
 
 #----------------------------------------------------------------------
-# execute the negative binomial fits across all GC bins
+# execute the negative binomial fits across all GC bins, one bin at a time
 #----------------------------------------------------------------------
 fits <- sapply(gcIndices, function(gci){
     rpa <- readsPerAllele[gcIndex == gci]
@@ -85,12 +85,14 @@ peak <- mapply(
 #----------------------------------------------------------------------
 structure(
     list(
-        nGcSteps = nGcSteps, # value for parsing new GC values to mu and theta values
+        nGcSteps      = nGcSteps, # values for parsing new GC values to mu and theta values
         gcIndexOffset = minGcIndex - 1,
-        gcFractions = gcIndices / nGcSteps,
+        gcFractions   = gcIndices / nGcSteps,
+        minGcIndex = minGcIndex,
+        maxGcIndex = maxGcIndex,
         theta = theta, # the shape parameter of the negative binomial, called size in dnbinom             
-        mu = mu,       # poisson mean, as reads per allele, used by HMM
-        peak = peak    # the most frequent reads per allele value in each GC bin, best for visualization
+        mu    = mu,    # poisson mean, as reads per allele, used by HMM
+        peak  = peak   # the most frequent reads per allele value in each GC bin, best for visualization
     ),
     class = class
 )

@@ -14,6 +14,7 @@ source $GENOMEX_MODULES_DIR/genome/set_genome_vars.sh
 # TODO: add scCNV to these names
 export EXTRACT_FILE=$DATA_FILE_PREFIX.extract.RData
 export ANALYZE_FILE=$DATA_FILE_PREFIX.analyze.RData
+export ANALYZE_RDS=$DATA_FILE_PREFIX.analyze.rds
 export NORMALIZE_FILE=$DATA_FILE_PREFIX.normalize.rds
 # export OUTPUT_FILE=$DATA_FILE_PREFIX.output.RData
 
@@ -23,8 +24,8 @@ runWorkflowStep 1 extract extract/extract.sh
 # analyze cells one at a time to set windows and fit to GC bias
 runWorkflowStep 2 analyze analyze/analyze.sh
 
-# perform cross-cell normalization, recall single-cell CNVs
-runWorkflowStep 3 normalize normalize/normalize.sh
+# # perform cross-cell normalization, recall single-cell CNVs
+# runWorkflowStep 3 normalize normalize/normalize.sh
 
 # # cluster cells and call CNVs shared by multiple cells
 # runWorkflowStep 4 cluster cluster/cluster.sh

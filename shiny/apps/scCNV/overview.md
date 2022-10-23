@@ -1,3 +1,4 @@
-The scCNV app examines large-scale single-cell DNA sequencing data for larger
-copy number alterations and whole chromosome aneuploidies, e.g., 
-via the 10x scCNV platform.                 
+The scCNV app allows users to manually inspect and explore
+single-cell, whole-genome data from the scCNV pipeline to
+make adjustments to, or reject, input cells and to make
+and track CNV calls.

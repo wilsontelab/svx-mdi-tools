@@ -1,0 +1,23 @@
+.cellPageInput {
+    display: inline-block;
+    vertical-align: top;
+}
+.cellPageInput .shiny-input-container {
+    width: 90px;
+}
+.cellPageWideInput .shiny-input-container {
+    width: 110px;
+}
+.cellPageInput .selectize-control{
+    margin: 0;
+}
+.cellPageInput:not(.ucscInput) button {
+    width: 30px;
+    text-align: center;
+    padding: 6px 0;
+    margin-top: 25px;
+}
+.cellPageInput .checkbox {
+    margin-top: 30px;
+    margin-left: 10px;
+}

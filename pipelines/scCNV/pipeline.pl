@@ -14,7 +14,4 @@ use warnings;
 
 # all task environment variables may be accessed here
 
-# example:
-# $ENV{XXX_FILE} = "$ENV{DATA_FILE_PREFIX}.xxx";
-
 1;

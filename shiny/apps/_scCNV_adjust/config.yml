@@ -5,8 +5,8 @@
 # semantic version is of form v0.0.0: https://semver.org/
 # external modules will come from latest suite versions unless listed in suiteVersions
 #----------------------------------------------------------------------
-name: scCNV
-description: "Analyze single-cell whole-genome sequencing data for copy number variants"
+name: scCNV_adjust
+description: "Analyze 10x scCNV data for single-cell and clonal copy number variants"
 # version: v0.0.0 # OPTIONAL
 # suiteVersions:
 #     suiteName: v0.0.0
@@ -17,12 +17,12 @@ description: "Analyze single-cell whole-genome sequencing data for copy number v
 #   - required files lead to rejection of a project file if missing
 #----------------------------------------------------------------------
 uploadTypes:
-    scCNV: 
+    scCNV_extract: 
         contentFileTypes: # anything not listed will not be available to the app
             extractFile:
                 required: true
-            plotsArchive:
-                required: true
+            # normalizeFile:
+            #     required: true
 
 #----------------------------------------------------------------------
 # labels and definitions for all sequential analysis steps shown in sidebar
@@ -40,7 +40,7 @@ appSteps:
     upload: # nearly always the 1st step of every app
         module: sourceFileUpload
     adjust:
-        module: adjustCells        
+        module: adjustFit        
     # summary:
     #     module: sampleSummary        
     # summary:

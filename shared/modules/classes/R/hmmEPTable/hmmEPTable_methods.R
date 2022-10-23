@@ -61,6 +61,7 @@ keyedViterbi.hmmEPTable <- function(hmm){ # keys is a vector with one value per 
     ends   <- cumsum(hmm$keys$lengths)
     starts <- c(1, ends + 1)
     unlist(sapply(seq_along(ends), function(i){
+        if(starts[i] == ends[i]) return(NA)
         viterbi(hmm, starts[i]:ends[i])
     }))
 }

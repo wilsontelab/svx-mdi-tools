@@ -31,9 +31,9 @@ settings <- activateMdiHeaderLinks( # uncomment as needed
 sourceId <- dataSourceTableServer(
     "source", 
     selection = "single"
-)
+) 
 projectName <- projectNameReactive(sourceId)
-sampleData <- sampleDataReactive(sourceId)
+data <- extractDataReactive(sourceId)
 
 #----------------------------------------------------------------------
 # metric boxes (a series of info boxes)
@@ -91,8 +91,8 @@ output$metrics <- renderUI({
 #----------------------------------------------------------------------
 # aggregate plots of all good cells
 #----------------------------------------------------------------------
-windowSizes <- staticPlotBoxServer(
-    "windowSizes",
+windowSizeByRMSD <- staticPlotBoxServer(
+    "windowSizeByRMSD",
     #----------------------------
     maxHeight = "400px",
     immediate = TRUE,
@@ -100,20 +100,19 @@ windowSizes <- staticPlotBoxServer(
     envir = parent.frame(),
     settings = NULL,
     create = function(){
-        sampleData <- sampleData()
-        req(sampleData)
-        d <- sampleData$colData[rejected == FALSE, .(N = .N), by = window_size]
-        windowSizes$initializeFrame(
+        data <- data()
+        req(data)
+        d <- data$colData
+        windowSizeByRMSD$initializeFrame(
             title = projectName(),
             xlim = range(d$window_size, na.rm = TRUE),
-            ylim = c(0, max(d$N, na.rm = TRUE) * 1.1),
+            ylim = range(d$rmsd, na.rm = TRUE),
             xlab = "Window Size (# of 20kb bins)",
-            ylab = "# of Cells"
+            ylab = "RMSD of GC Git"
         )
-        windowSizes$addPoints(
-            x = d$window_size,
-            y = d$N,
-            typ = "h"
+        windowSizeByRMSD$addPoints(
+            x = jitter(d$window_size),
+            y = d$rmsd
         )
     }
 )

@@ -2,7 +2,7 @@
 # ui
 #----------------------------------------------------------------------
 shortLabel:       "Sample Summary" # shown on dashboard menu 
-shortDescription: "Explore sample-level metrics across all cells, such as good and bad cell counts." # shown on Overview page
+shortDescription: "Explore sample-level metrics across all cells, such as window size and RMSD." # shown on Overview page
 longLabel:        "Sample-level metrics" # shown at top of appStep page 
 
 #----------------------------------------------------------------------

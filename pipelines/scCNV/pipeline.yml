@@ -1,7 +1,7 @@
 ---
 pipeline:
     name: scCNV
-    description: "Analyze 10x scCNV data for single-cell and clonal copy number variants"
+    description: "Analyze single-cell whole-genome sequencing data for copy number variants"
     version: v0.0.0
 suiteVersions:
     genomex-mdi-tools: main 
@@ -15,13 +15,42 @@ actions:
             - bioconductor     
         optionFamilies:
             - genomex-mdi-tools//genome
-            - input
-            - sample
-            - normalization
-            - CNV            
-    do:
-        order: 1
+    # align:
+    #     order: 1
+    #     thread: do
+    #     optionFamilies:
+    #     resources:
+    #         required:
+    #             total-ram: 16G
+    #         recommended: 
+    #             n-cpu: 8
+    #             ram-per-cpu: 2G
+    #     job-manager:
+    #         recommended:
+    #             time-limit: 24:00:00
+    #     description: "Align reads to the genome starting from input fastq files"             
+    # bin:
+    #     order: 2
+    #     thread: do
+    #     optionFamilies:
+    #     resources:
+    #         required:
+    #             total-ram: 16G
+    #         recommended: 
+    #             n-cpu: 8
+    #             ram-per-cpu: 2G
+    #     job-manager:
+    #         recommended:
+    #             time-limit: 4:00:00
+    #     description: "Count reads in 20kb genome bins starting from aligned bam files"       
+    extract:
+        order: 3
         thread: do
+        optionFamilies:
+            - input
+            - sample                      
+            - normalization
+            - HMM        
         resources:
             required:
                 total-ram: 16G
@@ -31,16 +60,27 @@ actions:
         job-manager:
             recommended:
                 time-limit: 4:00:00
-        description: "Extract and normalize bin counts, call initial single-cell CNVs"      
+        description: "Extract and normalize bin counts per cell (start here for 10x scCNV)"   
+    # analyze:
+    #     order: 2
+    #     thread: do
+    #     resources:
+    #         required:
+    #             total-ram: 16G
+    #         recommended: 
+    #             n-cpu: 8
+    #             ram-per-cpu: 2G
+    #     job-manager:
+    #         recommended:
+    #             time-limit: 4:00:00
+    #     description: "Run batch effect normalization and call CNVs after manual cell adjustment"  
 condaFamilies:
     cran:
         dependencies:
-            - r-zoo=1.8_11
             - r-mass=7.3_58.1
     bioconductor:
         dependencies:
             - bioconductor-rhdf5=2.38.1 # most recent in conda, requires r-base >=4.1,<4.2.0   
-            - bioconductor-summarizedexperiment=1.24.0  
 optionFamilies:     
     input:
         options:
@@ -52,14 +92,14 @@ optionFamilies:
                 default: null
                 directory:
                     must-exist: true
-                description: "10x Cell Ranger project output directory, one sample per named sub-directory"  
+                description: "bin or 10x Cell Ranger output directory, one sample per named sub-directory"  
             input-name: 
                 order: 2
                 short: I
                 type: string
                 required: true
                 default: null
-                description: "name of the sub-directory of input-dir with data from one sample"  
+                description: "name of the sub-directory of --input-dir with data from one sample, i.e., set of cells"  
     sample:
         options:
             ploidy: 
@@ -68,7 +108,7 @@ optionFamilies:
                 type: integer
                 required: false
                 default: 2
-                description: "expected copy number for autosomes, common to all cells in sample"  
+                description: "expected copy number for autosomes, common to all cells in a sample"  
     normalization:
         options:
             n-sd-halfCN: 
@@ -83,7 +123,7 @@ optionFamilies:
                 short: W
                 type: integer
                 required: false
-                default: 101
+                default: 251 # i.e., 5Mb windows 
                 description: "discard cells requiring more than -W 20kb bins per window" 
             min-mappability: 
                 order: 3
@@ -92,7 +132,7 @@ optionFamilies:
                 required: false
                 default: 0.9
                 description: "ignore windows with less than -M fractional mappability"
-    CNV:
+    HMM:
         options:
             transition-probability: 
                 order: 1
@@ -102,12 +142,21 @@ optionFamilies:
                 default: 1e-7
                 description: "state transition probability in the CNV hidden Markov model"
 package:
-    do: # the pipeline action after which a data package should assembled
+    extract: # the pipeline action after which a data package should assembled
         uploadType: scCNV # a signal to the Stage 2 framework regarding the package contents
         files:
-            normalizeFile:
-                type: RData
-                file: $DATA_FILE_PREFIX.normalize.rds
+            extractFile:
+                type: rds
+                file: $DATA_FILE_PREFIX.$PIPELINE_NAME.extract.rds
+            plotsArchive:
+                type: archive
+                file: $DATA_FILE_PREFIX.$PIPELINE_NAME.plots.tar.gz
+    # analyze:
+        # uploadType:   scCNV_analyze         
+        # files:
+        #     normalizeFile:
+        #         type: RData
+        #         file: $DATA_FILE_PREFIX.scCNV.normalize.rds         
 # container:
 #     supported: false    
 #     registry:  ghcr.io  # domain name of your OCI-compatible, oras-accessible, container registry [ghcr.io]

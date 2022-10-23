@@ -28,6 +28,10 @@ sourceScripts <- function(dir, scripts){
         source(file.path(dir, script), local = local)
     }
 }
+sourceClass <- function(env, class){
+    classDir <- file.path(env$MODULES_DIR, 'classes/R', class)
+    sourceScripts(classDir, paste(class, c('class', 'methods'), sep = "_"))
+}
 
 # report and retrieve summary values
 reportStat <- function(value, message){

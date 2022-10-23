@@ -2,14 +2,21 @@
 # nbinomCountsGC2 class generic methods, called as method(obj)
 #----------------------------------------------------------------------
 
+#----------------------------------------------------------------------
 # returns readsPerAllele from a set of input GC values (or the model itself)
+#----------------------------------------------------------------------
+getRows.nbinomCountsGC2 <- function(nb, fractionGC){
+    if(is.null(fractionGC)) TRUE else {
+        pmax(nb$minGcIndex, pmin(nb$maxGcIndex, round(fractionGC * nb$nGcSteps, 0) - nb$gcIndexOffset))
+    }
+}
 predict.nbinomCountsGC2 <- function(
     nb, 
     fractionGC = NULL, 
     type = c('mu', 'peak', 'adjustedPeak', 'theta'), 
     peakThreshold = 10
 ){
-    rows <- if(is.null(fractionGC)) TRUE else round(fractionGC * nb$nGcSteps, 0) - nb$gcIndexOffset    
+    rows <- getRows.nbinomCountsGC2(nb, fractionGC)
     if(type[1] == 'adjustedPeak'){
         peak <- nb$peak[rows]  
         mu   <- nb$mu[rows]
@@ -19,8 +26,10 @@ predict.nbinomCountsGC2 <- function(
     }
 }
 
+#----------------------------------------------------------------------
 # returns a vector of cumulative count probabilities for a set of bins relative to a computed model
-# each bin's value is its lower-tail probability, i.e., percentile for its actual count based on the nb model
+# each bin's value is its lower-tail probability, i.e., percentile of its actual count based on the nb model
+#----------------------------------------------------------------------
 cumprob <- function(x, ...) {
     UseMethod("cumprob", x)
 }
@@ -47,7 +56,10 @@ cumprob.nbinomCountsGC2 <- function(
     })
 }
 
+#----------------------------------------------------------------------
 # solve for the most likely CN path of a set of bin counts given a nbinomCountsGC2 model
+# depends on class hmmEPTable
+#----------------------------------------------------------------------
 viterbi <- function(x, ...) {
     UseMethod("viterbi", x)
 }
@@ -64,7 +76,7 @@ viterbi.nbinomCountsGC2 <- function(
 ){ # report results as rle object to minimize object size
 
     # calculate emissProbs
-    rows <- round(fractionGC * nb$nGcSteps, 0) - nb$gcIndexOffset
+    rows <- getRows.nbinomCountsGC2(nb, fractionGC)
     size <- nb$theta[rows]
     rpa  <- nb$mu[rows]
     if(!is.null(percentile)) rpa <- qnbinom(percentile, size = size, mu = rpa)     
@@ -100,31 +112,27 @@ viterbi.nbinomCountsGC2 <- function(
     )
 }
 
-# save a plot of the GC bias correction for quality monitoring
-plot.nbinomCountsGC2 <- function(nb, cell, ploidy, filename){
-    png(
-        filename = filename,
-        width = 1.5, 
-        height = 1.5, 
-        units = "in", 
-        pointsize = 6,
-        bg = "white",  
-        res = 300,
-        type = "cairo"
-    )
-    par(mar= c(4.1, 4.1, 0.1, 0.1))
-    plot(cell$gc_wr, cell$NR_map_wr, xlim = c(0.35, 0.55), 
-         pch = 16, cex = 0.25, col = rgb(0, 0, 0, 0.2))
-    col <- if(cell$rejected) "red" else "blue"
+#----------------------------------------------------------------------
+# make a composite plot of the GC bias model for cell quality monitoring
+#----------------------------------------------------------------------
+plot.nbinomCountsGC2 <- function(nb, gc_w, NR_map_w, modal_CN = 2, rejected = FALSE){
+    peak <- predict(nb, type = 'adjustedPeak') * modal_CN
+    maxPeak  <- max(peak, na.rm = TRUE)
+    maxCount <- max(NR_map_w, na.rm = TRUE)
+    ymax <- min(maxPeak * 2, maxCount)
+    plot(gc_w, NR_map_w, 
+         pch = 19, cex = 0.4, col = rgb(0, 0, 0, 0.1),
+         xlim = c(0.35, 0.55), ylim = c(0, ymax),
+         xlab = "Fraction GC", ylab = "# of Reads")
+    col <- if(rejected) "red3" else "blue"
     lines(
         nb$gcFractions,
-        predict(nb, type = 'adjustedPeak') * ploidy,
-        lty = 1, lwd = 1, col = col
+        peak,
+        lty = 1, lwd = 1.5, col = col
     )
     for(percentile in c(0.05, 0.95)) lines(
         nb$gcFractions, 
-        qnbinom(percentile, size = nb$theta, mu = nb$mu) * ploidy, 
-        lty = 3, lwd = 0.75, col = col
+        qnbinom(percentile, size = nb$theta, mu = nb$mu) * modal_CN, 
+        lty = 3, lwd = 1.5, col = col
     )
-    dev.off()
 }
