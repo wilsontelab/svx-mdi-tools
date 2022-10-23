@@ -37,8 +37,8 @@ adjustCellsUI <- function(id, options) {
         ),
 
         # pagination controls
-        tags$style(slurpFile(file.path(appStepDir, "adjustCells.css"))),
-        tags$script(slurpFile(file.path(appStepDir, "adjustCells.js"))),
+        includeCSS(file.path(appStepDir, "adjustCells.css")),
+        tags$head(includeScript(file.path(appStepDir, "adjustCells.js"))),
         tags$div(
             style = "margin-top: 0; margin-bottom: 10px;",
             tags$div(
