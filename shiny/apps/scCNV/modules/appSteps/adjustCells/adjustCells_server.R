@@ -70,7 +70,7 @@ cells <- reactive({
                      ( rejected &  isUserOverride(cell_id)),
             Reject = ( rejected & !isUserOverride(cell_id)) | 
                      (!rejected &  isUserOverride(cell_id))
-        ) & if(is.na(input$modalCN) || input$modalCN == "") TRUE 
+        ) & if(is.null(input$modalCN) || is.na(input$modalCN) || input$modalCN == 0 || input$modalCN == "") TRUE 
             else getModalCN(cell_id) == input$modalCN
     }]
     n <- sum(i)
