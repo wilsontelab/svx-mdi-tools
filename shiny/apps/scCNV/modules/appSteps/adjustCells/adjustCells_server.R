@@ -40,7 +40,7 @@ isUserOverride <- Vectorize(function(cell_id) {
     !is.null(userOverrides[[sourceId]][[cell_id]]) && userOverrides[[sourceId]][[cell_id]]
 })
 userModalCN <- reactiveValues()
-getUserModalCN <- Vectorize(function(cell_id) {
+getModalCN <- Vectorize(function(cell_id) {
     sourceId <- sourceId()
     x <- userModalCN[[sourceId]][[cell_id]]
     if(is.null(x)) sample()$cells[[cell_id]]$modal_CN else x
@@ -66,11 +66,12 @@ cells <- reactive({
     req(sample)  
     i <- sample$colData[, {
         switch(input$cellType,
-            autoKeep   = !rejected & !isUserOverride(cell_id),
-            autoReject =  rejected & !isUserOverride(cell_id),
-            userKeep   =  rejected &  isUserOverride(cell_id),
-            userReject = !rejected &  isUserOverride(cell_id)
-        )
+            Keep   = (!rejected & !isUserOverride(cell_id)) | 
+                     ( rejected &  isUserOverride(cell_id)),
+            Reject = ( rejected & !isUserOverride(cell_id)) | 
+                     (!rejected &  isUserOverride(cell_id))
+        ) & if(is.na(input$modalCN) || input$modalCN == "") TRUE 
+            else getModalCN(cell_id) == input$modalCN
     }]
     n <- sum(i)
     list(
@@ -90,12 +91,12 @@ getCellCompositePlot <- function(sample, cell_id){
 }
 getCellSummary <- function(cell){
     prefix <- session$ns("")
-    override <- input$cellType == "autoReject" || input$cellType == "autoKeep"
-    label <- if(cell$rejected){
-        if(input$cellType == "autoReject") "Keep" else "Reject"
+    override <- if(cell$rejected){
+        if(input$cellType == "Reject") TRUE else FALSE
     } else {
-        if(input$cellType == "autoKeep") "Reject" else "Keep"
+        if(input$cellType == "Keep")   TRUE else FALSE
     }
+    label <- if(input$cellType == "Reject") "Keep" else "Reject"
     inputId <- paste("cellSetModalCN", cell$cell_id, sep = "-")
     tags$div(
         style = "display: inline-block; padding: 5px; margin-left:5px;",
@@ -114,7 +115,7 @@ getCellSummary <- function(cell){
                 min = 1,
                 max = 10,
                 step = 1,
-                value = isolate({ getUserModalCN(cell$cell_id) }),
+                value = isolate({ getModalCN(cell$cell_id) }),
                 onchange = paste0("cellSetModalCN('", prefix, "', '", cell$cell_id, "', '", inputId, "')"),
             )            
         )
@@ -215,23 +216,3 @@ list(
 })}
 #----------------------------------------------------------------------
 
-# Classes ‘data.table’ and 'data.frame':  120949 obs. of  35 variables:
-#  $ chrom      : chr  "chr1" "chr1" "chr1" "chr1" ...
-#  $ start      : int  1 20001 40001 60001 80001 100001 120001 140001 160001 180001 ...
-#  $ end        : int  20000 40000 60000 80000 100000 120000 140000 160000 180000 200000 ...
-#  $ gc_fraction: num  0 0 0 0 0 0 0 0 0 0 ...
-#  $ mappability: num  0 0 0 0 0 0 0 0 0 0 ...
-#  $ autosome   : logi  TRUE TRUE TRUE TRUE TRUE TRUE ...
-#  $ chrom_bin_n: int  1 2 3 4 5 6 7 8 9 10 ...
-#  $ bad_region : logi  FALSE FALSE FALSE FALSE FALSE FALSE ...
-#  $ bin_n      : int  1 2 3 4 5 6 7 8 9 10 ...
-#  $ w_1        : logi  TRUE TRUE TRUE TRUE TRUE TRUE ...
-#  $ w_3        : logi  FALSE TRUE FALSE FALSE TRUE FALSE ...
-#  - attr(*, ".internal.selfref")=<externalptr>
-# List of 5
-#  $ 0  :Classes ‘data.table’ and 'data.frame':   7115 obs. of  4 variables:      
-#   ..$ cn : num [1:7115] NA NA NA NA NA ...
-#   ..$ hmm: int [1:7115] 2 2 2 2 2 2 2 2 2 2 ...
-#   ..$ cnc: num [1:7115] NA NA NA NA NA NA NA NA NA NA ...
-#   ..$ cnv: int [1:7115] NA NA NA NA NA NA NA NA NA NA ...
-#   ..- attr(*, ".internal.selfref")=<externalptr>

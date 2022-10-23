@@ -40,12 +40,16 @@ adjustCellsUI <- function(id, options) {
         tags$style(slurpFile(file.path(appStepDir, "adjustCells.css"))),
         tags$script(slurpFile(file.path(appStepDir, "adjustCells.js"))),
         tags$div(
-            style = "margin-bottom: 15px;",
+            style = "margin-top: 0; margin-bottom: 10px;",
             tags$div(
                 class = "cellPageInput",
-                selectInput(ns('cellType'), "Cell Type", 
-                             choices = c("autoKeep", "autoReject", "userKeep", "userReject"), 
+                radioButtons(ns('cellType'), "Cell Type", 
+                             choices = c("Keep", "Reject"), inline = TRUE,
                              width = "125px")
+            ),
+            tags$div(
+                class = "cellPageInput",
+                numericInput(ns('modalCN'), "Modal CN", value = NULL, width = "100px"),
             ),
             tags$div(
                 class = "cellPageInput",

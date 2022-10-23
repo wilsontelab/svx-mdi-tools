@@ -1,4 +1,7 @@
 cellKeepReject = function(prefix, cell_id, override){
+console.log(prefix)
+console.log(cell_id)
+console.log(override)
     Shiny.setInputValue(
         prefix + 'cellKeepReject',
         {cell_id: cell_id, override: override},
