@@ -4,46 +4,51 @@ pipeline:
     description: "Analyze single-cell whole-genome sequencing data for copy number variants"
     version: v0.0.0
 suiteVersions:
-    genomex-mdi-tools: main 
+    genomex-mdi-tools: main
 actions: 
-    _global:
-        environment: scCNV
+    _global:  
+        environment: scCNV  
         condaFamilies:
             - genomex-mdi-tools//base
+            - genomex-mdi-tools//genome
+            - genomex-mdi-tools//bwa
             - r-4.1
-            - cran
-            - bioconductor     
+            - r-packages 
         optionFamilies:
             - genomex-mdi-tools//genome
-    # align:
-    #     order: 1
-    #     thread: do
-    #     optionFamilies:
-    #     resources:
-    #         required:
-    #             total-ram: 16G
-    #         recommended: 
-    #             n-cpu: 8
-    #             ram-per-cpu: 2G
-    #     job-manager:
-    #         recommended:
-    #             time-limit: 24:00:00
-    #     description: "Align reads to the genome starting from input fastq files"             
-    # bin:
-    #     order: 2
-    #     thread: do
-    #     optionFamilies:
-    #     resources:
-    #         required:
-    #             total-ram: 16G
-    #         recommended: 
-    #             n-cpu: 8
-    #             ram-per-cpu: 2G
-    #     job-manager:
-    #         recommended:
-    #             time-limit: 4:00:00
-    #     description: "Count reads in 20kb genome bins starting from aligned bam files"       
+    align:
+        order: 1
+        thread: do
+        optionFamilies:
+            - fastq
+        resources:
+            required:
+                total-ram: 8G
+            recommended: 
+                n-cpu: 8
+                ram-per-cpu: 2G
+        job-manager:
+            recommended:
+                time-limit: 24:00:00
+        description: "Align reads to the genome starting from cell input fastq files"             
     extract:
+        order: 2
+        thread: do
+        optionFamilies:
+            - bam
+            - quality
+        resources:
+            required:
+                total-ram: 16G
+                ram-per-cpu: 4G
+            recommended: 
+                n-cpu: 8
+                ram-per-cpu: 4G
+        job-manager:
+            recommended:
+                time-limit: 4:00:00
+        description: "Count reads in 20kb bins and find junctions in name-sorted bam/cram files"       
+    normalize:
         order: 3
         thread: do
         optionFamilies:
@@ -75,13 +80,42 @@ actions:
     #             time-limit: 4:00:00
     #     description: "Run batch effect normalization and call CNVs after manual cell adjustment"  
 condaFamilies:
-    cran:
+    r-packages:
         dependencies:
-            - r-mass=7.3_58.1
-    bioconductor:
-        dependencies:
-            - bioconductor-rhdf5=2.38.1 # most recent in conda, requires r-base >=4.1,<4.2.0   
+            - bioconductor-rhdf5=2.38.1         
+            - r-mass=7.3_58.1   
 optionFamilies:     
+    fastq:
+        options:
+            fastq-dir:
+                order: 1
+                short: F
+                type: string
+                required: true
+                default: null
+                directory:
+                    must-exist: true
+                description: "--fastq-dir and its sub-directories will be searched for cell FASTQ files"
+    bam:
+        options:
+            bam-dir:
+                order: 1
+                short: B
+                type: string
+                required: false
+                default: null
+                directory:
+                    must-exist: false
+                description: "--bam-dir will be searched for cell bam/cram files (omit if you ran scCNV align)"
+    quality:
+        options: 
+            min-mapq:
+                order: 1
+                short: Q
+                type: integer
+                required: false
+                default: 40
+                description: "reject read alignments with lower than this MAPQ"
     input:
         options:
             input-dir: 
@@ -92,7 +126,7 @@ optionFamilies:
                 default: null
                 directory:
                     must-exist: true
-                description: "bin or 10x Cell Ranger output directory, one sample per named sub-directory"  
+                description: "extract or 10x Cell Ranger directory, one sample per named sub-directory"  
             input-name: 
                 order: 2
                 short: I
@@ -142,12 +176,12 @@ optionFamilies:
                 default: 1e-7
                 description: "state transition probability in the CNV hidden Markov model"
 package:
-    extract: # the pipeline action after which a data package should assembled
+    normalize: # the pipeline action after which a data package should assembled
         uploadType: scCNV # a signal to the Stage 2 framework regarding the package contents
         files:
-            extractFile:
+            normalizeFile:
                 type: rds
-                file: $DATA_FILE_PREFIX.$PIPELINE_NAME.extract.rds
+                file: $DATA_FILE_PREFIX.$PIPELINE_NAME.normalize.rds
             plotsArchive:
                 type: archive
                 file: $DATA_FILE_PREFIX.$PIPELINE_NAME.plots.tar.gz

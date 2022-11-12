@@ -19,7 +19,7 @@ description: "Analyze single-cell whole-genome sequencing data for copy number v
 uploadTypes:
     scCNV: 
         contentFileTypes: # anything not listed will not be available to the app
-            extractFile:
+            normalizeFile:
                 required: true
             plotsArchive:
                 required: true
@@ -42,10 +42,6 @@ appSteps:
     adjust:
         module: adjustCells        
     # summary:
-    #     module: sampleSummary        
-    # summary:
     #     module: sampleSummary 
-    # mark:
-    #     module: markCells
-    # browser:
-    #     module: genomex-mdi-tools//trackBrowser
+    browser:
+        module: genomex-mdi-tools//trackBrowser

@@ -1,0 +1,52 @@
+# template for settings relevant to the __MODULE_NAME__ browserTrack type
+
+# uncomment this section to include standard settings from widgets/browserTrack/settings.yml
+# see: https://github.com/wilsontelab/genomex-mdi-tools
+# include:
+#     - height, etc.
+
+# uncomment this section to specify custom settings, using the same formate as for settingsServer
+# see: https://midataint.github.io/mdi-apps-framework/docs/settings/yaml-declarations.html
+settings:
+    Plot_Options:
+        Sample:
+            type: dataSource
+        # Cell_Type:
+        #     type:   selectInput
+        #     choices:
+        #         - good
+        #         - bad
+        #     selected: good
+        Cell_Height_Pixels:
+            type:   selectInput
+            choices:
+                - auto
+                - 1
+                - 2
+                - 3
+                - 4
+                - 5
+                - 6
+                - 7
+                - 8
+                - 9
+                - 10
+            value: auto
+        Min_Height_Pixels:
+            type:   numericInput
+            value:  400
+            min:    25
+            max:    1000
+            step:   25 
+        # Maximum_Copy_Number:
+        #     type:   numericInput
+        #     value:  4
+        #     min:    2
+        #     max:    10
+        #     step:   1 
+        # Point_Size:
+        #     type:   numericInput
+        #     value:  0.4
+        #     min:    0.25
+        #     max:    2
+        #     step:   0.05

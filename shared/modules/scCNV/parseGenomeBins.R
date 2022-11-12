@@ -9,11 +9,12 @@ setnames(badRegions, c("chrom", "start", "end"))
 rowRanges <- do.call(rbind, mclapply(seq_along(constants$chroms), function(i){
     chrom <- constants$chroms[i]
     nBins <- constants$num_bins_per_chrom[i]
-    start <- seq(from = 1, by = constants$bin_size, length.out = nBins)
+    binSize <- as.integer(constants$bin_size)
+    start <- seq(from = 1, by = binSize, length.out = nBins)
     dt <- data.table(
         chrom = rep(chrom, nBins),
         start = as.integer(start),
-        end   = as.integer(start + constants$bin_size - 1),
+        end   = as.integer(start + binSize - 1),
         gc_fraction = as.double(genome_tracks$gc_fraction[[chrom]]), 
         mappability = as.double(genome_tracks$mappability[[chrom]]),
         autosome    = chrom %in% autosomes,
@@ -36,7 +37,7 @@ rm(per_cell_summary_metrics)
 # -------------------------------------------------------------------------------------
 message("parsing cell raw bin counts")
 raw_counts <- do.call(rbind, mclapply(constants$chroms, function(chrom){
-    as.data.table(raw_counts[[chrom]][, 1:constants$num_cells]) # rows = all bins, columns = all cells
+    as.data.table(raw_counts[[chrom]][, 1:as.integer(constants$num_cells)]) # rows = all bins, columns = all cells
 }, mc.cores = env$N_CPU))
 setnames(raw_counts, cell_ids)
 #=====================================================================================

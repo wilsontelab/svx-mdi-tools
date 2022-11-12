@@ -8,6 +8,39 @@
 # if not needed, simply omit file server.R from your app
 #----------------------------------------------------------------------
 
+# sample cache objects
+sampleCache <- list(
+    common = list( # rowRanges and colData, loaded once per sample
+        cache = new_dataCache('scCNV-common'),
+        claims = list()
+    ), 
+    working = list( # chrom-level expanded data, loaded per sample-chrom
+        cache = new_dataCache('scCNV-working'),
+        claims = list()
+    )
+)
+getSampleCache <- function(caller, cacheType, sourceId, chrom = NULL){
+    req(sourceId)
+    dprint("getSampleCache")    
+    key <- if(is.null(chrom)) sourceId else paste(sourceId, chrom, sep = "-")
+    x <- sampleCache[[cacheType]]
+    priorKeys <- x$cache$cacheKeys()
+    d <- x$cache$get(
+        cacheType, 
+        key = key, 
+        createFn = if(is.null(chrom)) loadSampleCommon else loadSampleWorking,
+        permanent = FALSE,
+        from = "ram",
+        sourceId = sourceId,
+        chrom = chrom
+    )
+    sampleCache[[cacheType]]$claims[[caller]] <<- d$cacheKey
+    activeKeys <- unique(unlist(sampleCache[[cacheType]]$claims))
+    staleKeys <- priorKeys[!(priorKeys %in% activeKeys)]
+    for(key in staleKeys) x$cache$clear(key, purgeFiles = FALSE)
+    d$value
+}
+
 # appServer function called after all modules are instantiated
 appServer <- function(){
 

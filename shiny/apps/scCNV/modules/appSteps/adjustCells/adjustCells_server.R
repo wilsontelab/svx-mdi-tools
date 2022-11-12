@@ -33,7 +33,7 @@ sourceId <- dataSourceTableServer(
     selection = "single"
 )
 projectName <- projectNameReactive(sourceId)
-sample <- extractDataReactive(sourceId)
+sample <- normalizeDataReactive(sourceId)
 userOverrides <- reactiveValues()
 isUserOverride <- Vectorize(function(cell_id) {
     sourceId <- sourceId()

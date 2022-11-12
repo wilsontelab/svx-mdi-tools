@@ -1,5 +1,5 @@
 #=====================================================================================
-# extract and reformat data from step 'bin', or 10x Cell Ranger DNA, as input
+# reformat data from step 'extract', or 10x Cell Ranger DNA, as input
 # analyze cells one at a time to set windows, fit a GC bias model, and run a copy number HMM
 #-------------------------------------------------------------------------------------
 # regardless of the input data source, data are in HDF5 format as per 10x Cell Ranger DNA
@@ -30,7 +30,7 @@ checkEnvVars(list(
         'BAD_REGIONS_FILE',
         'PLOTS_DIR',
         'PLOT_PREFIX',
-        'EXTRACT_FILE'        
+        'OUTPUT_FILE'        
     ),
     integer = c(
         "PLOIDY",
@@ -102,5 +102,5 @@ saveRDS(list(
     windows = windows,
     colData = colData,
     cells = cells
-), file  = env$EXTRACT_FILE)
+), file  = env$OUTPUT_FILE)
 #=====================================================================================
