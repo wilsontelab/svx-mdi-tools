@@ -19,4 +19,4 @@ action: # required
     job-manager:
         recommended:
             time-limit: 4:00:00
-    description: "scan anomalous molecules from one or more samples to make SV calls"
+    description: "scan anomalous molecules from one or more samples to make SV junction calls"

@@ -56,8 +56,8 @@ loadSampleWorking <- function(cacheKey, keyObject, key, cacheObject, sourceId, c
         i <- cell$hmm > 0
         sd((cell$cn[i] - cell$hmm[i]) / cell$hmm[i], na.rm = TRUE) # NA if NULL, etc.
     })
-    getM <- function(val) lapply(-1:1, function(increment){
-        m <- sapply(x$colData$cell_id, function(cell_id){
+    getZ <- function(val) lapply(-1:1, function(increment){
+        sapply(x$colData$cell_id, function(cell_id){
             cell <- x$cells[[cell_id]]
             if(is.null(cell[[val]])) return(nullCell)            
             w <- x$windows[[paste("w", cell$window_size, sep = "_")]]
@@ -78,17 +78,51 @@ loadSampleWorking <- function(cacheKey, keyObject, key, cacheObject, sourceId, c
             }
             uncollapseVector(x, cell$window_size, nGoodBins)    
         })
-        if(nBadBins > 0) m <- rbind(m, nullMatrix)[order, ]
-        m
     })
+    padZ <- function(z) {
+        if(nBadBins > 0) lapply(z, function(m) rbind(m, nullMatrix)[order, ]) else z
+    }
+
+    valueTypes <- c("cn", "hmm")
+    windowMedians <- lapply(valueTypes, function(val){
+        d <- sapply(x$colData$cell_id, function(cell_id){
+            cell <- x$cells[[cell_id]]
+            if(is.null(cell[[val]])) return(nullCell)            
+            w <- x$windows[[paste("w", cell$window_size, sep = "_")]]
+            bins <- w[, if(isAll) TRUE else chrom == chrom_]
+            uncollapseVector(cell[[val]][bins], cell$window_size, nGoodBins)   
+        })
+        d <- apply(d, 1, median, na.rm = TRUE)
+        lapply(x$windows, function(w) {
+            n <- nGoodBins / w[chrom == chrom_, .N]
+            collapseVector(d, n) / n
+        })
+    })
+    names(windowMedians) <- valueTypes
+
+    getValues <- function(val){
+        x <- lapply(x$colData$cell_id, function(cell_id){
+            cell <- x$cells[[cell_id]]
+            if(is.null(cell[[val]])) return(NA)
+            wx <- paste("w", cell$window_size, sep = "_")
+            w <- x$windows[[wx]]
+            bins <- w[, if(isAll) TRUE else chrom == chrom_]
+            cell[[val]][bins] - windowMedians[[val]][[wx]]
+        })
+        names(x) <- x$colData$cell_id
+        x
+    }
     list(
         cell_id     = x$colData$cell_id,
         modal_CN    = x$colData$modal_CN,
         rejected    = x$colData$rejected,
         window_size = x$colData$window_size,
+        windows = lapply(x$windows, function(w) w[chrom == chrom_, .(start, end)]),
+        cn  = getValues("cn"),
+        hmm = getValues("hmm"),
         z = list(
-            cn  = getM("cn"),
-            hmm = getM("hmm")
+            cn  = padZ(getZ("cn")),
+            hmm = padZ(getZ("hmm"))
         )
     )
 }

@@ -38,6 +38,9 @@ runWorkflowStep 2 manifest manifest/make_manifest.sh
 # for svWGS, assemble a composite bin coverage profile with normalization data
 runWorkflowStep 3 coverage coverage/assemble_coverage.sh
 
+# export svCalls to VCF format for repository upload and other programs
+runWorkflowStep 4 vcf vcf/make_vcf.sh
+
 # clean up
 rm -fr $TMP_DIR_WRK
 # rm -f  $EXTRACT_PREFIX.endpoints.*.gz

@@ -1,0 +1,25 @@
+﻿SVX_ID,VCF_ID,Number,Type,Description
+SV_ID,EVENT,1,String,ID of event associated to breakend
+NA,MATEID,.,String,ID of mate breakends
+NA,MQ,1,Float,RMS mapping quality
+N_SAMPLES,NSSV,A,Integer,Number of samples with AD >= 1
+NA,SVTYPE,1,String,Type of structural variant
+SV_SIZE,SVLEN,.,Integer,Difference in length between REF and ALT alleles
+MICROHOM_LEN,HOMLEN,.,Integer,Length of base pair identical micro-homology at event breakpoints
+JXN_BASES,HOMSEQ,.,String,Sequence of base pair identical micro-homology at event breakpoints
+JXN_TYPE,JXNTYPE,A,Character,"Type of junction; L=deletion, D=duplication, I=inversion, T=translocation"
+JXN_SEQ,JXNSEQ,A,String,Consensus sequence surrounding the assembled structural variant junction
+TARGET_REGION,TGT,A,String,Capture target region(s) to which the junction sides correspond
+TARGET_CLASS,TGTCLASS,A,String,"Alignments capture target correspondence; T=on-target, A=adjacent, -=off-target, upper=same target, lower=different targets"
+SHARED_PROPER,SP,A,Float,Fraction of source DNA molecule ends also found in proper molecules in the parent library
+SHARED_PROPER_GS,SPGS,A,Float,"SP for gap and split molecules, excluding clips"
+N_TOTAL,AD,R,Integer,Number of source DNA molecules for each allele
+N_GAPS,ADG,R,Integer,AD with the junction in the unsequenced gap between paired reads
+N_SPLITS,ADS,R,Integer,AD with the junction in a split read alignment
+N_OUTER_CLIPS,ADC,R,Integer,AD with the junction at an unaligned outer clip
+N_DUPLEX,ADX,R,Integer,AD with the junction sequenced on both DNA strands
+N_DUPLEX_GS,ADXGS,R,Integer,"ADX for gap and split molecules, excluding clips"
+STRAND_COUNT,SD,R,Integer,Number of source DNA strands for each allele (duplex molecule = two strands)
+STRAND_COUNT1,SDF,R,Integer,SD for strand 1
+STRAND_COUNT2,SDR,R,Integer,SD for strand 2
+STRAND_COUNT_GS,SDGS,R,Integer,"SD for gap and split molecules, excluding clips"
