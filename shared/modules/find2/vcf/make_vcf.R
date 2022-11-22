@@ -40,7 +40,7 @@ checkEnvVars(list(
 # set some options
 setDTthreads(env$N_CPU)
 options(scipen = 999) # prevent 1+e6 in printed, which leads to read.table error when integer expected
-options(warn = 2) ########################
+options(warn = 2)
 #-------------------------------------------------------------------------------------
 # source R scripts
 sourceScripts(rUtilDir, 'utilities')
@@ -56,7 +56,7 @@ targetsBed <- if(is.null(env$TARGETS_BED) ||
                  env$TARGETS_BED == "null") NA else basename(env$TARGETS_BED)
 targets <- if(is.na(targetsBed)) data.table() else fread(env$TARGETS_BED)
 nTargets <- nrow(targets)
-targets <- if(nTargets > 100) ">100" else {
+targets <- if(nTargets == 0) "NA" else if(nTargets > 100) ">100" else {
     paste(apply(targets, 1, function(v) paste0(v[4], "::", v[1], ":", v[2], "-", v[3])), collapse = ",")
 }
 #-------------------------------------------------------------------------------------
@@ -164,7 +164,7 @@ writeLines(paste0("#", paste(allColumns, collapse = "\t")))
 message("  parsing variant records")
 inFile  <- paste(env$FIND_PREFIX, 'structural_variants', 'gz',  sep = ".")
 svCalls <- fread(inFile)
-# svCalls <- svCalls[JXN_TYPE == "I" & MICROHOM_LEN < 0 & SIDE_1 == "R" & SIDE_2 == "R" & CHROM_1 == "chr3"][1:3]
+# svCalls <- svCalls[JXN_TYPE == "I" & MICROHOM_LEN == 0 & SIDE_1 == "R" & SIDE_2 == "R" & CHROM_1 == "chr3"][1:3]
 callInfo1 <- data.table(TEMPORARY = svCalls$SV_ID)
 getMQ <- function(x) {
     x <- as.integer(strsplit(x, ",")[[1]])
@@ -176,6 +176,7 @@ for(i in seq_along(info$VCF_ID)) callInfo1[[info$VCF_ID[i]]] <- switch( # fill j
         MQ = getMQ(svCalls$MAPQ_1),
         SVTYPE = "BND",
         SVLEN = ifelse(svCalls$JXN_TYPE == "L", -svCalls$SV_SIZE, svCalls$SV_SIZE), # DEL neg SVLEN per VCF format
+        CIPOS = ifelse(svCalls$MICROHOM_LEN > 0, paste(0, svCalls$MICROHOM_LEN, sep = ","), "0,0"),
         HOMLEN = as.integer(pmax(0, svCalls$MICROHOM_LEN)), # only micromology appropriate here, not de novo insertions
         HOMSEQ = ifelse(svCalls$MICROHOM_LEN <= 0, ".", svCalls$JXN_BASES),
         JXNSEQ = ifelse(svCalls$JXN_SEQ == "*", ".", svCalls$JXN_SEQ),
@@ -189,70 +190,82 @@ callInfo2[, ":="( # modify columns that differ between junction sides 1 and 2
 )]
 callInfo <- rbind(callInfo1, callInfo2) # merge to table of all records, two per junction
 rm(callInfo1, callInfo2)
-for(i in seq_along(info$VCF_ID)) if(info$Number[i] == "R") { # add reference allele coverage
+for(i in seq_along(info$VCF_ID)) if(info$Number[i] == "R") { # add allele coverage
     # TODO: update to add coverage data for reference allele, probably just for svWGS
     callInfo[[info$VCF_ID[i]]] <- paste(".", callInfo[[info$VCF_ID[i]]], sep = ",")
 }
 
 # parse the remainder of the variant record lines
-records1 <- data.table(TEMPORARY = svCalls$SV_ID)
-nodeBases <- mapply(getRefSeq_padded, svCalls$CHROM_1, svCalls$POS_1, 0)
-getALT <- function(THIS_SIDE_I, THIS_SIDE, 
-                   OTHER_CHROM, OTHER_POS, OTHER_SIDE, 
-                   MICROHOM_LEN, JXN_BASES){
-    otherNode <- paste(OTHER_CHROM, OTHER_POS, sep = ":")
-    otherDir <- ifelse(OTHER_SIDE == "L", "]", "[")
-    otherNode <- paste0(otherDir, otherNode, otherDir)
+getBndPos <- function(BND_POS, BND_SIDE, MICROHOM_LEN){ # return leftmost position in the ambiguity range for the breakend node
+    ifelse(                                             # could adjust 0, 1, or 2 breakend positions (MH>0 & RR, LR, LL, respectively)
+        MICROHOM_LEN > 0 & BND_SIDE == "L",
+        BND_POS - MICROHOM_LEN, # TRUE executes if microhomologous breakend node is L and therefore needs adjusting to leftmost position
+        BND_POS # FALSE executes if 1) neither node needs adjusting, or 2) breakend node is R and therefore is already leftmost position
+    )
+}
+getMatePos <- function(BND_SIDE, MATE_POS, MATE_SIDE, MICROHOM_LEN){ # return mate position that ensures microhomologous bases are include just once
+    ifelse(
+        MICROHOM_LEN > 0 & BND_SIDE == "R",
+        ifelse(MATE_SIDE == "L", MATE_POS - MICROHOM_LEN, MATE_POS + MICROHOM_LEN), # TRUE extends into the aligned sequence to remove MH redundancy
+        MATE_POS # FALSE executes if 1) neither node needs adjusting, or 2) breakend node was already adjusted
+    )
+}
+getALT <- function(BND_SIDE_I, BND_SIDE, 
+                   MATE_CHROM, MATE_POS, MATE_SIDE, 
+                   REF, MICROHOM_LEN, JXN_BASES){
+    mateNode <- paste(MATE_CHROM, getMatePos(BND_SIDE, MATE_POS, MATE_SIDE, MICROHOM_LEN), sep = ":")
+    mateBracket <- ifelse(MATE_SIDE == "L", "]", "[")
+    mateNode <- paste0(mateBracket, mateNode, mateBracket)
     insertionSeq <- ifelse(MICROHOM_LEN < 0, JXN_BASES, "") # microhomologies are implicit in the node positions
     ifelse(
-        THIS_SIDE == OTHER_SIDE,
+        BND_SIDE == MATE_SIDE,
 
         # inversion type along conjoined chromosomes, side 1 = leftmost position
         # must rc the insertion sequence on the non-canonical strand
-        if(THIS_SIDE_I == 1) ifelse(
-            THIS_SIDE == "L",
+        if(BND_SIDE_I == 1) ifelse(
+            BND_SIDE == "L",
             # t]p] reverse comp piece extending left of p is joined after t
-            paste0(paste0(nodeBases, insertionSeq), otherNode),    # this side is the canonical strand
+            paste0(paste0(REF, insertionSeq), mateNode),    # BND  is the canonical strand
             # s [p[t reverse comp piece extending right of p is joined before t
-            paste0(otherNode, paste0(rc(insertionSeq), nodeBases)) # other side is the canonical strand
+            paste0(mateNode, paste0(rc(insertionSeq), REF)) # MATE is the canonical strand
 
         ) else ifelse(
-            THIS_SIDE == "L",
+            BND_SIDE == "L",
             # t]p] reverse comp piece extending left of p is joined after t
-            paste0(paste0(nodeBases, rc(insertionSeq)), otherNode), # other side is the canonical strand
+            paste0(paste0(REF, rc(insertionSeq)), mateNode), # MATE is the canonical strand
             # s [p[t reverse comp piece extending right of p is joined before t
-            paste0(otherNode, paste0(insertionSeq, nodeBases))      # this side is the canonical strand
+            paste0(mateNode, paste0(insertionSeq, REF))      # BND  is the canonical strand
         ), 
 
         # PDL type along conjoined chromosomes, side 1 == leftward alignment
         # both sides are the canonical strand, rc not needed
-                             # s t[p[ piece extending to the right of p is joined after t
-        if(THIS_SIDE_I == 1) paste0(paste0(nodeBases, insertionSeq), otherNode) # THIS_SIDE == L, OTHER_SIDE = R
-                             # s ]p]t piece extending to the left of p is joined before t
-                        else paste0(otherNode, paste0(insertionSeq, nodeBases)) # THIS_SIDE == R, OTHER_SIDE = L
+                            # s t[p[ piece extending to the right of p is joined after t
+        if(BND_SIDE_I == 1) paste0(paste0(REF, insertionSeq), mateNode) # BND_SIDE == L, MATE_SIDE = R
+                            # s ]p]t piece extending to the left of p is joined before t
+                       else paste0(mateNode, paste0(insertionSeq, REF)) # BND_SIDE == R, MATE_SIDE = L
     )
 }
+records1 <- data.table(TEMPORARY = svCalls$SV_ID)
 records1[, ":="( # parse breakend 1
     CHROM = svCalls$CHROM_1,
-    POS = svCalls$POS_1,
-    ID = paste(svCalls$SV_ID, 1, sep = ":"),
-    REF = nodeBases,
-    ALT = getALT(1, svCalls$SIDE_1, 
-                 svCalls$CHROM_2, svCalls$POS_2, svCalls$SIDE_2, 
-                 svCalls$MICROHOM_LEN, svCalls$JXN_BASES)
+    POS = getBndPos(svCalls$POS_1, svCalls$SIDE_1, svCalls$MICROHOM_LEN),
+    ID = paste(svCalls$SV_ID, 1, sep = ":")
 )]
+records1[, REF := mapply(getRefSeq_padded, CHROM, POS, 0)] # adjusted ref base/pos per VCF rules
+records1[, ALT := getALT(1, svCalls$SIDE_1, 
+                         svCalls$CHROM_2, svCalls$POS_2, svCalls$SIDE_2, 
+                         REF, svCalls$MICROHOM_LEN, svCalls$JXN_BASES)]
 for(sample in env$SAMPLES) records1[[sample]] <- svCalls[[sample]] # add sample molecule counts
 records2 <- data.table(TEMPORARY = svCalls$SV_ID)
-nodeBases <- mapply(getRefSeq_padded, svCalls$CHROM_2, svCalls$POS_2, 0)
 records2[, ":="( # parse breakend 2
     CHROM = svCalls$CHROM_2,
-    POS = svCalls$POS_2,
-    ID = paste(svCalls$SV_ID, 2, sep = ":"),
-    REF = nodeBases,
-    ALT = getALT(2, svCalls$SIDE_2, 
-                 svCalls$CHROM_1, svCalls$POS_1, svCalls$SIDE_1, 
-                 svCalls$MICROHOM_LEN, svCalls$JXN_BASES)
+    POS = getBndPos(svCalls$POS_2, svCalls$SIDE_2, svCalls$MICROHOM_LEN),
+    ID = paste(svCalls$SV_ID, 2, sep = ":")
 )]
+records2[, REF := mapply(getRefSeq_padded, CHROM, POS, 0)] # adjusted ref base/pos per VCF rules
+records2[, ALT := getALT(2, svCalls$SIDE_2, 
+                         svCalls$CHROM_1, svCalls$POS_1, svCalls$SIDE_1, 
+                         REF, svCalls$MICROHOM_LEN, svCalls$JXN_BASES)]
 for(sample in env$SAMPLES) records2[[sample]] <- svCalls[[sample]] # add sample molecule counts
 
 # merge to final table of all records, two per junction

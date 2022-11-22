@@ -5,6 +5,7 @@ NA,MQ,1,Float,RMS mapping quality
 N_SAMPLES,NSSV,A,Integer,Number of samples with AD >= 1
 NA,SVTYPE,1,String,Type of structural variant
 SV_SIZE,SVLEN,.,Integer,Difference in length between REF and ALT alleles
+NA,CIPOS,2,Integer,Confidence interval around POS for imprecise variants
 MICROHOM_LEN,HOMLEN,.,Integer,Length of base pair identical micro-homology at event breakpoints
 JXN_BASES,HOMSEQ,.,String,Sequence of base pair identical micro-homology at event breakpoints
 JXN_TYPE,JXNTYPE,A,Character,"Type of junction; L=deletion, D=duplication, I=inversion, T=translocation"

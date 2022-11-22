@@ -268,6 +268,7 @@ microhomologyDistribution <- staticPlotBoxServer(
             xlim    = c(-20, 20),            
             xlab    = "Microhomology Length (bp)",
             modifyPlotBase = function(...){
+                abline(v = seq(-100, 100, 2),  col = "grey80")
                 abline(v = seq(-100, 100, 10), col = "grey60")
                 abline(v = 0)
             }
