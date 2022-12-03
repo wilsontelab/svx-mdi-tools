@@ -22,8 +22,5 @@ checkPipe
 Rscript $ACTION_DIR/count/count.R
 checkPipe
 
-# clean up
-rm -rf $TMP_DIR_WRK
-
 echo "done"
 echo

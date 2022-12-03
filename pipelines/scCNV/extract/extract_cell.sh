@@ -2,8 +2,8 @@
 
 # set operating parameters
 ALIGNMENT_FILE=$1
-SORT_RAM=$(( $RAM_PER_CPU_INT - 3000000000 ))
-SORT_RAM=$(( $SORT_RAM / 4 ))
+SORT_RAM=$(( $RAM_PER_CPU_INT - 2000000000 ))
+SORT_RAM=$(( $SORT_RAM / 4 )) # ensured to be at least 500M per sort
 SORT_RAM=$SORT_RAM"b"
 
 # extract bin and junction data

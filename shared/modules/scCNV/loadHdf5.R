@@ -26,4 +26,33 @@ per_cell_summary_metrics <- h5read(h5, "per_cell_summary_metrics", bit64conversi
 raw_counts <- h5read(h5, "raw_counts", bit64conversion = "int")
 H5Fclose(h5)
 rm(h5FileName, h5Files, h5File, h5)
+
+# # if possible, replace the svx pipeline's gc and mappability tracks with CellRanger's
+# # unfortunately, the bin counts do not match between Cell Ranger and our genome builds
+# genomeTracksDir <- file.path(env$MDI_DIR, "resources", "scCNV")
+# genomeTracksGroup <- 'genome_tracks'
+# genomeTrackFiles <- list(
+#     GRCh38 = file.path(genomeTracksDir, paste("GRCh38", genomeTracksGroup, "h5", sep = ".")),
+#     GRCm38 = file.path(genomeTracksDir, paste("GRCm38", genomeTracksGroup, "h5", sep = "."))
+# )
+# genomeTrackFiles$hg38 = genomeTrackFiles$GRCh38 # support both name types
+# genomeTrackFiles$mm10 = genomeTrackFiles$GRCm38
+# h5File <- genomeTrackFiles[[metadata$assembly]]
+# if(is.null(genome_tracks$n_fraction)){ # TRUE for svx, this track not added during 'extract'
+#     if(!is.null(h5File) && file.exists(h5File)){
+#         message("overriding genome_tracks to Cell Ranger values")
+#         message(h5File)
+#         h5 = H5Fopen(h5File)
+#         genome_tracks <- h5read(h5, "genome_tracks", bit64conversion = "int")
+#         genome_tracks$is_mappable <- NULL
+#         H5Fclose(h5)
+#         rm(h5)
+#     }
+# } else { # only needed to export a CellRanger gene track file; uncomment as needed
+#     if(!file.exists(h5File)){
+#         dir.create(dirname(h5File), showWarnings = FALSE, recursive = TRUE)
+#         h5createFile(h5File)
+#         h5write(get(genomeTracksGroup), h5File, genomeTracksGroup)
+#     }
+# }
 #=====================================================================================

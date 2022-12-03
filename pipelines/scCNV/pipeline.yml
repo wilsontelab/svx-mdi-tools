@@ -65,20 +65,7 @@ actions:
         job-manager:
             recommended:
                 time-limit: 4:00:00
-        description: "Extract and normalize bin counts per cell (start here for 10x scCNV)"   
-    # analyze:
-    #     order: 2
-    #     thread: do
-    #     resources:
-    #         required:
-    #             total-ram: 16G
-    #         recommended: 
-    #             n-cpu: 8
-    #             ram-per-cpu: 2G
-    #     job-manager:
-    #         recommended:
-    #             time-limit: 4:00:00
-    #     description: "Run batch effect normalization and call CNVs after manual cell adjustment"  
+        description: "Extract and normalize bin counts per cell (start here for 10x scCNV)"    
 condaFamilies:
     r-packages:
         dependencies:
@@ -157,8 +144,8 @@ optionFamilies:
                 short: W
                 type: integer
                 required: false
-                default: 251 # i.e., 5Mb windows 
-                description: "discard cells requiring more than -W 20kb bins per window" 
+                default: 7 # i.e., 2^7 * 20,000 = 2,560,000 bp windows 
+                description: "discard cells requiring more than 2^W 20kb bins per window" 
             min-mappability: 
                 order: 3
                 short: M
@@ -184,13 +171,7 @@ package:
                 file: $DATA_FILE_PREFIX.$PIPELINE_NAME.normalize.rds
             plotsArchive:
                 type: archive
-                file: $DATA_FILE_PREFIX.$PIPELINE_NAME.plots.tar.gz
-    # analyze:
-        # uploadType:   scCNV_analyze         
-        # files:
-        #     normalizeFile:
-        #         type: RData
-        #         file: $DATA_FILE_PREFIX.scCNV.normalize.rds         
+                file: $DATA_FILE_PREFIX.$PIPELINE_NAME.plots.tar.gz        
 # container:
 #     supported: false    
 #     registry:  ghcr.io  # domain name of your OCI-compatible, oras-accessible, container registry [ghcr.io]

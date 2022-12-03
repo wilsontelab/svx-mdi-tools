@@ -2,7 +2,7 @@
 # assemble the parts of an initial BioConductor SummarizedExperiment-like object set
 # although we do NOT use a SE because we end up with different binning per cell
 #-------------------------------------------------------------------------------------
-message("parsing genome bin descriptions")
+message("parsing genome bin descriptions") # i.e., 20kb bins (not windows, which comprise >=1 bins)
 autosomes <- paste0("chr", 1:100)
 badRegions <- fread(env$BAD_REGIONS_FILE)[, 1:3]
 setnames(badRegions, c("chrom", "start", "end"))
@@ -43,7 +43,7 @@ setnames(raw_counts, cell_ids)
 #=====================================================================================
 
 #=====================================================================================
-# permanently remove bins in bad genome regions; windows will span them
+# permanently remove bins in bad genome regions; multi-bin windows will span them
 #-------------------------------------------------------------------------------------
 message("removing bins in bad genome regions")
 bad_bin_n  <-  rowRanges[bad_region == TRUE, bin_n]
@@ -55,7 +55,7 @@ rowRanges  <-  rowRanges[bad_region == FALSE]
 # pre-aggregate the bins for all required window sizes
 #-------------------------------------------------------------------------------------
 message("pre-aggregating bins for all required window sizes")
-window_sizes <- seq(1, env$MAX_WINDOW_BINS, 2)
+window_sizes <- 2 ** (0:env$MAX_WINDOW_BINS)
 windows <- mclapply(window_sizes, function(window_size){
     rowRanges[, {
         chrom_window_id <- floor((1:.N - 1) / window_size) + 1

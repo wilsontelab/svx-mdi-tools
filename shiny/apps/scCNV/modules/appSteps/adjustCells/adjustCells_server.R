@@ -35,8 +35,8 @@ sourceId <- dataSourceTableServer(
 projectName <- projectNameReactive(sourceId)
 sample <- normalizeDataReactive(sourceId)
 userOverrides <- reactiveValues()
-isUserOverride <- Vectorize(function(cell_id) {
-    sourceId <- sourceId()
+isUserOverride <- Vectorize(function(cell_id, sourceId = NULL) {
+    if(is.null(sourceId)) sourceId <- sourceId()
     !is.null(userOverrides[[sourceId]][[cell_id]]) && userOverrides[[sourceId]][[cell_id]]
 })
 userModalCN <- reactiveValues()
@@ -61,18 +61,28 @@ slopes <- reactive({
         coef(lm(mu ~ gc))[2]
     })
 })
+getKeep <- function(rejected, cell_id, sourceId) {
+    overridden <- isUserOverride(cell_id, sourceId)
+    (!rejected & !overridden) | 
+    ( rejected &  overridden)
+}
+getRejected <- function(rejected, cell_id, sourceId){
+    overridden <- isUserOverride(cell_id, sourceId)
+    ( rejected & !overridden) | 
+    (!rejected &  overridden)
+}
 cells <- reactive({
     sample <- sample()
     req(sample)  
+    sourceId <- sourceId()
     i <- sample$colData[, {
         switch(input$cellType,
-            Keep   = (!rejected & !isUserOverride(cell_id)) | 
-                     ( rejected &  isUserOverride(cell_id)),
-            Reject = ( rejected & !isUserOverride(cell_id)) | 
-                     (!rejected &  isUserOverride(cell_id))
+            Keep   = getKeep(rejected, cell_id, sourceId),
+            Reject = getRejected(rejected, cell_id, sourceId)
         ) & if(is.null(input$modalCN) || is.na(input$modalCN) || input$modalCN == 0 || input$modalCN == "") TRUE 
             else getModalCN(cell_id) == input$modalCN
     }]
+    dstr(i)
     n <- sum(i)
     list(
         i = i,
@@ -207,7 +217,44 @@ list(
         userModalCN   = userModalCN
     ),
     # isReady = reactive({ getStepReadiness(options$source, ...) }),
-    NULL
+    getSampleFilePrefix = function(sourceId, keep = NULL, colData = NULL){
+        if(is.null(keep)){
+            if(is.null(colData)) colData <- {
+                dataFilePath <- getSourceFilePath(sourceId, "normalizeFile")
+                readRDS(dataFilePath)$colData
+            }
+            keep <- getKeep(colData$rejected, colData$cell_id, sourceId)            
+        }
+        key <- digest(keep)
+        expandSourceFilePath(sourceId, key)
+    },
+    sampleSummaryColumns = reactive({
+        sources <- getStepReturnValueByType('upload', 'outcomes')$sources()
+        startSpinner(session, message = "get sample summaries") 
+        x <- do.call(rbind, lapply(names(sources), function(sourceId){
+            normalizeFilePath <- getSourceFilePath(sourceId, "normalizeFile")
+            colData <- readRDS(normalizeFilePath)$colData
+            keep <- getKeep(colData$rejected, colData$cell_id, sourceId)
+            batchFilePath <- paste(app$adjust$getSampleFilePrefix(sourceId, keep), "batchNormalized.rds", sep = ".")
+            batchFileExists <- file.exists(batchFilePath)
+            colData[, .(    
+                sourceId = sourceId,
+                normalizeFilePath = normalizeFilePath,
+                batchFilePath = batchFilePath,
+                batchFileExists = batchFileExists,
+                cell_id = list(colData$cell_id[keep]),
+                cells = .N,
+                keep     = sum(keep),
+                reject   = sum(getRejected(rejected, cell_id, sourceId)),
+                override = sum(isUserOverride(cell_id, sourceId)),
+                status = if(batchFileExists) 
+                    '<b style="margin-left: 10px;"><i class="fa-solid fa-check fa-lg" style="color: #0a0;"></i><b>' 
+                    else "pending"
+            )]   
+        }))
+        stopSpinner(session)
+        x
+    })
 )
 
 #----------------------------------------------------------------------

@@ -1,0 +1,33 @@
+/* top row of track navigation inputs */
+.annotateCellsInput {
+    display: inline-block;
+    vertical-align: top;
+}
+.annotateCellsInput .shiny-input-container {
+    width: 90px;
+}
+.annotateCellsWideInput .shiny-input-container {
+    width: 110px;
+}
+.annotateCellsInput .selectize-control {
+    margin: 0;
+}
+.annotateCellsInput button {
+    width: 30px;
+    text-align: center;
+    padding: 6px 0;
+    margin-top: 25px;
+}
+.annotateCellsInput .checkbox {
+    margin-top: 30px;
+    margin-left: 10px;
+}
+
+/* the cell stepper */
+.stepperInput {
+    display: inline-block;
+    margin-top: 10px;
+}
+.stepperInput * {
+    vertical-align: middle;
+}

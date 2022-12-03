@@ -101,6 +101,7 @@ saveRDS(list(
     rowRanges = rowRanges, 
     windows = windows,
     colData = colData,
-    cells = cells
+    cells = cells,
+    raw_counts = raw_counts
 ), file  = env$OUTPUT_FILE)
 #=====================================================================================

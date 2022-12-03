@@ -30,27 +30,58 @@ build.scCNV_cell_xyTrack <- function(track, reference, coord, layout){
 
 
     cellI <- which(x$cell_id == cellId)
-    w <- x$windows[[paste("w", x$window_size[cellI], sep = "_")]]
+    wx <- paste("w", x$window_size[cellI], sep = "_")
+    w <- x$windows[[wx]]
 
 
     # use generic methods and any other custom code to determine the track's (dynamic) Y span
     padding <- padding(track, layout)
-    height <- height(track, 1) + padding$total # or set a known, fixed height in inches
-    ylim <- c(-2, 2)
+    height <- height(track, 3) + padding$total # or set a known, fixed height in inches
+    ylim <- c(0, 4)
 
     # use the mdiTrackImage helper function to create the track image
     mai <- NULL
     image <- mdiTrackImage(layout, height, function(...){
         mai <<- setMdiTrackMai(layout, padding, mar = list(top = 0, bottom = 0))
+
+        # cn <- x$cn[[cellI]]
+        # mcn <- x$windowMedians$cn[[wx]]
+
+        # mcnq <- quantile(mcn, c(0.05, 0.95), na.rm = TRUE)
+        # mcnw <- which(mcn >= mcnq[1] & mcn <= mcnq[2])
+        # mcnf <- mcn[mcnw]
+        # mcnf2 <- mcnf ** 2
+        # mcnf3 <- mcnf ** 3
+        # cnf <- cn[mcnw]
+        # formula <- cnf ~ mcnf # + mcnf2 + mcnf3
+        # fit <- loess(formula)
+
+        # print(fit)
+
+
+
+        # plot(0, 0, type = "n", bty = "n",
+        #     xlim = c(0.5, 3.5), xlab = "", xaxt = "n", # nearly always set `xlim`` to `coord$range`
+        #     ylim = c(0.5, 3.5),  ylab = "Copy Number",
+        #     xaxs = "i", yaxs = "i") # always set `xaxs` and `yaxs` to "i"
+
+
+
+        # points(mcn, cn, pch = 16, cex = 0.25)
+        # abline(0, 1, col = "blue")
+        # points(mcnf, predict(fit, newdata = data.frame(mcnf = mcnf)), col = "red")
+        # abline(v=mcnq)
+
         plot(0, 0, type = "n", bty = "n",
             xlim = coord$range, xlab = "", xaxt = "n", # nearly always set `xlim`` to `coord$range`
             ylim = ylim,  ylab = "Copy Number",
             xaxs = "i", yaxs = "i") # always set `xaxs` and `yaxs` to "i"
 
-        dprint(coord$range)
-        dprint(range(w$start))
-        dprint(ylim)
-        dprint(range(x$cn[[cellI]]))
+        # dprint(coord$range)
+        # dprint(range(w$start))
+        # dprint(ylim)
+        # dprint(range(x$cn[[cellI]]))
+
         points(w$start, x$cn[[cellI]], pch = 16, cex = 1)
         lines(w$start, x$hmm[[cellI]], lwd = 2, col = "red")
         abline(h=ylim[1]:ylim[2])

@@ -16,8 +16,5 @@ echo "indexing the final bam file"
 samtools index -@ $N_CPU $COORDINATE_BAM_FILE
 checkPipe
 
-# clean up
-rm -r $TMP_DIR_WRK
-
 echo "done"
 echo

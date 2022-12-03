@@ -49,10 +49,10 @@ options(scipen = 999) # prevent 1+e6 in printed, which leads to read.table error
 options(warn=2)
 #-------------------------------------------------------------------------------------
 # set some constants
-# TODO: expose as options?
-BIN_SIZE <- 20000L # constant to match 10x scCNV pipeline
-KMER_LENGTH <- 100L
+BIN_SIZE <- 20000L  # constant to match 10x scCNV pipeline
+KMER_LENGTH <- 150L # TODO: expose as options?
 N_ERRORS <- 1L
+MIN_MAPQ <- 40L
 #=====================================================================================
 
 #=====================================================================================
@@ -61,6 +61,7 @@ N_ERRORS <- 1L
 message("collecting genome-level information")
 chroms <- unlist(revChromIndex)
 chroms <- chroms[startsWith(chroms, "chr")]
+#-------------------------------------------------------------------------------------
 prepareBins <- paste( # as created by genomex-mdi-tools prepareBins
     env$GENOME, 
     'bins', 
@@ -87,10 +88,42 @@ setnames(prepareBins, c(
     'umap',
     'genmap'
 ))
+#-------------------------------------------------------------------------------------
+pemap <- paste( # as created by genomex-mdi-tools prepareBins
+    env$GENOME, 
+    'pemap', 
+    paste('r', KMER_LENGTH, sep = "_"), 
+    paste('q', MIN_MAPQ,    sep = "_"), 
+    paste('s', BIN_SIZE,    sep = "_"), 
+    'bed',
+    'gz',
+    sep = "."
+)
+pemap <- file.path(env$MDI_DIR, 'resources', 'genomes', 'pemap', env$GENOME, pemap)
+if(!file.exists(pemap)) stop(paste("file not found:", pemap))
+pemap <- fread(pemap)
+setnames(pemap, c(
+    'chrom',
+    'start',
+    'end',
+    'bin_i',
+    'pemap',
+    'strand'
+))
+prepareBins <- merge(
+    prepareBins, 
+    pemap[, .SD, .SDcols = c("chrom", "start", "end", "pemap")], 
+    by = c("chrom", "start", "end"),
+    all.x = TRUE,
+    all.y = FALSE,
+    sort = FALSE
+)
+#-------------------------------------------------------------------------------------
 prepareBins[, chrom_bin_i := floor(start / BIN_SIZE) + 1]
 cols <- list(
     gc_fraction = 'gc_fraction',
-    mappability = 'genmap'
+    # mappability = 'genmap'
+    mappability = 'pemap'
 )
 genome_tracks <- lapply(names(cols), function(colIn){
     colOut <- cols[[colIn]]

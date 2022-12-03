@@ -9,9 +9,9 @@ normalizeDataReactive <- function(sourceId){
     reactive({
         sourceId <- sourceId()
         req(sourceId)
-        dataFilePath <- getSourceFilePath(sourceId, "normalizeFile")
+        normalizeFilePath <- getSourceFilePath(sourceId, "normalizeFile")
         startSpinner(session, message = "loading sample data")
-        x <- readRDS(dataFilePath)
+        x <- readRDS(normalizeFilePath)
         setkey(x$colData, "cell_id")  
         x$qcPlotsDir <- expandSourceFilePath(sourceId, "qc_plots")
         if(!dir.exists(x$qcPlotsDir)) untar(
@@ -24,9 +24,9 @@ normalizeDataReactive <- function(sourceId){
 }
 
 loadSampleRds <- function(sourceId){
-    dataFilePath <- getSourceFilePath(sourceId, "normalizeFile")
-    x <- readRDS(dataFilePath)
-    setkey(x$colData, "cell_id")  
+    normalizeFilePath <- getSourceFilePath(sourceId, "normalizeFile")
+    x <- readRDS(normalizeFilePath)
+    setkey(x$colData, "cell_id")
     x
 }
 loadSampleCommon <- function(cacheKey, keyObject, key, cacheObject, sourceId, ...){
@@ -107,7 +107,7 @@ loadSampleWorking <- function(cacheKey, keyObject, key, cacheObject, sourceId, c
             wx <- paste("w", cell$window_size, sep = "_")
             w <- x$windows[[wx]]
             bins <- w[, if(isAll) TRUE else chrom == chrom_]
-            cell[[val]][bins] - windowMedians[[val]][[wx]]
+            cell[[val]][bins] # - windowMedians[[val]][[wx]]
         })
         names(x) <- x$colData$cell_id
         x
@@ -118,6 +118,7 @@ loadSampleWorking <- function(cacheKey, keyObject, key, cacheObject, sourceId, c
         rejected    = x$colData$rejected,
         window_size = x$colData$window_size,
         windows = lapply(x$windows, function(w) w[chrom == chrom_, .(start, end)]),
+        windowMedians = windowMedians,
         cn  = getValues("cn"),
         hmm = getValues("hmm"),
         z = list(

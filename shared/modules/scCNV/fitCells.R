@@ -1,35 +1,31 @@
-# determine the number of reads per bin required for a cell's data to support a robust HMM
+# determine the least number of reads per bin for a cell's data to support a robust HMM
 # with default options, places ~96% of bins within modal_CN +/- 0.5
 getMinBinCount <- function(modal_CN){
     ploidyFactor <- (modal_CN + 0.5) / modal_CN
     minBinCount <- (env$N_SD_HALFCN / (ploidyFactor - 1)) ** 2
 }
 
-# set the per-cell window size as the number of bins needed to obtain a median raw count >=minBinCount
+# set the per-cell window size as the number of bins needed to obtain a mean raw count >=minBinCount
 # permanently remove cells with insufficient coverage, as determined by MAX_WINDOW_BINS
-getCellWindowSize <- function(cell_id, minBinCount, bins = NULL){
+getMinWindowPower <- function(cell_id, minBinCount, bins = NULL){
     if(is.null(bins)) bins <- rowRanges$autosome & rowRanges$mappability >= env$MIN_MAPPABILITY
     NR_raw_b <- raw_counts[[cell_id]][bins]
     NR_avg_b <- mean(NR_raw_b, na.rm = TRUE)
     if(is.na(NR_avg_b) || NR_avg_b == 0) return(NA)
     window_size <- ceiling(minBinCount / NR_avg_b)
-    window_size <- window_size + !(window_size %% 2) # make odd to ensure proper window centering
-    if(is.na(window_size) || window_size > env$MAX_WINDOW_BINS) return(NA)   
-    window_size
+    if(is.na(window_size) || window_size > 2 ** env$MAX_WINDOW_BINS) return(NA)
+    window_sizes <- 2 ** (0:env$MAX_WINDOW_BINS)
+    window_size <- window_sizes[min(which(window_sizes >= window_size))] # thus, allow 2**(0:MWB) bins per window
+    log2(window_size)
 }
 
 # fit a cell's GC bias using the negative binomial distribution
-# called twice: 1) learn about cell 2) optimize window size based on overdispersion
-fitCell_ <- function(cell_id, stage = "extract", pass = 1, 
-                     scaleFactor = NULL, prevFit = NULL){ 
+# called as many times as needed at increasing window sizes to account for a cell's overdispersion
+fitCell_ <- function(cell_id, modal_CN, minBinCount, windowPower, pass, stage = "extract"){ 
 
     # calculate window sums and correct for mappability
-    modal_CN <- colData[cell_id, modal_CN]
-    minBinCount <- if(is.null(scaleFactor)) getMinBinCount(modal_CN) else scaleFactor * prevFit$minBinCount
-    window_size <- getCellWindowSize(cell_id, minBinCount)
-    if(is.na(window_size)) return(prevFit)    
-    if(!is.null(prevFit) && window_size == prevFit$window_size) return(prevFit)
-    windows <- windows[[paste("w", window_size, sep = "_")]]
+    window_size <- 2 ** windowPower
+    windows <- windows[[paste("w", window_size, sep = "_")]]   
     mappability <- windows[, ifelse(mappability < env$MIN_MAPPABILITY, NA, mappability)]
     NR_map_w <- unname(unlist(sapply(constants$chrom, function(chrom){
         collapseVector(
@@ -79,29 +75,38 @@ fitCell_ <- function(cell_id, stage = "extract", pass = 1,
         theta = predict(fit, gc_w, type = 'theta')
     )
 }
+
 fitCell <- function(cell_id, stage = "extract"){ 
 
     # the very worst cells, wholly insufficent data
-    x0 <- list(
+    x <- list(
         rejected = TRUE,
         stage = stage, 
         pass = 0,
         window_size = NA 
     )
 
-    # first pass fit at a sensitivity adjusted for a specific cell's read depth
-    x1 <- fitCell_(cell_id, stage, pass = 1)
-    if(!is.list(x1)) return(x0)
+    # get the smallest reasonable window size for this cell based on its read depth, assuming Poisson
+    modal_CN <- colData[cell_id, modal_CN]
+    minBinCount <- getMinBinCount(modal_CN)
+    minWindowPower <- getMinWindowPower(cell_id, minBinCount)
+    if(is.na(minWindowPower)) return(x)
 
-    # second pass fit at a sensitivity adjusted for the specific cell's read depth and dispersion
-    dcn <- x1$cn[x1$hmm == x1$modal_CN] - x1$modal_CN
-    scaleFactor <- max(1, env$N_SD_HALFCN * sd(dcn, na.rm = TRUE) / 0.5, na.rm = TRUE)
-    x2 <- if(scaleFactor == 1) x1
-          else fitCell_(cell_id, stage, pass = 2, scaleFactor, x1)
-    dcn <- x2$cn[x2$hmm == x2$modal_CN] - x2$modal_CN
-    sdDcn <- sd(dcn, na.rm = TRUE)
-    x2$rejected <- is.na(sdDcn) || sdDcn * env$N_SD_HALFCN > 1 # deliberately 2-fold more permissive than the stated target
-    x2
+    # step up to larger and larger windows as needed to account for overdispersion
+    # expanding window sizes by a factor of two leads to predictable cell-to-cell bin relationships
+    pass <- 0
+    windowPower <- minWindowPower - 1 
+    while(x$rejected && windowPower < env$MAX_WINDOW_BINS){
+        pass <- pass + 1
+        windowPower <- windowPower + 1
+        x <- fitCell_(cell_id, modal_CN, minBinCount, windowPower, pass, stage)
+        dcn <- x$cn[x$hmm == x$modal_CN] - x$modal_CN
+        sdDcn <- sd(dcn, na.rm = TRUE)
+        x$rejected <- is.na(sdDcn) || sdDcn * env$N_SD_HALFCN > 1 # deliberately 2-fold more permissive than the stated target
+    }
+
+    # return our result
+    x
 }
 
 # make a composite plot of cell model for QC purposes

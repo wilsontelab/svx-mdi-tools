@@ -61,7 +61,6 @@ settings:
             type:   selectInput
             choices:
                 - genmap
-                - umap
             value:  genmap  
         Minimum_GC:
             type:   numericInput
