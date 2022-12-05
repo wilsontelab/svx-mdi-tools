@@ -2,8 +2,22 @@
 .annotateCellsInput {
     display: inline-block;
     vertical-align: top;
+    margin-right: 5px;
+    border-right: 1px solid #aaa;
+    height: 81px;
+    padding-right: 5px;
 }
-.annotateCellsInput .shiny-input-container {
+.annotateCellsInput .shiny-options-group {
+    margin-top: 15px !important;
+}
+.annotateCellsInput button {
+    width: 60px;
+    text-align: center;
+    /* padding: 6px 0; */
+    margin-top: 36px;
+} 
+
+/* .annotateCellsInput .shiny-input-container {
     width: 90px;
 }
 .annotateCellsWideInput .shiny-input-container {
@@ -11,12 +25,6 @@
 }
 .annotateCellsInput .selectize-control {
     margin: 0;
-}
-.annotateCellsInput button {
-    width: 30px;
-    text-align: center;
-    padding: 6px 0;
-    margin-top: 25px;
 }
 .annotateCellsInput .checkbox {
     margin-top: 30px;
@@ -26,8 +34,8 @@
 /* the cell stepper */
 .stepperInput {
     display: inline-block;
-    margin-top: 10px;
+    margin-top: 36px;
 }
 .stepperInput * {
     vertical-align: middle;
-}
+} */

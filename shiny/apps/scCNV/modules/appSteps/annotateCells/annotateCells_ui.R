@@ -45,10 +45,28 @@ annotateCellsUI <- function(id, options) {
             style = "white-space: nowrap;",
             tags$div(
                 class = "annotateCellsInput",
-                style = "width: 300px",
-                radioButtons(ns("windowSize"), "Window Size (# of 20 kb bins)",
-                             choices = 2 ^ (0:6), selected = 1, inline = TRUE)
+                style = "width: 165px;",
+                sliderInput(ns("windowPower"), "Window Size (80 kb)", width = "165px", 
+                            value = 2, min = 0, max = 7, step = 1, round = TRUE)
             ),
+            tags$div(
+                class = "annotateCellsInput",
+                style = "width: 95px",
+                radioButtons(ns("isReplicating"), "Replicating",
+                             choices = c("no", "yes"), selected = "no", inline = TRUE)
+            ),
+            tags$div(
+                class = "annotateCellsInput",
+                style = "width: 125px;",
+                sliderInput(ns("modalCn"), "Modal CN", width = "125px", 
+                            value = 2, min = 1, max = 4, step = 1, round = TRUE)
+            ),
+            tags$div(
+                class = "annotateCellsInput",
+                style = "width: 130px;",
+                bsButton(ns("resetCell"), "Reset"),
+                bsButton(ns("fitCell"), "Fit", style = "primary")
+            ), 
             tags$div(
                 class = "stepperInput",
                 listStepperButtonsUI(ns("cellStepper"))

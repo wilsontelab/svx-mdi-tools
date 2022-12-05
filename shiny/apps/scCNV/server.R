@@ -8,6 +8,20 @@
 # if not needed, simply omit file server.R from your app
 #----------------------------------------------------------------------
 
+# CONSTANTS
+CONSTANTS$binSize <- 20000
+CONSTANTS$nSdHalfCn <- 2
+CONSTANTS$minWindowPower <- 0
+CONSTANTS$maxWindowPower <- 7
+CONSTANTS$windowSizes <- 2 ** (CONSTANTS$minWindowPower:CONSTANTS$maxWindowPower)
+CONSTANTS$maxWindowSize <- 2 ** CONSTANTS$maxWindowPower
+
+# cache for holding post-processed, but unchanging, cell-level data
+windowsCache <- new_dataCache('scCNV-windows')
+cellCache    <- new_dataCache('scCNV-cells')
+
+
+
 # sample cache objects
 sampleCache <- list(
     common = list( # rowRanges and colData, loaded once per sample
