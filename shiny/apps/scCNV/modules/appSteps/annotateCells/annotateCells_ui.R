@@ -42,6 +42,7 @@ annotateCellsUI <- function(id, options) {
 
         # row of cell annotation inputs
         tags$div(
+            id = "annotateCellsInputs",
             style = "white-space: nowrap;",
             tags$div(
                 class = "annotateCellsInput",
@@ -52,18 +53,19 @@ annotateCellsUI <- function(id, options) {
             tags$div(
                 class = "annotateCellsInput",
                 style = "width: 95px",
-                radioButtons(ns("isReplicating"), "Replicating",
-                             choices = c("no", "yes"), selected = "no", inline = TRUE)
+                radioButtons(ns("replicating"), "Replicating",
+                             choices = c("no" = FALSE, "yes" = TRUE), selected = "no", inline = TRUE)
             ),
             tags$div(
                 class = "annotateCellsInput",
                 style = "width: 125px;",
-                sliderInput(ns("modalCn"), "Modal CN", width = "125px", 
+                sliderInput(ns("modal_CN"), "Modal CN", width = "125px", 
                             value = 2, min = 1, max = 4, step = 1, round = TRUE)
             ),
             tags$div(
                 class = "annotateCellsInput",
-                style = "width: 130px;",
+                style = "width: 178px;",
+                bsButton(ns("keepRejectCell"), "Reject", style = "warning"),
                 bsButton(ns("resetCell"), "Reset"),
                 bsButton(ns("fitCell"), "Fit", style = "primary")
             ), 
@@ -79,14 +81,14 @@ annotateCellsUI <- function(id, options) {
             # left column of boxes for GC bias plots
             column(width = 3,
                 # style = unpad,  
-                interactiveScatterplotUI(ns('NR_map_w_vs_gc'), height = '250px'),         
+                interactiveScatterplotUI(ns('NR_map_w_vs_gc0'), height = '250px'),         
                 ""                  
             ),
             
             # right column of boxes for genomic bin plots
             column(width = 9,
                 # style = unpad,
-                interactiveScatterplotUI(ns('NR_map_w_vs_bin'),  height = '250px')              
+                interactiveScatterplotUI(ns('NR_map_w_vs_bin0'),  height = '250px')              
             )
         ),
 

@@ -11,9 +11,11 @@
 # CONSTANTS
 CONSTANTS$binSize <- 20000
 CONSTANTS$nSdHalfCn <- 2
+CONSTANTS$minMappability <- 0.9
 CONSTANTS$minWindowPower <- 0
 CONSTANTS$maxWindowPower <- 7
-CONSTANTS$windowSizes <- 2 ** (CONSTANTS$minWindowPower:CONSTANTS$maxWindowPower)
+CONSTANTS$windowPowers <- CONSTANTS$minWindowPower:CONSTANTS$maxWindowPower
+CONSTANTS$windowSizes <- 2 ** CONSTANTS$windowPowers
 CONSTANTS$maxWindowSize <- 2 ** CONSTANTS$maxWindowPower
 
 # cache for holding post-processed, but unchanging, cell-level data

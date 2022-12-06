@@ -18,16 +18,13 @@ getMinWindowPower <- function(cellData){
 }
 
 # demarcation lines for plots
-NR_map_hLines <- function(cellData, cellWindowCounts){
-
-    modal_CN <- cellData()$colData$modal_CN     
-
-    ER_map_modal_CN <- cellWindowCounts()$ER_map_modal_CN
+NR_map_hLines <- function(modal_CN, cellWindowCounts){
+    ER_map_modal_CN <- cellWindowCounts$ER_map_modal_CN
     readsPerAllele <- ER_map_modal_CN / modal_CN
     orange <- CONSTANTS$plotlyColors$orange
     red    <- CONSTANTS$plotlyColors$red
     structure(
-        ER_map_modal_CN + -2:2 * readsPerAllele, 
-        color = c(red, red, orange, red, red)
+        ER_map_modal_CN + -5:5 * readsPerAllele, 
+        color = c(rep(red, 5), orange, rep(red, 5))
     )
 }
