@@ -30,11 +30,13 @@ checkEnvVars(list(
         'BAD_REGIONS_FILE',
         'PLOTS_DIR',
         'PLOT_PREFIX',
-        'OUTPUT_FILE'        
+        'OUTPUT_FILE',
+        'DATA_NAME',
+        'MANIFEST_FILE' # created by us
     ),
     integer = c(
         "PLOIDY",
-        "MAX_WINDOW_BINS",
+        "MAX_WINDOW_POWER",
         "N_CPU"
     ),
     double = c(
@@ -70,29 +72,40 @@ sourceScripts(scCnvSharedDir, c('loadHdf5', 'parseGenomeBins', 'fitCells'))
 # first pass fit at the bin resolution expected for Poisson without over/under-dispersion
 #-------------------------------------------------------------------------------------
 message('characterizing individual cells')
-colData[, modal_CN := env$PLOIDY]
-cells <- mclapply(cell_ids, function(cell_id){
+# cells <- mclapply(cell_ids, function(cell_id){
+cells <- lapply("70", function(cell_id){ # rep=  3 70 37 8  un = 90 81
     # message()
     # message(cell_id)
     cell <- fitCell(cell_id)
     if(!is.null(cell$fit)) plotCellQC(cell_id, cell)
+    # str(cell)
+    # stop("GOT TO HERE!")
     cell
-}, mc.cores = env$N_CPU)
+})
+# , mc.cores = env$N_CPU)
 names(cells) <- cell_ids
 
 # assemble and organize the per-cell data
 message('recording cell metadata')
-colData[, window_size := 0L] # needed to prevent errors if first cell has window_size == NA
 colData[, ':='(
-    rejected    = cells[[cell_id]]$rejected,
-    stage       = cells[[cell_id]]$stage,
-    pass        = cells[[cell_id]]$pass,
-    window_size = cells[[cell_id]]$window_size
+    keep        =  cells[[cell_id]]$keep,
+    rejected    = !cells[[cell_id]]$keep,
+    windowPower = cells[[cell_id]]$windowPower,    
+    sdLagDiff   = cells[[cell_id]]$sdLagDiff,
+    replicating = cells[[cell_id]]$replicating,
+    fractionS   = cells[[cell_id]]$fractionS,
+    peakIsReplicated   = cells[[cell_id]]$replicationModel$peakIsReplicated,
+    maxNR_unreplicated = cells[[cell_id]]$replicationModel$maxNR_unreplicated,
+    modal_CN    = cells[[cell_id]]$modal_CN,
+    ploidy      = cells[[cell_id]]$ploidy,
+    ER_modal_CN = cells[[cell_id]]$ER_modal_CN,
+    ER_ploidy   = cells[[cell_id]]$ER_ploidy,
+    readsPerAllele = cells[[cell_id]]$readsPerAllele
 ), by = cell_id]
 #=====================================================================================
 
 #=====================================================================================
-# save the interim output file
+# save the interim output and manifest files
 #-------------------------------------------------------------------------------------
 saveRDS(list(
     env = env,
@@ -104,4 +117,17 @@ saveRDS(list(
     cells = cells,
     raw_counts = raw_counts
 ), file  = env$OUTPUT_FILE)
+write.table(
+    data.table(
+        Project = env$DATA_NAME,
+        Sample_ID = colData$cell_id,
+        Description = if(is.null(colData$cell_name)) colData$cell_id else colData$cell_name,
+        Keep = colData$keep
+    ), 
+    file = env$MANIFEST_FILE, 
+    quote = FALSE, 
+    sep = ",",
+    row.names = FALSE,
+    col.names = TRUE
+)
 #=====================================================================================

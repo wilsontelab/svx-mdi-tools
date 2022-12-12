@@ -139,13 +139,13 @@ optionFamilies:
                 required: false
                 default: 2
                 description: "number of standard deviations at CN == --ploidy + 0.5" 
-            max-window-bins: 
+            max-window-power: 
                 order: 2
                 short: W
                 type: integer
                 required: false
                 default: 7 # i.e., 2^7 * 20,000 = 2,560,000 bp windows 
-                description: "discard cells requiring more than 2^W 20kb bins per window" 
+                description: "reject cells requiring more than 2^W 20kb bins per window" 
             min-mappability: 
                 order: 3
                 short: M
@@ -166,6 +166,10 @@ package:
     normalize: # the pipeline action after which a data package should assembled
         uploadType: scCNV # a signal to the Stage 2 framework regarding the package contents
         files:
+            manifestFile:
+                type: comma-delimited
+                manifestType: simple
+                file: $DATA_FILE_PREFIX.$PIPELINE_NAME.manifest.csv
             normalizeFile:
                 type: rds
                 file: $DATA_FILE_PREFIX.$PIPELINE_NAME.normalize.rds

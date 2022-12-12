@@ -19,6 +19,8 @@ description: "Analyze single-cell whole-genome sequencing data for copy number v
 uploadTypes:
     scCNV: 
         contentFileTypes: # anything not listed will not be available to the app
+            manifestFile:
+                required: true
             normalizeFile:
                 required: true
             plotsArchive:

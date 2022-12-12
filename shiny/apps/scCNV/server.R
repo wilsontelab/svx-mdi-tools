@@ -22,8 +22,6 @@ CONSTANTS$maxWindowSize <- 2 ** CONSTANTS$maxWindowPower
 windowsCache <- new_dataCache('scCNV-windows')
 cellCache    <- new_dataCache('scCNV-cells')
 
-
-
 # sample cache objects
 sampleCache <- list(
     common = list( # rowRanges and colData, loaded once per sample

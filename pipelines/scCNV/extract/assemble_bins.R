@@ -16,6 +16,7 @@ suppressPackageStartupMessages({
     library(rhdf5)
     library(data.table)
     library(parallel)
+    library(yaml)
 })
 #-------------------------------------------------------------------------------------
 # parse environment variables
@@ -146,7 +147,16 @@ nChromBins <- unname(sapply(chroms, function(chrom_) prepareBins[chrom == chrom_
 message("collecting sample-level information")
 metadata <- list(
     assembly  = env$GENOME,
-    sample_id = env$DATA_NAME
+    sample_id = env$DATA_NAME,
+    organism = switch(
+        env$GENOME,
+        hg38   = "Homo_sapiens",
+        GRCh38 = "Homo_sapiens",
+        mm10   = "Mus_musculus",
+        GRCm38 = "Mus_musculus",
+        NA
+    ),
+    pipeline = "svx-mdi-tools/scCNV"
 )
 #=====================================================================================
 
@@ -164,6 +174,12 @@ per_cell_summary_metrics[, ':='(
         i <- length(x) - 1
         if(x[i] == "name") i <- i - 1
         x[i]
+    }),    
+    total_num_reads = sapply(alignment_file, function(x){ # all input read pairs from fastq
+        read_yaml(paste(x, "counts", "yml", sep = "."))$nReadPairs
+    }),    
+    num_discarded_reads = sapply(alignment_file, function(x){           # input read pairs failing either mapping or mapq
+        read_yaml(paste(x, "counts", "yml", sep = "."))$nDiscardedPairs # sum of 10x num_unmapped_reads + num_lowmapq_reads
     })
 )]
 constants <- list(
@@ -200,9 +216,10 @@ raw_counts <- lapply(chroms, function(chrom_){
     unname(x)
 })
 names(raw_counts) <- chroms
-per_cell_summary_metrics$total_num_reads <- unname(sapply(1:constants$num_cells, function(j){
-    sum( sapply(chroms, function(chrom) sum(raw_counts[[chrom]][, j])) )
+per_cell_summary_metrics$num_mapped_dedup_reads <- unname(sapply(1:constants$num_cells, function(j){
+    sum( sapply(chroms, function(chrom) sum(raw_counts[[chrom]][, j])) ) # ~final number of deduplicated read pairs used in analysis
 }))
+per_cell_summary_metrics[, num_duplicate_reads := total_num_reads - num_discarded_reads - num_mapped_dedup_reads] 
 #=====================================================================================
 
 #=====================================================================================

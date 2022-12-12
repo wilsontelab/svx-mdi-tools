@@ -14,7 +14,7 @@
     width: 55px;
     text-align: center;
     padding: 6px 0;
-    margin-top: 36px;
+    margin-top: 2px; /* 36px */
 } 
 
 /* .annotateCellsInput .shiny-input-container {

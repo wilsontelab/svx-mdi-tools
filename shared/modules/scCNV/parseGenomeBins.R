@@ -1,6 +1,6 @@
 #=====================================================================================
 # assemble the parts of an initial BioConductor SummarizedExperiment-like object set
-# although we do NOT use a SE because we end up with different binning per cell
+# although we do NOT use a SE because we often end up with different binning per cell
 #-------------------------------------------------------------------------------------
 message("parsing genome bin descriptions") # i.e., 20kb bins (not windows, which comprise >=1 bins)
 autosomes <- paste0("chr", 1:100)
@@ -13,7 +13,7 @@ rowRanges <- do.call(rbind, mclapply(seq_along(constants$chroms), function(i){
     start <- seq(from = 1, by = binSize, length.out = nBins)
     dt <- data.table(
         chrom = rep(chrom, nBins),
-        start = as.integer(start),
+        start = as.integer(start), # start and end both 1-referenced (unlike BED)
         end   = as.integer(start + binSize - 1),
         gc_fraction = as.double(genome_tracks$gc_fraction[[chrom]]), 
         mappability = as.double(genome_tracks$mappability[[chrom]]),
@@ -31,7 +31,14 @@ rm(autosomes, badRegions, genome_tracks)
 message("parsing cell metrics")
 cell_ids <- as.character(per_cell_summary_metrics$cell_id)
 colData <- as.data.table(per_cell_summary_metrics)
-colData[, cell_id := cell_ids]
+is10x <- "num_lowmapq_reads" %in% names(colData)
+numDiscardedReads <- colData[, if(is10x) num_unmapped_reads + num_lowmapq_reads else num_discarded_reads]
+numAlignedReads   <- colData[, total_num_reads - numDiscardedReads]
+colData[, ":="(
+    cell_id   = cell_ids,
+    alignRate = numAlignedReads / total_num_reads,
+    dupRate   = 1 - num_mapped_dedup_reads / numAlignedReads
+)]
 setkey(colData, "cell_id")
 rm(per_cell_summary_metrics)
 # -------------------------------------------------------------------------------------
@@ -55,12 +62,13 @@ rowRanges  <-  rowRanges[bad_region == FALSE]
 # pre-aggregate the bins for all required window sizes
 #-------------------------------------------------------------------------------------
 message("pre-aggregating bins for all required window sizes")
-window_sizes <- 2 ** (0:env$MAX_WINDOW_BINS)
-windows <- mclapply(window_sizes, function(window_size){
+windowPowers <- 0:env$MAX_WINDOW_POWER
+windows <- mclapply(windowPowers, function(windowPower){
+    windowSize <- 2 ** windowPower # as number of bins, not bp
     rowRanges[, {
-        chrom_window_id <- floor((1:.N - 1) / window_size) + 1
+        chrom_window_id <- floor((1:.N - 1) / windowSize) + 1
         .SD[, .(
-            start = min(start),
+            start = min(start), # start and end both 1-referenced (unlike BED)
             end   = max(end),
             gc_fraction = mean(gc_fraction),
             mappability = mean(mappability),
@@ -68,5 +76,5 @@ windows <- mclapply(window_sizes, function(window_size){
         ), by = chrom_window_id]
     }, by = "chrom"]
 }, mc.cores = env$N_CPU)
-names(windows) <- paste("w", window_sizes, sep = "_")
+names(windows) <- paste("w", windowPowers, sep = "_")
 #=====================================================================================

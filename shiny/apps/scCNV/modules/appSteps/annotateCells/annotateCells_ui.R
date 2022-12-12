@@ -64,6 +64,12 @@ annotateCellsUI <- function(id, options) {
             ),
             tags$div(
                 class = "annotateCellsInput",
+                style = "width: 125px;",
+                sliderInput(ns("Ploidy"), "ploidy", width = "125px", 
+                            value = 2, min = 1, max = 4, step = 1, round = TRUE)
+            ),
+            tags$div(
+                class = "annotateCellsInput",
                 style = "width: 178px;",
                 bsButton(ns("keepRejectCell"), "Reject", style = "warning"),
                 bsButton(ns("resetCell"), "Reset"),
@@ -88,8 +94,18 @@ annotateCellsUI <- function(id, options) {
             # right column of boxes for genomic bin plots
             column(width = 9,
                 # style = unpad,
-                interactiveScatterplotUI(ns('NR_map_w_vs_bin0'),  height = '250px')              
-            )
+                interactiveScatterplotUI(ns('NR_map_w_vs_bin0'),    height = '250px'),
+                tags$div(
+                    id = ns("byChromDiv"),
+                    style = "display: none;",
+                    listStepperButtonsUI(ns("chromStepper")),
+                    interactiveScatterplotUI(ns('byChromPlot'), height = '250px') 
+                )
+            ),
+            column(width = 9, offset = 3,
+                plotOutput(ns("density")),         
+                ""                  
+            ),
         ),
 
         # appStep UI elements, populate as needed

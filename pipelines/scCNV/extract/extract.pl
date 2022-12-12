@@ -115,9 +115,15 @@ parseReadPair();
 close $inH;
 
 # print summary information
-my $keptPairs = commify($nReadPairs - $nDiscarded);
+my $nKeptPairs = $nReadPairs - $nDiscarded;
+open my $outH, ">", "$alignmentFile.counts.yml";
+print $outH "nReadPairs: $nReadPairs\n";
+print $outH "nDiscardedPairs: $nDiscarded\n";
+print $outH "nKeptPairs: $nKeptPairs\n";
+close $outH;
+$nKeptPairs = commify($nKeptPairs);
 $nReadPairs = commify($nReadPairs);
-print STDERR "$keptPairs of $nReadPairs input read pairs kept for cell $cellId\n";
+print STDERR "$nKeptPairs of $nReadPairs input read pairs kept for cell $cellId\n";
 
 # child process to parse bam read pairs
 sub getCoverageBin {
