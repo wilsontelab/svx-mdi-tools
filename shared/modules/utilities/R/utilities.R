@@ -7,6 +7,7 @@
 # vector tools
 #----------------------------------------------------------------------
 collapseVector <- function(v, n) { # sum every n adjacent elements of a vector
+    if(n == 1) return(v)
     cv <- unname(tapply(v, (seq_along(v) - 1) %/% n, sum, na.rm = TRUE))
     tailLength <- length(v) %% n # number of input elements summed into incomplete last output element    
     if(tailLength != 0){
@@ -16,6 +17,7 @@ collapseVector <- function(v, n) { # sum every n adjacent elements of a vector
     cv
 }
 uncollapseVector <- function(v, n, len) { # reverse the actions of collapseVector
+    if(n == 1) return(v)
     ucv <- as.vector(sapply(v, rep, n))
     extra <- length(ucv) - len # user must remember how long the original vector was    
     if(extra > 0) ucv <- ucv[1:len]    

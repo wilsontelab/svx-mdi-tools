@@ -25,6 +25,7 @@ source(file.path(rUtilDir, 'workflow.R'))
 source(file.path(rUtilDir, 'utilities.R'))
 checkEnvVars(list(
     string = c(
+        'ACTION_DIR',
         'INPUT_DIR',
         'INPUT_NAME',
         'BAD_REGIONS_FILE',
@@ -72,16 +73,30 @@ sourceScripts(scCnvSharedDir, c('loadHdf5', 'parseGenomeBins', 'fitCells'))
 # first pass fit at the bin resolution expected for Poisson without over/under-dispersion
 #-------------------------------------------------------------------------------------
 message('characterizing individual cells')
+
+# rep=  
+# 3 = 24/LK-13, ~85%S, XX
+# 70 = 69/LK-74, mid-S, XY + aneuploidy
+# 37 = 32/LK-44, ?40%S, XY
+# 8 = 79/LK-18, ~15%S, XX
+# un = 
+# 90 = 91/LK-92, 0%S, XX + gain chr22
+# 81 = 81/LK-84, 0%S, XY + loss chr15
+
 # cells <- mclapply(cell_ids, function(cell_id){
-cells <- lapply("70", function(cell_id){ # rep=  3 70 37 8  un = 90 81
+# cells <- lapply("8", function(cell_id){ 
+cells <- lapply(as.character(c(3, 70, 37, 8, 90, 81)), function(cell_id){ 
     # message()
     # message(cell_id)
     cell <- fitCell(cell_id)
-    if(!is.null(cell$fit)) plotCellQC(cell_id, cell)
+    # if(!is.null(cell$fit)) plotCellQC(cell_id, cell)
     # str(cell)
-    # stop("GOT TO HERE!")
+    
     cell
 })
+
+stop("GOT TO HERE!")
+
 # , mc.cores = env$N_CPU)
 names(cells) <- cell_ids
 
