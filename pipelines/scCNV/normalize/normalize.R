@@ -84,7 +84,7 @@ message('characterizing individual cells')
 # 81 = 81/LK-84, 0%S, XY + loss chr15
 
 # cells <- mclapply(cell_ids, function(cell_id){
-# cells <- lapply("8", function(cell_id){ 
+# cells <- lapply("81", function(cell_id){ 
 cells <- lapply(as.character(c(3, 70, 37, 8, 90, 81)), function(cell_id){ 
     # message()
     # message(cell_id)
@@ -94,6 +94,13 @@ cells <- lapply(as.character(c(3, 70, 37, 8, 90, 81)), function(cell_id){
     
     cell
 })
+
+# dir <- "/nfs/turbo/umms-smithgd/pipelines/scripts/scCNV/human_embryo"
+# file <- file.path(dir, "dev.rds")
+# # saveRDS(P_rep_fs_gc, file = file)
+# P_rep_fs_gc <- readRDS(file)
+
+# plotReplicationProfiles()
 
 stop("GOT TO HERE!")
 

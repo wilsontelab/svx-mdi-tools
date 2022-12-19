@@ -51,9 +51,17 @@ table <- rbind(
 
 # create a function for doing the lookup
 getRepStateProbs <- function(x, ploidy, fractionS) with(x, {
-    row <- table[table$fractionS_int == as.integer(fractionS * 1000), , drop = FALSE]
-    if(ploidy == 1) c(row$P1_R0,         0, row$P1_R1) 
-               else c(row$P2_R0, row$P2_R1, row$P2_R2)
+    fractionS_int <- as.integer(fractionS * 1000)
+    row <- table[table$fractionS_int == fractionS_int, , drop = FALSE]    
+    # if(nrow(row) > 0){ # a perfect match
+        if(ploidy == 1) c(row$P1_R0,         0, row$P1_R1) 
+                   else c(row$P2_R0, row$P2_R1, row$P2_R2)        
+    # } else { # in between value, interpolate
+    #     below <- table[max(which(table$fractionS_int < fractionS_int)), , drop = FALSE]    
+    #     above <- table[min(which(table$fractionS_int > fractionS_int)), , drop = FALSE]    
+    #     if(ploidy == 1) c(mean(below$P1_R0, above$P1_R0),                              0, mean(below$P1_R1, above$P1_R1)) 
+    #                else c(mean(below$P2_R0, above$P2_R0), mean(below$P2_R1, above$P2_R1), mean(below$P2_R2, above$P2_R2))
+    # }
 })
 
 # save the table for use during fitting

@@ -24,7 +24,7 @@ viterbi.hmmEPTable <- function(hmm, observations=TRUE){
     # NB: these 'for' loops are faster than apply methods with array as implemented and given recursion restrictions
     for (t in 2:T){
         pt <- t - 1
-        for (j in 1:N){   # j = this hs
+        for (j in 1:N){     # j = this hs
             ep_j <- ep[t, j]
             for (i in 1:N){ # i = prev hs
                 delta_ <- delta[pt, i] + tp[i, j] + ep_j

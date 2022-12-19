@@ -65,7 +65,7 @@ message("pre-aggregating bins for all required window sizes")
 windowPowers <- 0:env$MAX_WINDOW_POWER
 windows <- mclapply(windowPowers, function(windowPower){
     windowSize <- 2 ** windowPower # as number of bins, not bp
-    rowRanges[, {
+    x <- rowRanges[, {
         chrom_window_id <- floor((1:.N - 1) / windowSize) + 1
         .SD[, .(
             start = min(start), # start and end both 1-referenced (unlike BED)
@@ -75,6 +75,8 @@ windows <- mclapply(windowPowers, function(windowPower){
             autosome = autosome[1]
         ), by = chrom_window_id]
     }, by = "chrom"]
+    x[, ":="(i = .I, i2 = .I ** 2)]
+    x
 }, mc.cores = env$N_CPU)
 names(windows) <- paste("w", windowPowers, sep = "_")
 #=====================================================================================

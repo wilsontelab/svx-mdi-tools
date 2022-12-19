@@ -7,7 +7,7 @@
 #----------------------------------------------------------------------
 getRows.nbinomCountsGC2 <- function(nb, fractionGC){
     if(is.null(fractionGC)) TRUE else {
-        pmax(nb$minGcIndex, pmin(nb$maxGcIndex, round(fractionGC * nb$nGcSteps, 0) - nb$gcIndexOffset))
+        pmax(nb$minGcIndex, pmin(nb$maxGcIndex, round(fractionGC * nb$nGcSteps, 0))) - nb$gcIndexOffset
     }
 }
 predict.nbinomCountsGC2 <- function(
@@ -116,14 +116,15 @@ viterbi.nbinomCountsGC2 <- function(
 # make a composite plot of the GC bias model for cell quality monitoring
 #----------------------------------------------------------------------
 plot.nbinomCountsGC2 <- function(nb, gc_w, NR_map_w, modal_CN = 2, rejected = FALSE, 
-                                 col = NULL, maxPoints = 5000){
+                                 col = NULL, maxPoints = 5000, binCN = NULL){
     peak <- predict(nb, type = 'adjustedPeak') * modal_CN
     maxPeak  <- max(peak, na.rm = TRUE)
+    if(!is.null(binCN)) NR_map_w <- NR_map_w / binCN * modal_CN
     maxCount <- max(NR_map_w, na.rm = TRUE)
     ymax <- min(maxPeak * 2, maxCount)
     n <- length(gc_w)
     i <- sample(n, min(n, maxPoints), replace = FALSE)
-    col <- if(is.null(col)) rgb(0, 0, 0, 0.1) else col[i]
+    col <- if(is.null(col) || is.na(col)) rgb(0, 0, 0, 0.1) else col[i]
     plot(gc_w[i], NR_map_w[i], 
          pch = 19, cex = 0.4, col = col,
          xlim = c(0.3, 0.6), ylim = c(0, ymax),
