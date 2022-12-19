@@ -84,8 +84,8 @@ message('characterizing individual cells')
 # 81 = 81/LK-84, 0%S, XY + loss chr15
 
 # cells <- mclapply(cell_ids, function(cell_id){
-# cells <- lapply("81", function(cell_id){ 
-cells <- lapply(as.character(c(3, 70, 37, 8, 90, 81)), function(cell_id){ 
+cells <- lapply("70", function(cell_id){ 
+# cells <- lapply(as.character(c(3, 70, 37, 8, 90, 81)), function(cell_id){ 
     # message()
     # message(cell_id)
     cell <- fitCell(cell_id)
