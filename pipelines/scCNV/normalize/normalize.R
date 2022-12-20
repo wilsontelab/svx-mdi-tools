@@ -83,46 +83,38 @@ message('characterizing individual cells')
 # 90 = 91/LK-92, 0%S, XX + gain chr22
 # 81 = 81/LK-84, 0%S, XY + loss chr15
 
-# cells <- mclapply(cell_ids, function(cell_id){
-cells <- lapply("70", function(cell_id){ 
-# cells <- lapply(as.character(c(3, 70, 37, 8, 90, 81)), function(cell_id){ 
-    # message()
-    # message(cell_id)
-    cell <- fitCell(cell_id)
-    # if(!is.null(cell$fit)) plotCellQC(cell_id, cell)
-    # str(cell)
-    
-    cell
-})
+# cell_ids <- as.character(c(3, 70, 37, 8, 90, 81))
+# cell_ids <- cell_ids[1:2]
+# cells <- lapply(cell_ids, fitCell)
+# stop("GOT TO HERE!")
 
-# dir <- "/nfs/turbo/umms-smithgd/pipelines/scripts/scCNV/human_embryo"
-# file <- file.path(dir, "dev.rds")
-# # saveRDS(P_rep_fs_gc, file = file)
-# P_rep_fs_gc <- readRDS(file)
-
-# plotReplicationProfiles()
-
-stop("GOT TO HERE!")
-
-# , mc.cores = env$N_CPU)
+cells <- mclapply(cell_ids, fitCell, mc.cores = env$N_CPU)
 names(cells) <- cell_ids
 
 # assemble and organize the per-cell data
 message('recording cell metadata')
+getWindowsMetadata <- function(cell_id, key){
+    windowPower <- cells[[cell_id]]$windowPower
+    x <- cells[[cell_id]]$windows[[windowPower + 1]][[key]]
+    if(is.null(x)) NA else x
+}
+getReplicationMetadata <- function(cell_id, key) {
+    x <- cells[[cell_id]]$replicationModel[[key]]
+    if(is.null(x)) NA else x
+}
 colData[, ':='(
-    keep        =  cells[[cell_id]]$keep,
-    rejected    = !cells[[cell_id]]$keep,
-    windowPower = cells[[cell_id]]$windowPower,    
-    sdLagDiff   = cells[[cell_id]]$sdLagDiff,
-    replicating = cells[[cell_id]]$replicating,
-    fractionS   = cells[[cell_id]]$fractionS,
-    peakIsReplicated   = cells[[cell_id]]$replicationModel$peakIsReplicated,
-    maxNR_unreplicated = cells[[cell_id]]$replicationModel$maxNR_unreplicated,
-    modal_CN    = cells[[cell_id]]$modal_CN,
-    ploidy      = cells[[cell_id]]$ploidy,
-    ER_modal_CN = cells[[cell_id]]$ER_modal_CN,
-    ER_ploidy   = cells[[cell_id]]$ER_ploidy,
-    readsPerAllele = cells[[cell_id]]$readsPerAllele
+    keep         = TRUE,
+    ploidy       = cells[[cell_id]]$ploidy,
+    windowPower  = cells[[cell_id]]$windowPower,
+    normLagDiffQ = getWindowsMetadata(cell_id, "normLagDiffQ"),     
+    modal_NA     = cells[[cell_id]]$modal_NA,
+    ER_modal_NA  = getWindowsMetadata(cell_id, "ER_modal_NA"),  
+    ER_ploidy    = getWindowsMetadata(cell_id, "ER_ploidy"),  
+    RPA          = getWindowsMetadata(cell_id, "RPA"), 
+    replicating  = cells[[cell_id]]$cellIsReplicating,
+    fractionS    = cells[[cell_id]]$fractionS,
+    modelType    = getReplicationMetadata(cell_id, "modelType"),
+    theta        = getReplicationMetadata(cell_id, "theta")
 ), by = cell_id]
 #=====================================================================================
 
@@ -144,7 +136,7 @@ write.table(
         Project = env$DATA_NAME,
         Sample_ID = colData$cell_id,
         Description = if(is.null(colData$cell_name)) colData$cell_id else colData$cell_name,
-        Keep = colData$keep
+        WindowPower = colData$windowPower
     ), 
     file = env$MANIFEST_FILE, 
     quote = FALSE, 

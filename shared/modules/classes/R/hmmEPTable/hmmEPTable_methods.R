@@ -6,9 +6,9 @@
 viterbi <- function(x, ...) {
     UseMethod("viterbi", x)
 }
-viterbi.hmmEPTable <- function(hmm, observations=TRUE){
-
+viterbi.hmmEPTable <- function(hmm, observations = TRUE, reverse = FALSE){
     ep <- hmm$emissProbs[observations, ]
+    if(reverse) ep <- ep[nrow(ep):1, ]
     tp <- hmm$transProbs
     ep[is.na(ep)] <- -Inf # block unusable paths as having zero probability
     ep[apply(ep, 1, max) == -Inf, ] <- log(1) # mask unusable bins, i.e., those with no usable paths
@@ -48,7 +48,7 @@ viterbi.hmmEPTable <- function(hmm, observations=TRUE){
     
     # 4. reconstruction and return the hidden state indices
     for (t in (T - 1):1) hsi[t] <- phi[t, hsi[t + 1]]
-    hsi
+    if(reverse) rev(hsi) else hsi
 }
 
 # run HMM on all unique values of a key vector (e.g., by chromosome)
@@ -56,12 +56,12 @@ viterbi.hmmEPTable <- function(hmm, observations=TRUE){
 keyedViterbi <- function(x, ...) {
     UseMethod("keyedViterbi", x)
 }
-keyedViterbi.hmmEPTable <- function(hmm){ # keys is a vector with one value per observation
-    if(is.null(hmm$keys)) return( viterbi(hmm) )
+keyedViterbi.hmmEPTable <- function(hmm, reverse = FALSE){ # keys is a vector with one value per observation
+    if(is.null(hmm$keys)) return( viterbi(hmm, reverse = reverse) )
     ends   <- cumsum(hmm$keys$lengths)
     starts <- c(1, ends + 1)
     unlist(sapply(seq_along(ends), function(i){
         if(starts[i] == ends[i]) return(NA)
-        viterbi(hmm, starts[i]:ends[i])
+        viterbi(hmm, observations = starts[i]:ends[i], reverse = reverse)
     }))
 }
