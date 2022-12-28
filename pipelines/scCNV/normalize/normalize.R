@@ -83,10 +83,28 @@ message('characterizing individual cells')
 # 90 = 91/LK-92, 0%S, XX + gain chr22
 # 81 = 81/LK-84, 0%S, XY + loss chr15
 
+# 39 = some hit, some miss on wavy "gains"
+# 40 = NR_wm_reshaped - something is wrong with shape fit? loses peak? peak moves?
+# 47 = very high res unreplicated
+# 49 = very late replication (got)
+# 51 = even later replication?? (missed)
+# 52 = extreme shape on chr16, exaggerates a gain?
+# 56 = small chr19 segmental, is it real?
+# 59 = low coverage, passes, has a problem after shaping (prob.like 40)
+# 82 = late replicating with chr22+, some replication miscalls
+# 83 = early replicatin with chr22+, nailed it
+# 84 = similer to 83, somewhat later in S
+# 86 = unreplicated (low res) partenr to 83/84 (also 89, 90)
+# 91 = interesting cell, low res, maybe early replicating, but it just gets squashed, chr22+ still detectable
+# 93 = likely a miss of a late-replicating cell due to waviness, stays squashed
+# 95 possible very late replication, missed
+
 # cell_ids <- as.character(c(3, 70, 37, 8, 90, 81))
 # cell_ids <- cell_ids[1:2]
+# cell_ids <- "14"
 # cells <- lapply(cell_ids, fitCell)
-# stop("GOT TO HERE!")
+cells <- mclapply(cell_ids, fitCell, mc.cores = env$N_CPU)
+stop("GOT TO HERE!")
 
 cells <- mclapply(cell_ids, fitCell, mc.cores = env$N_CPU)
 names(cells) <- cell_ids
@@ -103,7 +121,8 @@ getReplicationMetadata <- function(cell_id, key) {
     if(is.null(x)) NA else x
 }
 colData[, ':='(
-    keep         = TRUE,
+    bad          =  cells[[cell_id]]$badCell,
+    keep         = !cells[[cell_id]]$badCell,
     ploidy       = cells[[cell_id]]$ploidy,
     windowPower  = cells[[cell_id]]$windowPower,
     normLagDiffQ = getWindowsMetadata(cell_id, "normLagDiffQ"),     

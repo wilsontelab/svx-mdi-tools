@@ -65,9 +65,11 @@ getAgg <- function(NR){ # mostly used for debugging
 # plotting functions
 #-------------------------------------------------------------------------------------
 plotNumber <- 1
-defaultPointColor <- rgb(0, 0, 0, 0.1)
+pointOpacity <- 0.15
+defaultPointColor <- rgb(0, 0, 0, pointOpacity)
 plotsDir <- file.path(env$PLOTS_DIR, 'scCNV')
 if(!dir.exists(plotsDir)) dir.create(plotsDir)
+####################
 # plotsDir <- "/nfs/turbo/path-wilsonte-turbo/mdi/wilsontelab/greatlakes/mdi/suites/definitive/svx-mdi-tools/shared/modules/scCNV/plots"
 saveCellPlot <- function(cell, name, fn, width = 2, height = 2){ # save a plot for future assembly and app
     plotDir <- file.path(plotsDir, cell$cell_id)
@@ -75,6 +77,7 @@ saveCellPlot <- function(cell, name, fn, width = 2, height = 2){ # save a plot f
     filename <- paste(cell$cell_id, letters[plotNumber], name, "png", sep = ".")
     pngFile <- file.path(plotDir, filename)
     png(pngFile, width = width, height = height, units = "in", pointsize = 7, res = 300, type = "cairo")
+    par(mar = c(4.1, 4.1, 0.1, 1.1), cex = 1)
     fn()
     dev.off()
     plotNumber <<- plotNumber + 1
@@ -83,17 +86,42 @@ getRepColor <- function(cell, default = NULL){ # after replication fitting, colo
     if(is.null(cell$replicationModel)) {
         if(is.null(default)) defaultPointColor else default
     } else {
-        cols <- c(rgb(0, 0, 1, 0.15), rgb(0, 1, 0, 0.15), rgb(1, 0, 0, 0.15), rgb(0, 0.75, 0.75, 0.15), rgb(1, 0, 1, 0.15))
+        cols <- c(                            # by NAR (same order, different meaning, from CN below)
+            rgb(0, 0, 1, pointOpacity),       # 0 = blue
+            rgb(0.1, 0.8, 0.1, pointOpacity), # 1 = subdued green
+            rgb(1, 0, 0, pointOpacity),       # 2 = red
+            rgb(1, 0.65, 0, pointOpacity),    # 3 = orange
+            defaultPointColor                 # 4 = yelblack/grey to make it obviouslow
+        )
         col <- cols[cell$windows$NAR + 1]
         col[is.na(col)] <- defaultPointColor
         col
     }
 }
 getCnColor <- function(cell){
-    cols <- c(defaultPointColor, rgb(0, 0, 1, 0.15), rgb(0, 1, 0, 0.15), rgb(1, 0, 0, 0.15), rgb(0, 0.75, 0.75, 0.15), rgb(1, 0, 1, 0.15)) 
+    cols <- c(                            # by CN (regardless of ploidy)
+        defaultPointColor,                # 0 = black/grey (absence of color/copies...)
+        rgb(0, 0, 1, pointOpacity),       # 1 = blue ("cool" colors are losses)
+        rgb(0.1, 0.8, 0.1, pointOpacity), # 2 = subdued green ("good/go" for typical CN neutral)
+        rgb(1, 0, 0, pointOpacity),       # 3 = red ("hot" colors are gains)
+        rgb(1, 0.65, 0, pointOpacity),    # 4 = orange
+        defaultPointColor                 # 5 = back to black/grey to make it obvious
+    ) 
     col <- cols[cell$states[cell$windows$stateI, CN + 1]]
     col[is.na(col)] <- defaultPointColor
     col
+}
+minGciColor <- 30
+maxGciColor <- 55
+gcPalette <- colorRampPalette(c("orange", "blue"))(maxGciColor - minGciColor + 1)
+getGcColor <- function(cell, windowI){
+    gcis <- windows[[cell$windowPower + 1]][windowI, round(gc_fraction * 100, 0)]
+    sapply(gcis, function(gci) {
+        if(is.na(gci)) NA
+        else if(gci < minGciColor) minGciColor
+        else if(gci > maxGciColor) maxGciColor
+        else gcPalette[gci - minGciColor + 1] 
+    }) 
 }
 getWindowCoordinates <- function(cell, windowI){
     windows <- windows[[cell$windowPower + 1]]
@@ -116,27 +144,46 @@ addChromLabels <- function(coord){
 }
 plotGcBias <- function(cell, name, gc_w, NR_wm, windowCN = NULL){ # NR vs. fraction GC, sometimes with adjustments for CN and/or replication
     saveCellPlot(cell, paste("gc", name, sep = "_"), function(){
-        par(mar = c(4.1, 4.1, 0.1, 1.1), cex = 1)
         plot(cell$gc_fit, gc_w, NR_wm, cell$ploidy, col = getRepColor(cell, NA), binCN = windowCN)
+    })
+}
+plotP_gc_nar <- function(cell, dt, iteration){ # NR vs. fraction GC, sometimes with adjustments for CN and/or replication
+    saveCellPlot(cell, paste("P_gc_nar", iteration, sep = "_"), function(){
+        dt <- dt[order(GCI)]
+        dt$GC <- dt$GCI / nGcSteps
+        ymax <- max(dt[["0"]], dt$all)
+        plot(NA, NA, xlim = c(0.3, 0.6), ylim = c(0, ymax),
+                     xlab = "Fraction GC", ylab = "Frequency" )
+        cols <- list(
+            "0" = "blue",
+            "1" = "purple",
+            "2" = "red3",
+            "all" = "black"
+        )
+        for(nar in c("all", "0", "1", "2")){
+            y <- dt[[nar]]
+            if(!is.null(y)) lines(dt$GC, y, col = cols[[nar]])
+        }
+        legend("topright", legend = names(cols), col = unlist(cols), lwd = 1)
     })
 }
 plotWindows_counts <- function(cell, name, NR_wm, windowI = TRUE, col = defaultPointColor, shape = NULL){ # plot window counts by chromosome coordinates
     saveCellPlot(cell, paste("NR_wm", name, sep = "_"), function(){
-        par(mar = c(4.1, 4.1, 0.1, 1.1), cex = 1)
         coord <- getWindowCoordinates(cell, windowI)
-        if(is.character(col) && col[1] == "useRepColor") col <- getRepColor(cell)
-        if(is.character(col) && col[1] == "useCnColor")  col <- getCnColor(cell)
+             if(is.character(col) && col[1] == "useRepColor") col <- getRepColor(cell)
+        else if(is.character(col) && col[1] == "useCnColor")  col <- getCnColor(cell)
+        else if(is.character(col) && col[1] == "useGcColor")  col <- getGcColor(cell, windowI)
+        else if(is.character(col) && col[1] == "badCell")     col <- rgb(1, 0, 0, pointOpacity)
         plot(NA, NA, xlim = coord$xlim, ylim = c(0, cell$windows$ER_modal_NA * 3),
              xaxt = "n", xaxs = 'i', xlab = "Genome Window", ylab = "# of Reads")
         addChromLabels(coord)
-        if(!is.null(cell$windows$RPA)) abline(h = cell$windows$RPA * 0:10, col = "grey")        
+        if(!is.null(cell$windows$RPA)) abline(h = cell$windows$RPA * 0:10, col = "grey")
         points(coord$x, NR_wm, pch = 19, cex = 0.3, col = col)
         if(!is.null(shape)) points(coord$x, shape, pch = 16, cex = 0.5, col = "blue")
     }, width = 6)
 }
 plotWindows_cn <- function(cell, name, gc_w, NR_wm, windowI = TRUE, hmm = NULL){ # plot window CN by chromosome coordinates
     saveCellPlot(cell, paste("cn", name, sep = "_"), function(){
-        par(mar = c(4.1, 4.1, 0.1, 1.1), cex = 1)
         RPA <- predict(cell$gc_fit, gc_w, type = 'adjustedPeak')
         cn <- NR_wm / RPA
         coord <- getWindowCoordinates(cell, windowI)
@@ -151,7 +198,6 @@ plotWindows_cn <- function(cell, name, gc_w, NR_wm, windowI = TRUE, hmm = NULL){
 }
 plotWindows_FAR <- function(cell, name){ # plot window CN by chromosome coordinates
     saveCellPlot(cell, paste("FAR", name, sep = "_"), function(){
-        par(mar = c(4.1, 4.1, 0.1, 1.1), cex = 1)
         coord <- getWindowCoordinates(cell, TRUE)
         col <- getRepColor(cell)
         plot(NA, NA, xlim = coord$xlim, ylim = c(-0.5, 2),
@@ -180,17 +226,17 @@ plotCellFit <- function(cell, name, model, bestModelByType){ # distributions of 
         NR_m <- getRandomWindows(model)
         NR_ad <- density(NR_a)
         NR_md <- density(NR_m)
-        plot(NR_ad, typ="l", col = "black", lwd = 2,
+        plot(NR_ad, typ="l", col = "black", lwd = 1.5, main = "", xlab = "# of Reads",
              xlim = c(0, max(NR_ad$x, NR_md$x)), ylim = c(0, max(NR_ad$y, NR_md$y)))
         abline(v = cell$windows$ER_modal_NA * c(1/2, 1, 2))
         bestModelByType[, {
             NR_x <- getRandomWindows(.SD)
             col <- modelTypeColors[[modelType]]
-            lwd <- if(modelType == model$modelType) 2 else 1
+            lwd <- if(modelType == model$modelType) 1.5 else 0.75
             lines(density(NR_x), col = col, lwd = lwd)
             abline(v = ER_unreplicated * 1:2, lty = 2, col = col)
         }, by = "modelType"]
-    }, width = 3, height = 3)
+    })
 }
 #=====================================================================================
 
@@ -217,7 +263,6 @@ checkForExcessZeros <- function(cell_id, windowPower){
 }
 
 # set the per-cell minimum window size as the number of bins needed to obtain a mean raw count >=minWindowCount
-# cells with too-low counts will still be analyzed at MAX_WINDOW_POWER but will likely later fail QC
 windowSizes <- 2 ** windowPowers
 bins <- rowRanges$autosome & rowRanges$mappability >= env$MIN_MAPPABILITY
 getMinWindowPower <- function(cell_id, minWindowCount){
@@ -272,7 +317,11 @@ setCellWindows <- function(cell){ # establish the optimal window power for a cel
         cell$windowPower <- cell$windowPower + 1
         cell$windows <- getCellWindows(cell)
     }
-    setChromCN(cell)
+    if(cell$windows$normLagDiffQ > normLagDiffQ_threshold){
+        cell$badCell <- TRUE # unusable cell data, abort with no further analysis
+        plotWindows_counts(cell, "input", cell$windows$NR_wm, col = "badCell")
+        return(cell)
+    } else setChromCN(cell) # pass the baton
 }
 #=====================================================================================
 
@@ -467,8 +516,8 @@ setReplicationModel <- function(cell){
 
     # use CNV-corrected counts to establish cell-specific likelihoods for replication models
     cell$windows$NR_wmh <- with(cell, { windows$NR_wm * ploidy / windows$HMM }) 
-    repFitI <- with(cell$windows, { HMM > 0 & HMM < maxModelCN & !is.na(NR_wmh) }) 
-    cell$windows$NR_wmhf <- round(cell$windows$NR_wmh[repFitI], 0)
+    fitI <- with(cell$windows, { HMM > 0 & HMM < maxModelCN & !is.na(NR_wmh) }) 
+    cell$windows$NR_wmhf <- round(cell$windows$NR_wmh[fitI], 0)
     cell$windows$NR_wmhfl <- excludeOutliers(cell$windows$NR_wmhf)
     cell$windows$NR_wmhfld <- with(cell$windows, { if(length(NR_wmhfl) > 1e4) sample(NR_wmhfl, 1e4) else NR_wmhfl }) 
 
@@ -480,13 +529,13 @@ setReplicationModel <- function(cell){
     # solve an HMM to establish the (un)replicated genome spans for adjusting window NR prior to GC fit
     # message("solve rep HMM")
     emissProbs <- getRepEmissProbs(cell)
-    hmm <- new_hmmEPTable(emissProbs, transProb = 1e-1, keys = windows$chrom[repFitI])
+    hmm <- new_hmmEPTable(emissProbs, transProb = 1e-1, keys = windows$chrom[fitI])
     cell$windows$NAR <- {
         NAR <- keyedViterbi(hmm) - 1 # based on NR_wmhf
-        round(NAR * cell$windows$HMM[repFitI] / cell$ploidy, 0) # rescale NAR to hmm
+        round(NAR * cell$windows$HMM[fitI] / cell$ploidy, 0) # rescale NAR to hmm
     }
-    plotWindows_counts(cell, "repHMM", cell$windows$NR_wm[repFitI], windowI = repFitI, col = "useRepColor") 
-    setChromShapes(cell, repFitI) # pass the baton
+    plotWindows_counts(cell, "repHMM", cell$windows$NR_wm[fitI], windowI = fitI, col = "useRepColor") 
+    setChromShapes(cell, fitI) # pass the baton
 }
 #=====================================================================================
 
@@ -494,21 +543,25 @@ setReplicationModel <- function(cell){
 # apply a further correction to replication squashed data that accounts for the shape
 # of individual chromosome coverage profiles, which results from amplification artifacts
 #-------------------------------------------------------------------------------------
-setChromShapes <- function(cell, shapeFitI){ # shapeFitI is the same as repFitI
+setChromShapes <- function(cell, fitI){
     # message("setChromShapes")
     windows <- windows[[cell$windowPower + 1]]
 
     # fit a quadratic to each chromosome and use to normalize counts, i.e., stabilize the NR baseline
     NAR <- rep(NA, nrow(windows)) # begin with a list of all windows, only some of which have NAR data
-    NAR[shapeFitI] <- cell$windows$NAR
+    NAR[fitI] <- cell$windows$NAR 
+    CNV <- cell$windows$HMM != cell$ploidy
     cell$windows$NR_wmhr <- with(cell, { windows$NR_wm * modal_NA / (windows$HMM + NAR) }) # thus, correct counts toward ploidy
     cell$windows$shape <- windows[, { # shape is relative to ER_modal_NA
-        sfI  <- shapeFitI[.I] # model is created from filtered bins
-        if(sum(sfI) < 10) rep(1, .N) else { # insufficient points to fit
-            i_f  <- i[sfI]
-            i2_f <- i2[sfI]
-            NR_wmhrf <- cell$windows$NR_wmhr[.I][sfI]
-            if(all(is.na(NR_wmhrf))) rep(1, .N)
+        fI <- fitI[.I] # model is created from filtered windows
+        nChromWindows <- sum(fI)
+        if(nChromWindows < 10) rep(1, .N) else { # insufficient points to fit
+            isCnv <- CNV[.I][fI] # if <1/3 of chromosome is CNV, fit shape to the non-CNV portion only
+            fracCNV <- sum(isCnv) / nChromWindows
+            cnvI <- if(fracCNV < 1/3) !isCnv else TRUE
+            i_f  <- i[fI][cnvI]
+            i2_f <- i2[fI][cnvI]
+            NR_wmhrf <- cell$windows$NR_wmhr[.I][fI][cnvI]
             fit <- lm(NR_wmhrf ~ i_f + i2_f)
             predict(fit, newdata = data.frame(i_f = i, i2_f = i2)) # final shape prediction occurs on ALL bins 
         }
@@ -516,116 +569,95 @@ setChromShapes <- function(cell, shapeFitI){ # shapeFitI is the same as repFitI
     cell$windows$shapeCorrection <- with(cell$windows, { shape / ER_modal_NA })     
     cell$windows$NR_wms <- with(cell$windows, { NR_wm / shapeCorrection })
     cell$windows$NR_wms <- with(cell$windows, { NR_wms * sum(NR_wm, na.rm = TRUE) / sum(NR_wms, na.rm = TRUE) }) # maintain total cell weights
-    plotWindows_counts(cell, "shapes", cell$windows$NR_wmhr[shapeFitI],
-                       windowI = shapeFitI, shape = cell$windows$shape[shapeFitI])
+    plotWindows_counts(cell, "shapes", cell$windows$NR_wmhr[fitI],
+                       windowI = fitI, shape = cell$windows$shape[fitI])
 
     # re-solve the GC bias fit using the reshaped NR values
     cell$windows$NR_wmshr <- with(cell, { windows$NR_wms * ploidy / (windows$HMM + NAR) }) # thus, correct counts toward ploidy
-    col_w <- ifelse(shapeFitI, defaultPointColor, rgb(1, 0, 0, 0.1))
-    cell <- fitGcBias(cell, "reshaped", cell$windows$NR_wmshr, windowI = shapeFitI, col_w = col_w)
-    plotWindows_counts(cell, "reshaped", cell$windows$NR_wms[shapeFitI], windowI = shapeFitI, col = "useRepColor")  
-    solveCompositeHmm(cell, shapeFitI) # pass the baton
+    col_w <- ifelse(fitI, defaultPointColor, rgb(1, 0, 0, 0.1))
+    cell <- fitGcBias(cell, "reshaped", cell$windows$NR_wmshr, windowI = fitI, col_w = col_w)
+    plotWindows_counts(cell, "reshaped", cell$windows$NR_wms[fitI], windowI = fitI, col = "useRepColor")  
+    solveCompositeHmm(cell, fitI) # pass the baton
 }
 #=====================================================================================
 
 #=====================================================================================
 # support functions for replication state profiles as a function of fractionS + window GC
-# i.e., that add a (P_NAR | GC) weight to the composite HMM for replicating cells
+# i.e., that add P(GC | NAR) emission probability component to the composite HMM for replicating cells
 # derived from the intial fit of each individual cell (TODO: incorporate external replication weights?)
 #-------------------------------------------------------------------------------------
 nGcSteps <- 50
 gcIndices  <- 1:nGcSteps
-P_rep_fs_gc <- list() # for collecting replicating cell profiles for later aggregation
-getP_replicated_wf <- function(cell, gc_wf) with(cell, {
-    gci_wf <- round(gc_wf * nGcSteps, 0) # vector of filtered window GC indices
-    sapply(gcIndices, function(gci){ # all bins have at least somelikelihood of being called replicating
-        NAR <- windows$NAR[gci_wf == gci] # aggregate all windows with a given GC index
-        if(length(NAR) == 0) return(NA)
-        agg <- aggregate(NAR, list(NAR), length)
-        getN <- function(nar){
-            n <- agg[agg[[1]] == nar, 2]
-            if(length(n) == 0) 0 else n
-        }
-        pNAR <- sapply(0:ploidy, getN) / sum(agg[[2]]) # NAR's as observed for ploidy values in initial modeling
-        minPNar <- 0.01
-        if(ploidy == 1){
-            sapply(0:4, function(cn) pmax(minPNar,
-                     if(cn == 0) 1    # one state, replication not meaningful
-                else if(cn == 1) pNAR # CN==1, same as the NAR model
-                else if(cn == 2) c(pNAR[1], minPNar, pNAR[2]) # CN=2,3,4, interpolate intermediate values
-                else if(cn == 3) c(pNAR[1], minPNar, minPNar, pNAR[2])
-                else             c(pNAR[1], minPNar, minPNar, minPNar, pNAR[2])
-            ))
-        } else { # ploidy == 2, typical
-            sapply(0:4, function(cn) pmax(minPNar,
-                     if(cn == 0) 1                       # one state, replication not meaningful
-                else if(cn == 1) c(pNAR[1], 1 - pNAR[1]) # two states, unreplicated or replicated
-                else if(cn == 2) pNAR                    # CN==2, same as the NAR model
-                else if(cn == 3) c(pNAR[1], pNAR[2], pNAR[2], pNAR[3]) # CN=3,4
-                else             c(pNAR[1], pNAR[2], pNAR[2], pNAR[2], pNAR[3])
-            ))
-        }
-    })
+minPNar <- 0.01
+getP_gc_nar <- function(cell, gc_w, fitI, iteration) with(cell, {
+    cnNeutralI <- windows$HMM[fitI] == ploidy
+    dt <- dcast(
+        data.table(
+            GCI = round(gc_w[fitI][cnNeutralI] * nGcSteps, 0), # vector of filtered window GC indices
+            NAR = windows$NAR[cnNeutralI]
+        ), 
+        GCI ~ NAR, 
+        fun.aggregate = length, 
+        fill = 0, 
+        drop = FALSE
+    )
+    # if(is.null(dt[["0"]])) dt[["0"]]  <- 0  
+    dt$all <- rowSums(dt[, 2:ncol(dt)])
+    if(ploidy == 2) dt$replicated <- dt$all - dt[["0"]] 
+    for(j in 2:ncol(dt)) dt[[j]] <- pmax(minPNar, dt[[j]] / sum(dt[[j]]))
+    # for(nar in as.character(1:ploidy)) if(is.null(dt[[nar]])) dt[[nar]] <- minPNar
+    get_by_col <- function(nar) dt[[as.character(nar)]]
+    get_by_mix <- function(nar1, nar2, w1, w2){
+        x <- nar1 * w1 + nar2 * w2 # weigthed average of two distributions
+        x / sum(x) # such that all emission probability distributions sum to 1
+    }
+    if(ploidy == 1){
+        dt$CN1_NAR0 <- get_by_col(0) # CN1, same as the NAR model
+        dt$CN1_NAR1 <- get_by_col(1) 
+        #-------------
+        dt$CN0_NAR0 <- dt$all # CN0, one state, replication not meaningful
+        #-------------
+        dt$CN2_NAR0 <- dt$CN1_NAR0 # other CN, interpolate intermediate values
+        dt$CN2_NAR1 <- get_by_mix(dt$CN1_NAR0, dt$CN1_NAR1, 1/2, 1/2)
+        dt$CN2_NAR2 <- dt$CN1_NAR1
+        #-------------
+        dt$CN3_NAR0 <- dt$CN1_NAR0
+        dt$CN3_NAR1 <- get_by_mix(dt$CN1_NAR0, dt$CN1_NAR1, 2/3, 1/3)
+        dt$CN3_NAR2 <- get_by_mix(dt$CN1_NAR0, dt$CN1_NAR1, 1/3, 2/3)
+        dt$CN3_NAR3 <- dt$CN1_NAR1
+        #-------------
+        dt$CN4_NAR0 <- dt$CN1_NAR0
+        dt$CN4_NAR1 <- get_by_mix(dt$CN1_NAR0, dt$CN1_NAR1, 3/4, 1/4)
+        dt$CN4_NAR2 <- get_by_mix(dt$CN1_NAR0, dt$CN1_NAR1, 1/2, 1/2)
+        dt$CN4_NAR3 <- get_by_mix(dt$CN1_NAR0, dt$CN1_NAR1, 1/4, 3/4)
+        dt$CN4_NAR4 <- dt$CN1_NAR1
+    } else {
+        dt$CN2_NAR0 <- get_by_col(0) # CN2, same as the NAR model
+        dt$CN2_NAR2 <- get_by_col(2)    
+        if(is.null(dt[["1"]])) dt[["1"]] <- get_by_mix(dt$CN2_NAR0, dt$CN2_NAR2, 1/2, 1/2)
+        dt$CN2_NAR1 <- get_by_col(1)
+        #-------------
+        dt$CN0_NAR0 <- dt$all # CN0, one state, replication not meaningful
+        #-------------
+        dt$CN1_NAR0 <- dt$CN2_NAR0 # other CN, interpolate intermediate values
+        dt$CN1_NAR1 <- dt$replicated
+        #-------------
+        dt$CN3_NAR0 <- dt$CN2_NAR0
+        dt$CN3_NAR1 <- get_by_mix(dt$CN2_NAR0, dt$CN2_NAR1, 1/2, 1/2)
+        dt$CN3_NAR2 <- get_by_mix(dt$CN2_NAR1, dt$CN2_NAR2, 1/4, 3/4)
+        dt$CN3_NAR3 <- dt$CN2_NAR2
+        #-------------
+        dt$CN4_NAR0 <- dt$CN2_NAR0
+        dt$CN4_NAR1 <- get_by_mix(dt$CN2_NAR0, dt$CN2_NAR1, 1/2, 1/2)
+        dt$CN4_NAR2 <- dt$CN2_NAR1
+        dt$CN4_NAR3 <- get_by_mix(dt$CN2_NAR1, dt$CN2_NAR2, 1/2, 1/2)
+        dt$CN4_NAR4 <- dt$CN2_NAR2  
+    }
+    dt$key <- as.character(dt$GCI)
+    setkey(dt, "key")
+    plotP_gc_nar(cell, dt, iteration)
+    dt
 })
-getP_replicated_w <- function(cell, gc_w)  with(cell$replicationModel, {
-    gci_w <- round(gc_w * nGcSteps, 0) # vector of all window GC indices
-    is <- 1:length(gci_w)    
-    nonNaGci <- which(!is.na(P_replicated_wf)) # GC indices with sufficient filtered windows to estimate P_unreplicated_wf
-    sapply(is, function(i){ # return the appropriate GCI per window (may have been adjusted from the actual GCI)
-        gci <- gci_w[i]
-        x <- P_replicated_wf[gci]
-        if(length(x) > 0 && !is.na(x)) return(gci)
-        delta <- abs(nonNaGci - gci)
-        nonNaGci[which(delta == min(delta))[1]]
-    })
-})
-commitReplicationProfile <- function(cell, gc_wf) with(cell, { # keep track of GC replication bias across cells
-    if(!cellIsReplicating) return(NULL)
-    gci_wf <- round(gc_wf * nGcSteps, 0) 
-    P_rep_fs_gc[[cell_id]] <<- list(
-        cell_id = cell_id,
-        windowPower = windowPower,
-        modelType = replicationModel$modelType,
-        fractionS = replicationModel$fractionS,
-        profile = sapply(gcIndices, function(gci){
-            NAR <- replicationModel$NAR[gci_wf == gci]
-            if(length(NAR) == 0) return(rep(NA, ploidy + 2))
-            agg <- aggregate(NAR, list(NAR), length)
-            N <- sum(agg[[2]])
-            c(N, sapply(0:ploidy, function(nar) {
-                n <- agg[agg[[1]] == nar, 2]
-                if(length(n) == 0) 0 else n
-            }) / N)
-        })
-    )  
-})
-# plotReplicationProfiles <- function(){
-#     values <- c("N", "P_NAR0", "P_NAR1", "P_NAR2")
-#     fractionS_int <- as.integer(seq(0.05, 0.95, 0.025) * 1000)
-#     colfunc <- colorRampPalette(c("blue", "red"))
-#     colors <- colfunc(length(fractionS_int))
-#     weights <- sapply(P_rep_fs_gc, function(cell) cell$profile[1,])
-#     for(j in 1:length(values)){ # one plot per value type
-#         message(values[j])
-#         saveDevPlot(paste("P_rep_fs_gc", values[j], sep = "."), function(){
-#             x  <- gcIndices
-#             ys <- sapply(P_rep_fs_gc, function(cell) cell$profile[j,])
-#             plot(
-#                 NA, NA, 
-#                 xlim = c(0.3, 0.7), ylim = range(ys, na.rm = TRUE), 
-#                 xlab = "Fraction GC", ylab = values[j]
-#             ) 
-#             for(k in 1:ncol(ys)) { # once trace per cell
-#                 fractionS <- 
-#                 P_rep_fs_gc[[k]]$replicationModel$fractionS
-#                 col <- colors[fractionS_int == as.integer(fractionS * 1000)]
-#                 y <- ys[, k]
-#                 lines(x / nGcSteps, y, col = col)  
-#                 points(x / nGcSteps, y, col = col)               
-#             }
-#         })
-#     }
-# }
 #=====================================================================================
 
 #=====================================================================================
@@ -637,64 +669,82 @@ commitReplicationProfile <- function(cell, gc_wf) with(cell, { # keep track of G
 # thus, the model output is not dictated or forced at any window by upstream preparative work
 #-------------------------------------------------------------------------------------
 compositeStates <- fread(file.path(env$ACTION_DIR, "composite_states.csv"))
-solveCompositeHmm <- function(cell, shapeFitI){ # shapeFitI same as repFitI
+solveCompositeHmm <- function(cell, fitI){
     # message("solveCompositeHmm")
     windows <- windows[[cell$windowPower + 1]]
-
-    # establish the cell specific values for (P_unreplicated | GC)
     gc_w <- windows[, gc_fraction]
-    gc_wf <- gc_w[shapeFitI]
-    cell$replicationModel$P_replicated_wf <- getP_replicated_wf(cell, gc_wf)
-    P_replicated_wf <- cell$replicationModel$P_replicated_wf # since cell is reset below
-    P_replicated_w <- getP_replicated_w(cell, gc_w) # a vector of reference GCI values
+    gci_w <- as.character(round(gc_w * nGcSteps, 0))
 
     # re-fit ER_modal_NA (and thus RPA) and theta for our previously chosen cell model
     # needed to adjust for the reshaping in the previous step
     cell$windows$NR_wmsh  <- with(cell, { windows$NR_wms * ploidy / windows$HMM })  
-    cell$windows$NR_wmshf <- round(cell$windows$NR_wmsh[shapeFitI], 0) 
+    cell$windows$NR_wmshf <- round(cell$windows$NR_wmsh[fitI], 0) 
     cell$windows$NR_wmhfl <- excludeOutliers(cell$windows$NR_wmshf) # names intentionly "wrong" (no s), since used by modeling functions
     cell$windows$NR_wmhfld <- cell$windows$NR_wmhfl # use all windows, just solving one model
     cell <- setBestReplicationModel(cell, "reshaped")
 
-    # adjust the states and state transition weights for the target replication model
+    # initialize HMM states for the target replication model
     cell$states <- copy(compositeStates) # NAME	CN	NAR	N_ALLELES	CNC_P1	CNC_P2
     if(!cell$cellIsReplicating) {
         statesI <- cell$states[, NAR == 0]
         cell$states <- cell$states[statesI]
     }
     nStates <- nrow(cell$states)
-    transProbs <- matrix(NA, nrow = nStates, ncol = nStates)
-    for(fromI in 1:nStates) for(toI in 1:nStates){
-        fromState <- cell$states[fromI]
-        toState   <- cell$states[toI]
-        transProbs[fromI, toI] <- if(fromI == toI) 0.99  # TODO: this should add up to 1 for each row/column
-        else if(fromState$CN != toState$CN) 1e-8
-        else 1e-1
-    }
 
-    # calculate the emission probabilities using all prior fitting as guidance
+    # solve a first composite HMM, still using the early HMMs as guidance
     theta <- cell$replicationModel$theta
     RPA <- predict(cell$gc_fit, gc_w)
     NR_wms <- round(cell$windows$NR_wms, 0)
-    emissProbs <- sapply(cell$states$NAME, function(stateName){ # NAME	CN	NAR	N_ALLELES	CNC_P1	CNC_P2
-        state <- cell$states[NAME == stateName]
-        ER <- RPA * if(state$N_ALLELES == 0) 0.05 else state$N_ALLELES
-        pNAR <- sapply(P_replicated_w, function(gci) P_replicated_wf[[gci]][[state$CN + 1]][state$NAR + 1])
-        dnbinom(NR_wms, mu = ER, size = theta) * pNAR
-    })
+    iterateCompositeHmm <- function(iteration, transProb){
+        # message(paste("iteration", iteration))
 
-    # solve the HMM
-    hmm <- new_hmmEPTable(log(emissProbs), transProbs = log(transProbs), keys = windows$chrom) 
-    cell$windows$stateI <- keyedViterbi(hmm)
-    cell$windows$NAR <- cell$states[cell$windows$stateI, NAR]
+        # adjust the states and state transition weights for this HMM iteration
+        transProbs <- matrix(NA, nrow = nStates, ncol = nStates)
+        for(fromI in 1:nStates) for(toI in 1:nStates){
+            fromState <- cell$states[fromI]
+            toState   <- cell$states[toI]
+            transProbs[fromI, toI] <- if(fromI == toI) 1 - nStates * transProb
+            else if(fromState$CN != toState$CN) {
+                if(fromState$N_ALLELES != toState$N_ALLELES) transProb  # discourage CNVs
+                else 1e-12 # STRONGLY discourage changing CN and NAR simultaneously to yield the same N_ALLELES
+            } else 1e-1 # changing NAR is much more likely in replicating cells than introducing a CNV
+        }
+
+        # establish the cell specific values for P(GC | NAR)
+        if(cell$cellIsReplicating){
+            P_gc_nar <- getP_gc_nar(cell, gc_w, fitI, iteration)
+            P_gc_nar_w <- P_gc_nar[gci_w]             
+        }
+
+        # calculate the emission probabilities using all prior fitting as guidance
+        emissProbs <- sapply(cell$states$NAME, function(stateName){ # NAME	CN	NAR	N_ALLELES	CNC_P1	CNC_P2
+            state <- cell$states[NAME == stateName]
+            ER <- RPA * if(state$N_ALLELES == 0) 0.05 else state$N_ALLELES
+            pNA  <- dnbinom(NR_wms, mu = ER, size = theta)
+            pNAR <- if(cell$cellIsReplicating) P_gc_nar_w[[stateName]] else 1
+            pNA * pNAR
+        })
+
+        # solve the HMM
+        hmm <- new_hmmEPTable(log(emissProbs), transProbs = log(transProbs), keys = windows$chrom) 
+        cell$windows$stateI <<- keyedViterbi(hmm)
+        cell$windows$HMM <<- cell$states[cell$windows$stateI, CN]
+        cell$windows$NAR <<- cell$states[cell$windows$stateI, NAR]
+    }
+    iterateCompositeHmm(iteration = 1, transProb = 1e-10)
+
+    # resolve the HMM using the updated guidance from the first composite solution
+    fitI <- TRUE # with(cell$windows, { HMM > 0 & HMM < 4 & !is.na(NR_wms) }) 
+    iterateCompositeHmm(iteration = 2, transProb = 1e-8)
     plotWindows_counts(cell, "finalByRep", cell$windows$NR_wms, col = "useRepColor") 
+    plotWindows_counts(cell, "finalByGc",  cell$windows$NR_wms, col = "useGcColor") 
     plotWindows_counts(cell, "finalByCn",  cell$windows$NR_wms, col = "useCnColor") 
     setHMMProfiles(cell)
 }
 #=====================================================================================
 
 #=====================================================================================
-# finish up by converting the composite HMM results to isolated CN and FAR profiles
+# convert the composite HMM results to isolated CN and FAR profiles
 #-------------------------------------------------------------------------------------
 setHMMProfiles <- function(cell){
     # message("setHMMProfiles")
@@ -709,8 +759,51 @@ setHMMProfiles <- function(cell){
     cell$fractionS <- with(cell$windows, { sum(NAR, na.rm =TRUE) / sum(CN, na.rm =TRUE) }) # FAR for the whole cell
     plotWindows_cn(cell, "isolated", windows[, gc_fraction], cell$windows$NR_wmsr, hmm = cell$windows$HMM)
     plotWindows_FAR(cell, "isolated")
+    analyzeHmmSegments(cell)
+}
+#=====================================================================================
+
+#=====================================================================================
+# analyze the segment calls, i.e., characterize CNVs and replication zones
+#-------------------------------------------------------------------------------------
+analyzeHmmSegments <- function(cell){
+
+    return(cell)
+
+    # TODO: analyze CNV segments
+    # are they ~exclusively CN1_NAR1 or CN3_NAR0; such segments are likely mis-calls in replicating cells
+    # true CNV segments should always have at least some CN1_NAR0 (for CN1) or CN3_NAR>0 (for CN3)
+
+    DIR <- "/nfs/turbo/path-wilsonte-turbo/mdi/wilsontelab/greatlakes/mdi/suites/definitive/svx-mdi-tools/shared/modules/scCNV"
+    cell_id <- if(is.character(cell)) cell else cell$cell_id
+    RDS <- file.path(DIR, paste(cell_id, "rds", sep = "."))
+    saveRDS(cell, file = RDS)
+    cell <- readRDS(RDS)
+    windows <- windows[[cell$windowPower + 1]]
+    segments <- rle(cell$states[cell$windows$stateI, NAME])
+    i <- which(segments$values %in% c("CN1_NAR1", "CN2_NAR0") & segments$lengths >= 5)
+    ends <- cumsum(segments$lengths)
+    segments <- data.table(
+        i = 1:length(segments$values),
+        type   = segments$values,  
+        start_  = head(c(1, ends + 1), -1),         
+        end_    = ends,
+        length = segments$lengths
+    )[i]
+
+    
+    print(segments[,
+        .(
+            type = type,
+            gc = windows[start_:end_, mean(gc_fraction, na.rm = TRUE)]
+        ),
+        by = "i"
+    ][, .(mu = mean(gc), sd = sd(gc)), by = "type"])
+
+
     cell
-}#=====================================================================================
+}
+#=====================================================================================
 
 #=====================================================================================
 # main target function that launches the process!
@@ -720,12 +813,16 @@ fitCell <- function(cell_id){
     # message(cell_id)    
     plotNumber <<- 1 # so plots are ordered in lists as they were created
     cell <- list(
-        cell_id = cell_id,
+        cell_id  = cell_id,
+        badCell  = FALSE,
         modal_NA = env$PLOIDY, # subject to change if late S-phase
         ploidy   = env$PLOIDY  # never changed by this script, always env$PLOIDY
     )
     cell$minWindowCount <- getMinWindowCount(env$PLOIDY)
     cell$minWindowPower <- getMinWindowPower(cell_id, cell$minWindowCount)
+
+    # return(analyzeHmmSegments(cell_id))
+
     cell <- setCellWindows(cell) # cascades forward through all actions...
     for(key in c("CN_c", "NR_wmh", "NR_wmhf", "NR_wmhfl", "NR_wmhfld", "NR_wmhr", # remove data not needed for package
                 "shape", "NR_wmshr", "NR_wmsh", "NR_wmshf", "NR_wmsr")) cell$windows[[key]] <- NULL
@@ -842,3 +939,100 @@ fitCell <- function(cell_id){
 
 #     dev.off()
 # }
+
+    # cell$replicationModel$P_replicated_wf <- getP_replicated_wf(cell, gc_wf)
+    # P_replicated_wf <- cell$replicationModel$P_replicated_wf # since cell is reset below
+    # P_replicated_w <- getP_replicated_w(cell, gc_w) # a vector of reference GCI values
+
+# getP_replicated_wf <- function(cell, gc_wf) with(cell, {
+#     gci_wf <- round(gc_wf * nGcSteps, 0) # vector of filtered window GC indices
+#     sapply(gcIndices, function(gci){ # all bins have at least somelikelihood of being called replicating
+#         NAR <- windows$NAR[gci_wf == gci] # aggregate all windows with a given GC index
+#         if(length(NAR) == 0) return(NA)
+#         agg <- aggregate(NAR, list(NAR), length)
+#         getN <- function(nar){
+#             n <- agg[agg[[1]] == nar, 2]
+#             if(length(n) == 0) 0 else n
+#         }
+#         pNAR <- sapply(0:ploidy, getN) / sum(agg[[2]]) # NAR's as observed for ploidy values in initial modeling
+#         if(ploidy == 1){
+#             sapply(0:4, function(cn) pmax(minPNar,
+#                      if(cn == 0) 1    # one state, replication not meaningful
+#                 else if(cn == 1) pNAR # CN==1, same as the NAR model
+#                 else if(cn == 2) c(pNAR[1], minPNar, pNAR[2]) # CN=2,3,4, interpolate intermediate values
+#                 else if(cn == 3) c(pNAR[1], minPNar, minPNar, pNAR[2])
+#                 else             c(pNAR[1], minPNar, minPNar, minPNar, pNAR[2])
+#             ))
+#         } else { # ploidy == 2, typical
+#             sapply(0:4, function(cn) pmax(minPNar,
+#                      if(cn == 0) 1                       # one state, replication not meaningful
+#                 else if(cn == 1) c(pNAR[1], 1 - pNAR[1]) # two states, unreplicated or replicated
+#                 else if(cn == 2) pNAR                    # CN==2, same as the NAR model
+#                 else if(cn == 3) c(pNAR[1], pNAR[2], pNAR[2], pNAR[3]) # CN=3,4
+#                 else             c(pNAR[1], pNAR[2], pNAR[2], pNAR[2], pNAR[3])
+#             ))
+#         }
+#     })
+# })
+# getP_replicated_w <- function(cell, gc_w)  with(cell$replicationModel, {
+#     gci_w <- round(gc_w * nGcSteps, 0) # vector of all window GC indices
+#     is <- 1:length(gci_w)    
+#     nonNaGci <- which(!is.na(P_replicated_wf)) # GC indices with sufficient filtered windows to estimate P_unreplicated_wf
+#     sapply(is, function(i){ # return the appropriate GCI per window (may have been adjusted from the actual GCI)
+#         gci <- gci_w[i]
+#         x <- P_replicated_wf[gci]
+#         if(length(x) > 0 && !is.na(x)) return(gci)
+#         delta <- abs(nonNaGci - gci)
+#         nonNaGci[which(delta == min(delta))[1]]
+#     })
+# })
+# commitReplicationProfile <- function(cell, gc_wf) with(cell, { # keep track of GC replication bias across cells
+#     if(!cellIsReplicating) return(NULL)
+#     gci_wf <- round(gc_wf * nGcSteps, 0) 
+#     P_rep_fs_gc[[cell_id]] <<- list(
+#         cell_id = cell_id,
+#         windowPower = windowPower,
+#         modelType = replicationModel$modelType,
+#         fractionS = replicationModel$fractionS,
+#         profile = sapply(gcIndices, function(gci){
+#             NAR <- replicationModel$NAR[gci_wf == gci]
+#             if(length(NAR) == 0) return(rep(NA, ploidy + 2))
+#             agg <- aggregate(NAR, list(NAR), length)
+#             N <- sum(agg[[2]])
+#             c(N, sapply(0:ploidy, function(nar) {
+#                 n <- agg[agg[[1]] == nar, 2]
+#                 if(length(n) == 0) 0 else n
+#             }) / N)
+#         })
+#     )  
+# })
+# plotReplicationProfiles <- function(){
+#     values <- c("N", "P_NAR0", "P_NAR1", "P_NAR2")
+#     fractionS_int <- as.integer(seq(0.05, 0.95, 0.025) * 1000)
+#     colfunc <- colorRampPalette(c("blue", "red"))
+#     colors <- colfunc(length(fractionS_int))
+#     weights <- sapply(P_rep_fs_gc, function(cell) cell$profile[1,])
+#     for(j in 1:length(values)){ # one plot per value type
+#         message(values[j])
+#         saveDevPlot(paste("P_rep_fs_gc", values[j], sep = "."), function(){
+#             x  <- gcIndices
+#             ys <- sapply(P_rep_fs_gc, function(cell) cell$profile[j,])
+#             plot(
+#                 NA, NA, 
+#                 xlim = c(0.3, 0.7), ylim = range(ys, na.rm = TRUE), 
+#                 xlab = "Fraction GC", ylab = values[j]
+#             ) 
+#             for(k in 1:ncol(ys)) { # once trace per cell
+#                 fractionS <- 
+#                 P_rep_fs_gc[[k]]$replicationModel$fractionS
+#                 col <- colors[fractionS_int == as.integer(fractionS * 1000)]
+#                 y <- ys[, k]
+#                 lines(x / nGcSteps, y, col = col)  
+#                 points(x / nGcSteps, y, col = col)               
+#             }
+#         })
+#     }
+# }
+            # pNAR <- sapply(P_replicated_w, function(gci) P_replicated_wf[[gci]][[state$CN + 1]][state$NAR + 1])
+            # dnbinom(NR_wms, mu = ER, size = theta) * pNAR
+# P_rep_fs_gc <- list() # for collecting replicating cell profiles for later aggregation
