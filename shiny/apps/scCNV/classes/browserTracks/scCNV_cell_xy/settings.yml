@@ -14,6 +14,18 @@ settings:
         Cell_ID:
             type:   textInput
             value:  null
+        Shape_Model:
+            type: radioButtons
+            choices:
+                - Unshaped            
+                - Shaped
+            value: Unshaped   
+        Replication_Model:
+            type: radioButtons
+            choices:
+                - Sequential
+                - Composite
+            value: Sequential 
         # Cell_Type:
         #     type:   selectInput
         #     choices:

@@ -17,12 +17,12 @@ predict.nbinomCountsGC2 <- function(
     peakThreshold = 10
 ){
     rows <- getRows.nbinomCountsGC2(nb, fractionGC)
-    if(type[1] == 'adjustedPeak'){
+    if(type[1] == 'adjustedPeak'){ # peak (mode) is best for visualization
         peak <- nb$peak[rows]  
         mu   <- nb$mu[rows]
         ifelse(peak < peakThreshold, mu, peak) # revert to mu when peak is unreliable due to collision with zero counts
     } else {  
-        nb[[ type[1] ]][rows]        
+        nb[[ type[1] ]][rows] # default is mu, best for HMM and similar
     }
 }
 

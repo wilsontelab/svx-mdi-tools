@@ -25,69 +25,72 @@ build.scCNV_cell_xyTrack <- function(track, reference, coord, layout){
     caller <- paste("scCNV_heatmapTrack", track$id, sep = "-")
     cacheType <- "working"
     sourceId <- track$settings$get('Plot_Options', 'Sample')    
-    chrom <- coord$chromosome    
-    x <- getSampleCache(caller, cacheType, sourceId, chrom)
+    chrom <- coord$Chromosome
+    # x <- getSampleCache(caller, cacheType, sourceId, chrom)
 
-
-    cellI <- which(x$cell_id == cellId)
-    wx <- paste("w", x$window_size[cellI], sep = "_")
-    w <- x$windows[[wx]]
-
+    x <- getSampleCache(caller, cacheType, sourceId)
+    cell <- x$cells[[cellId]]
+    dprint(names(track$settings))
+    shapeModel <- track$settings$get("Plot_Options", "Shape_Model")
+    replicationModel <- track$settings$get("Plot_Options", "Replication_Model")
+    shapeKey <- if(shapeModel == "Unshaped") "unshaped" else "shaped"
+    repKey <- if(!cell$cellIsReplicating || forceSequential) "sequential" else "composite"
+    w <- x$windows[[cell$windowPower + 1]]
+    cw <- cell$windows[[cell$windowPower + 1]][[shapeKey]]
+    chromI <- w[, chrom == coord$chromosome]
 
     # use generic methods and any other custom code to determine the track's (dynamic) Y span
     padding <- padding(track, layout)
     height <- height(track, 3) + padding$total # or set a known, fixed height in inches
-    ylim <- c(0, 4)
+    maxCN <- 6
+    # ylim <- c(0, cw$RPA * maxCN)
+    ylim <- c(0, maxCN)
+
+    pointOpacity <- 1
+    defaultPointColor <- rgb(0, 0, 0, pointOpacity)
+    getCnColor <- function(CN){
+        cols <- c(                            # by CN (regardless of ploidy)
+            defaultPointColor,                # 0 = black/grey (absence of color/copies...)
+            rgb(0, 0, 1, pointOpacity),       # 1 = blue ("cool" colors are losses)
+            rgb(0.1, 0.8, 0.1, pointOpacity), # 2 = subdued green ("good/go" for typical CN neutral)
+            rgb(1, 0, 0, pointOpacity),       # 3 = red ("hot" colors are gains)
+            rgb(1, 0.65, 0, pointOpacity),    # 4 = orange
+            defaultPointColor                 # 5 = back to black/grey to make it obvious
+        ) 
+        col <- cols[CN + 1]
+        col[is.na(col)] <- defaultPointColor
+        col
+    }
+    minGciColor <- 30
+    maxGciColor <- 55
+    gcPalette <- colorRampPalette(c("orange", "blue"))(maxGciColor - minGciColor + 1)
+    getGcColor <- function(gc_fraction){
+        gcis <- round(gc_fraction * 100, 0)
+        sapply(gcis, function(gci) {
+            if(is.na(gci)) NA
+            else if(gci < minGciColor) minGciColor
+            else if(gci > maxGciColor) maxGciColor
+            else gcPalette[gci - minGciColor + 1] 
+        }) 
+    }
 
     # use the mdiTrackImage helper function to create the track image
     mai <- NULL
     image <- mdiTrackImage(layout, height, function(...){
         mai <<- setMdiTrackMai(layout, padding, mar = list(top = 0, bottom = 0))
-
-        # cn <- x$cn[[cellI]]
-        # mcn <- x$windowMedians$cn[[wx]]
-
-        # mcnq <- quantile(mcn, c(0.05, 0.95), na.rm = TRUE)
-        # mcnw <- which(mcn >= mcnq[1] & mcn <= mcnq[2])
-        # mcnf <- mcn[mcnw]
-        # mcnf2 <- mcnf ** 2
-        # mcnf3 <- mcnf ** 3
-        # cnf <- cn[mcnw]
-        # formula <- cnf ~ mcnf # + mcnf2 + mcnf3
-        # fit <- loess(formula)
-
-        # print(fit)
-
-
-
-        # plot(0, 0, type = "n", bty = "n",
-        #     xlim = c(0.5, 3.5), xlab = "", xaxt = "n", # nearly always set `xlim`` to `coord$range`
-        #     ylim = c(0.5, 3.5),  ylab = "Copy Number",
-        #     xaxs = "i", yaxs = "i") # always set `xaxs` and `yaxs` to "i"
-
-
-
-        # points(mcn, cn, pch = 16, cex = 0.25)
-        # abline(0, 1, col = "blue")
-        # points(mcnf, predict(fit, newdata = data.frame(mcnf = mcnf)), col = "red")
-        # abline(v=mcnq)
-
         plot(0, 0, type = "n", bty = "n",
             xlim = coord$range, xlab = "", xaxt = "n", # nearly always set `xlim`` to `coord$range`
-            ylim = ylim,  ylab = "Copy Number",
+            ylim = ylim,  ylab = "# Reads",
             xaxs = "i", yaxs = "i") # always set `xaxs` and `yaxs` to "i"
 
-        # dprint(coord$range)
-        # dprint(range(w$start))
-        # dprint(ylim)
-        # dprint(range(x$cn[[cellI]]))
+        # points(w[chromI, start], cw$NR_wms[chromI], pch = 16, cex = 1, col = getCnColor(cw[[repKey]]$NAR[chromI] + 1))
+        points(w[chromI, start], cw[[repKey]]$CN[chromI], pch = 16, cex = 1, col = getCnColor(cw[[repKey]]$HMM[chromI] + 1))
+        # points(w[chromI, start], rep(cw$RPA * 0.5, sum(chromI)), pch = 16, cex = 1, col = getGcColor(w[chromI, gc_fraction]))
+        # points(w[chromI, start], rep(cw$RPA * 0.7, sum(chromI)), pch = 16, cex = 1, col = getCnColor(cw$HMM[chromI]))
+        # points(w[chromI, start], rep(cw$RPA * 0.8, sum(chromI)), pch = 16, cex = 1, col = getCnColor(cw$NAR[chromI] + 1))
 
-        points(w$start, x$cn[[cellI]], pch = 16, cex = 1)
-        lines(w$start, x$hmm[[cellI]], lwd = 2, col = "red")
-        abline(h=ylim[1]:ylim[2])
-            
-
-        # plotting actions go here, e.g. points(x, y)
+        # lines(w$start, x$hmm[[cellI]], lwd = 2, col = "red")
+        abline(h = cw$RPA * 0:maxCN, col = "grey")
     })
 
     # return the track's magick image and associated metadata
@@ -96,6 +99,60 @@ build.scCNV_cell_xyTrack <- function(track, reference, coord, layout){
         mai   = mai,
         image = image
     )
+
+    # cellI <- which(x$cell_id == cellId)
+    # wx <- paste("w", x$window_size[cellI], sep = "_")
+    # w <- x$windows[[wx]]
+
+    # # use generic methods and any other custom code to determine the track's (dynamic) Y span
+    # padding <- padding(track, layout)
+    # height <- height(track, 3) + padding$total # or set a known, fixed height in inches
+    # ylim <- c(0, 4)
+
+    # # use the mdiTrackImage helper function to create the track image
+    # mai <- NULL
+    # image <- mdiTrackImage(layout, height, function(...){
+    #     mai <<- setMdiTrackMai(layout, padding, mar = list(top = 0, bottom = 0))
+
+    #     # cn <- x$cn[[cellI]]
+    #     # mcn <- x$windowMedians$cn[[wx]]
+
+    #     # mcnq <- quantile(mcn, c(0.05, 0.95), na.rm = TRUE)
+    #     # mcnw <- which(mcn >= mcnq[1] & mcn <= mcnq[2])
+    #     # mcnf <- mcn[mcnw]
+    #     # mcnf2 <- mcnf ** 2
+    #     # mcnf3 <- mcnf ** 3
+    #     # cnf <- cn[mcnw]
+    #     # formula <- cnf ~ mcnf # + mcnf2 + mcnf3
+    #     # fit <- loess(formula)
+
+    #     # plot(0, 0, type = "n", bty = "n",
+    #     #     xlim = c(0.5, 3.5), xlab = "", xaxt = "n", # nearly always set `xlim`` to `coord$range`
+    #     #     ylim = c(0.5, 3.5),  ylab = "Copy Number",
+    #     #     xaxs = "i", yaxs = "i") # always set `xaxs` and `yaxs` to "i"
+
+    #     # points(mcn, cn, pch = 16, cex = 0.25)
+    #     # abline(0, 1, col = "blue")
+    #     # points(mcnf, predict(fit, newdata = data.frame(mcnf = mcnf)), col = "red")
+    #     # abline(v=mcnq)
+
+    #     plot(0, 0, type = "n", bty = "n",
+    #         xlim = coord$range, xlab = "", xaxt = "n", # nearly always set `xlim`` to `coord$range`
+    #         ylim = ylim,  ylab = "Copy Number",
+    #         xaxs = "i", yaxs = "i") # always set `xaxs` and `yaxs` to "i"
+    #     points(w$start, x$cn[[cellI]], pch = 16, cex = 1)
+    #     lines(w$start, x$hmm[[cellI]], lwd = 2, col = "red")
+    #     abline(h=ylim[1]:ylim[2])
+
+    #     # plotting actions go here, e.g. points(x, y)
+    # })
+
+    # # return the track's magick image and associated metadata
+    # list(
+    #     ylim  = ylim,
+    #     mai   = mai,
+    #     image = image
+    # )
 
 # List of 5
 #  $ cell_id    : chr [1:10] "0" "1" "2" "3" ...

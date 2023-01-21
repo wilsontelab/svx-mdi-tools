@@ -5,7 +5,7 @@ projectNameReactive <- function(sourceId){
         gsub('.scCNV.extract', '', getSourceFilePackageName(sourceId))
     })    
 } 
-normalizeDataReactive <- function(sourceId){
+normalizeDataReactive <- function(sourceId, ...){
     reactive({
         sourceId <- sourceId()
         req(sourceId)
@@ -14,15 +14,26 @@ normalizeDataReactive <- function(sourceId){
         x <- readRDS(normalizeFilePath)
         setkey(x$colData, "cell_id")  
         x$qcPlotsDir <- expandSourceFilePath(sourceId, "qc_plots")
-        if(!dir.exists(x$qcPlotsDir)) untar(
-            getSourceFilePath(sourceId, "plotsArchive"), 
-            exdir = x$qcPlotsDir
-        )
+        if(!dir.exists(x$qcPlotsDir)) dir.create(x$qcPlotsDir)
+        # if(!dir.exists(x$qcPlotsDir)) untar(
+        #     getSourceFilePath(sourceId, "plotsArchive"), 
+        #     exdir = x$qcPlotsDir
+        # )
         stopSpinner(session)
         x
     }) 
 }
 
+# saveRDS(list(
+#     env = env,
+#     constants = constants,
+#     metadata = metadata,
+#     rowRanges = rowRanges, 
+#     windows = windows,
+#     colData = colData,
+#     cells = cells,
+#     raw_counts = raw_counts
+# ), file  = env$OUTPUT_FILE)
 loadSampleRds <- function(sourceId){
     normalizeFilePath <- getSourceFilePath(sourceId, "normalizeFile")
     x <- readRDS(normalizeFilePath)
@@ -32,7 +43,9 @@ loadSampleRds <- function(sourceId){
 loadSampleCommon <- function(cacheKey, keyObject, key, cacheObject, sourceId, ...){
     dprint("loadSampleCommon")
     x <- loadSampleRds(sourceId)
-    x[c("rowRanges", "colData")]
+
+    x
+    # x[c("rowRanges", "colData")]
 }
 loadSampleWorking <- function(cacheKey, keyObject, key, cacheObject, sourceId, chrom){
     dprint("loadSampleWorking")

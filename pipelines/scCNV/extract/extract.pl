@@ -165,13 +165,17 @@ sub parseReadPair {
         } 
 
         # commit bins and junction edges in a single row with a molecule identifier based on outer endpoints
-        if(@alns){
+        my $nAlns = @alns;
+        if($nAlns){
             my %bins;
             foreach my $aln(@alns){
-                $bins{getCoverageBin($$aln[RNAME_INDEX], $$aln[POS])} = 1;
+                $bins{getCoverageBin($$aln[RNAME_INDEX], $$aln[POS])} = 1; # not summing, just recorded that a bin was hit
                 $bins{getCoverageBin($$aln[RNAME_INDEX], getEnd($$aln[POS], $$aln[CIGAR]))} = 1;
             }
-            print join("\t", $molKey, scalar(@alns), join("::", keys %bins), join(":::", @jxns) || "X"), "\n";           
+            # thus, a molecule counts once in each bin it touches
+            # most molecules, even with multiple alignments, lead to a count of 1 in just one bin
+            # molecules that cross bin boundaries, or are SV pairs, are counted once in each bin
+            print join("\t", $molKey, $nAlns, join("::", keys %bins), join(":::", @jxns) || "X"), "\n";           
         }
 
         #########################

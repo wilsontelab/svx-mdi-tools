@@ -8,6 +8,7 @@ source $GENOMEX_MODULES_DIR/genome/set_genome_vars.sh
 # set output file paths
 export OUTPUT_FILE=$DATA_FILE_PREFIX.$PIPELINE_NAME.normalize.rds
 export PLOTS_ARCHIVE=$DATA_FILE_PREFIX.$PIPELINE_NAME.plots.tar.gz
+export MANIFEST_FILE_IN=$MANIFEST_FILE
 export MANIFEST_FILE=$DATA_FILE_PREFIX.$PIPELINE_NAME.manifest.csv
 
 # extract and reformat data from 10x Cell Ranger DNA input

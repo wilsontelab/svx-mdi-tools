@@ -33,17 +33,26 @@ checkEnvVars(list(
         'PLOT_PREFIX',
         'OUTPUT_FILE',
         'DATA_NAME',
-        'MANIFEST_FILE' # created by us
+        'MANIFEST_FILE_IN', # optional user-provided manifest
+        'MANIFEST_FILE'    # created by us
     ),
     integer = c(
         "PLOIDY",
+        "MIN_WINDOW_POWER",
         "MAX_WINDOW_POWER",
+        "MAX_FIT_WINDOWS",
         "N_CPU"
     ),
     double = c(
         "N_SD_HALFCN",
+        "MAX_NA95",
         "MIN_MAPPABILITY",
-        "TRANSITION_PROBABILITY"
+        "MIN_FRACTION_S",
+        "KEEP_THRESHOLD"
+    ),
+    logical = c(
+        "VERBOSE_PLOTS",
+        'SHAPE_CORRECTION'
     )
 ))
 #-------------------------------------------------------------------------------------
@@ -65,119 +74,158 @@ unlink(paste(env$PLOT_PREFIX, "*", sep = "."))
 # perform standard actions to load and parse genome bins
 #-------------------------------------------------------------------------------------
 scCnvSharedDir <- file.path(env$MODULES_DIR, 'scCNV')
-sourceScripts(scCnvSharedDir, c('loadHdf5', 'parseGenomeBins', 'fitCells'))
+sourceScripts(scCnvSharedDir, c('loadHdf5', 'parseGenomeBins', 'fitCells', 'normalizeBatch')) # 
+source(file.path(rUtilDir, 'smooth.R'))
 #=====================================================================================
 
 #=====================================================================================
-# characterize the individual cells
-# first pass fit at the bin resolution expected for Poisson without over/under-dispersion
+# characterize the cells
 #-------------------------------------------------------------------------------------
 message('characterizing individual cells')
+# cell_ids <- as.character(c(53,126,145,317,298,316,79,141,144,16))
+# cell_ids <- as.character(c(3, 70, 37, 8, 90, 81, 78))
+# cell_ids <- "0" # 78 81
+# cell_ids <- as.character(c(81, 78))
+# cells <- lapply(cell_ids, fitCell_1)
+# cells <- mclapply(cell_ids, fitCell_1, mc.cores = env$N_CPU)
+# names(cells) <- cell_ids
 
-# rep=  
-# 3 = 24/LK-13, ~85%S, XX
-# 70 = 69/LK-74, mid-S, XY + aneuploidy
-# 37 = 32/LK-44, ?40%S, XY
-# 8 = 79/LK-18, ~15%S, XX
-# un = 
-# 90 = 91/LK-92, 0%S, XX + gain chr22
-# 81 = 81/LK-84, 0%S, XY + loss chr15
-
-# cell with shaping issues
-# 39 = some hit, some miss on wavy "gains"
-# 40 = NR_wm_reshaped - something is wrong with shape fit? loses peak? peak moves? FIXED!
-# 59 = low coverage, passes, has a problem after shaping (prob.like 40) FIXED!
-# 52 = extreme shape on chr16, exaggerates a gain? NO REAL ERROR, JUST THE VAGARIES OF SHAPE FITTING - suppress extreme shapes?
-
-# cells with issues related to fractionS/replicating cell assignments
-# 49 = very late replication (got)
-# 51 = even later replication?? (missed)
-# 93 = likely a miss of a late-replicating cell due to waviness, stays squashed
-# 95 = possible very late replication, missed
-
-# cells with replication segments misassignments (CN1_NAR1 instead of CN2_NAR0, etc.)
-# others above
-# 82 = late replicating with chr22+, some replication miscalls
-
-# other miscellaneous cells
-# 47 = very high res unreplicated
-# 56 = small chr19 segmental, is it real?
-# 83 = early replication with chr22+, nailed it
-# 84 = similer to 83, somewhat later in S
-# 86 = unreplicated (low res) partner to 83/84 (also 89, 90)
-# 91 = low res, maybe early replicating, but it just gets squashed (note chr17, chr22), chr22+ still detectable
-
-# the following cells are identified as replicating, with windowPower, cell$replicationModel$fractionS and final cell$fractionS from composite HMM
-# 4       3       0.95    0.483793494006378 BAD?, probably a reject hyperseg, o/w need better early fit
-# 6       3       0.7     0.666458326702586 GOOD
-# 15      7       0.35    0.389833425515335 GOOD?, very low res, but probably right, re-analyze lower power value
-# 3       2       0.825   0.755370942600468 GOOD
-# 12      5       0.925   0.595459621837016 BAD?, reject hyperseg
-# 29      5       0.125   0.110417206602506 GOOD
-# 9       4       0.05    0.144906685705483 PROBABLY GOOD, or wrong due to waviness
-# 8       3       0.25    0.260561737578124 GOOD
-# 11      4       0.875   0.842922758227746 BAD?, reject hyperseg
-# 17      4       0.9     0.781132451526303 PROBABLY GOOD, or wrong due to waviness
-# 26      7       0.7     0.654049141142613 BAD, very low res, likely reject cell
-# 37      3       0.55    0.544142647711136 GOOD
-# 49      5       0.925   0.850760633879875 PROBABLY GOOD, a bit too low res, could re-analyze at power 4
-# 70      4       0.7     0.668104049136526 GOOD
-# 74      7       0.1     0.15496918560414  MAYBE GOOD, very low coverage cell
-# 84      5       0.6     0.631453919762601 GOOD, best re-analyzed at lower power value (even 3)
-# 92      7       0.05    0.039999596405234 PROBABLY GOOD, re-analyze at lower power value?
-# 82      3       0.925   0.841817135150738 GOOD
-# 83      4       0.5     0.526324580161477 GOOD
-
-# TODO: plot NR frequency distribution for all window powers along with genome plot
-#       many replicating cells are (not surprisingly) being pushed to too-high windowPower
-
-# TODO: move to app, allow user overrides of key parameters, refit in app
-
-# TODO: is there a suitable logic to implement post-HMM "correction" of replication-derived CNV segments?
-# TODO: any way to automate badCell assignment when excessively wavy or hypersegmented?
-# TODO: if the above are possible, then could go straight to common CNV/batch normalization in pipeline
-#       if not, defer that to app after manual intervention
-
-# TODO: establish how to set a replication timing value for bins/windows across many cells based on their fractionS + FAR data
-#       see Excel in Gary Smith folder for the logic of the cell voting process
-#       then use that to implement an external replication timing trainer as a replacement (adjunct?) to GC
-
-# cell_ids <- as.character(c(3, 70, 37, 8, 90, 81))
-# cell_ids <- cell_ids[1:2]
-# cell_ids <- "92"
-# cells <- lapply(cell_ids, fitCell)
-cells <- mclapply(cell_ids, fitCell, mc.cores = env$N_CPU)
-stop("GOT TO HERE!")
-
-cells <- mclapply(cell_ids, fitCell, mc.cores = env$N_CPU)
-names(cells) <- cell_ids
+# stop("XXXXXXXXXXXXXXXXX")
+DIR <- env$TASK_ACTION_DIR
+RDS_FILE <- file.path(DIR, "TEST.rds")
+# saveRDS(cells, file = RDS_FILE)
+cells <- readRDS(RDS_FILE)
+# # cells <- cells[names(cells) == "145"]
+# # cells <- lapply(cells, fitCell_2)
+# cells <- mclapply(cells, fitCell_2, mc.cores = env$N_CPU)
+# names(cells) <- cell_ids
 
 # assemble and organize the per-cell data
 message('recording cell metadata')
+shapeKey <- getShapeModelKey()
+getCellValue <- function(cell_id, key){
+    x <- cells[[cell_id]][[key]]
+    if(is.null(x)) NA else x 
+}
 getWindowsMetadata <- function(cell_id, key){
+    if(cells[[cell_id]]$badCell) return(NA)
     windowPower <- cells[[cell_id]]$windowPower
-    x <- cells[[cell_id]]$windows[[windowPower + 1]][[key]]
+    x <- cells[[cell_id]]$windows[[windowPower + 1]][[shapeKey]][[key]]
     if(is.null(x)) NA else x
 }
 getReplicationMetadata <- function(cell_id, key) {
-    x <- cells[[cell_id]]$replicationModel[[key]]
+    if(cells[[cell_id]]$badCell) return(NA)
+    x <- cells[[cell_id]]$replicationModel[[shapeKey]][[key]]
     if(is.null(x)) NA else x
 }
+colData[, ':='( # initialize data types (in case first cell is NA)
+    #---------------------------------- cell status information
+    bad          = TRUE, # cells rejected BEFORE detailed analysis, no fit or model is present
+    keep         = TRUE, # cells marked as questionable AFTER detailed analysis
+    #---------------------------------- coverage and variance details
+    ploidy       = 0L,
+    windowPower  = 0L,
+    modal_NA     = 0L,
+    nrModelType  = "NA",  
+    NA95         = 0.0,  
+    ER_modal_NA  = 0.0,  
+    ER_ploidy    = 0.0,  
+    RPA          = 0.0,
+    cnsd         = 0.0,
+    #---------------------------------- replication model details
+    replicating  = TRUE,
+    fractionS    = 0.0,
+    repGcRatio   = 0.0,
+    modelType    = "NA",
+    theta        = 0.0
+)]
 colData[, ':='(
-    bad          =  cells[[cell_id]]$badCell,
-    keep         = !cells[[cell_id]]$badCell,
-    ploidy       = cells[[cell_id]]$ploidy,
-    windowPower  = cells[[cell_id]]$windowPower,
-    normLagDiffQ = getWindowsMetadata(cell_id, "normLagDiffQ"),     
-    modal_NA     = cells[[cell_id]]$modal_NA,
+    #---------------------------------- cell status information
+    bad          = getCellValue(cell_id, "badCell"), # cells rejected BEFORE detailed analysis, not fit or model is present
+    keep         = getCellValue(cell_id, "keep"),    # cells marked as questionable AFTER detailed analysis
+    #---------------------------------- coverage and variance details
+    ploidy       = getCellValue(cell_id, "ploidy"),
+    windowPower  = getCellValue(cell_id, "windowPower"),
+    modal_NA     = getCellValue(cell_id, "modal_NA"),
+    nrModelType  = getWindowsMetadata(cell_id, "nrModelType"),    
+    NA95         = getWindowsMetadata(cell_id, "NA95"),  
     ER_modal_NA  = getWindowsMetadata(cell_id, "ER_modal_NA"),  
     ER_ploidy    = getWindowsMetadata(cell_id, "ER_ploidy"),  
-    RPA          = getWindowsMetadata(cell_id, "RPA"), 
-    replicating  = cells[[cell_id]]$cellIsReplicating,
-    fractionS    = cells[[cell_id]]$fractionS,
+    RPA          = getWindowsMetadata(cell_id, "RPA"),
+    cnsd         = getCellValue(cell_id, "cnsd"),
+    #---------------------------------- replication model details
+    replicating  = getCellValue(cell_id, "cellIsReplicating"),
+    fractionS    = getCellValue(cell_id, "fractionS"),
+    repGcRatio   = getReplicationMetadata(cell_id, "gcRatio"),
     modelType    = getReplicationMetadata(cell_id, "modelType"),
     theta        = getReplicationMetadata(cell_id, "theta")
 ), by = cell_id]
+#=====================================================================================
+
+#=====================================================================================
+# parse the sample manifest; one run of normalize.R applies to a single Project, 
+# which might have multiple Samples, each with multiple Cells
+# if manifest not provided, all Cells are assumed to derive from the same Sample
+#-------------------------------------------------------------------------------------
+manifest <- if(env$MANIFEST_FILE_IN != "NA"){
+    if(!file.exists(env$MANIFEST_FILE_IN)) stop(paste("unknown manifest file:", env$MANIFEST_FILE_IN))
+    m <- fread(env$MANIFEST_FILE_IN)
+    if(!all(c("Sample_Name","Cell_Name") %in% names(m))) stop("bad manifest file; expected columns Sample_Name and Cell_Name")
+    if(anyDuplicated(m$Cell_Name)) stop("bad manifest file; all Cell_Name entries must be unique")
+    if(is.null(colData$cell_name)) stop("don't know how to interpret manifest$Cell_Name because colData$cell_name is NULL")
+    if(!all(m$Cell_Name %in% colData$cell_name)) stop("bad manifest file; one or more Cell_Name missing from colData$cell_name")
+    if(!all(colData$cell_name %in% m$Cell_Name)) stop("bad manifest file; one or more colData$cell_name values are missing from manifest")
+    setkey(m, "Cell_Name")
+    names(m)[names(m) %in% c("", "", "", "")]
+    x <- data.table(
+        Project     = env$DATA_NAME,
+        Sample_ID   = colData$cell_id, # the index value, i.e. "0", "1", etc.
+        Sample_Name = m[colData$cell_name, Sample_Name],
+        Cell_Name   = m[colData$cell_name, Cell_Name],
+        Description = m[colData$cell_name, if(is.null(m$Description)) paste(Sample_Name, Cell_Name, sep = ":") else Description]
+    )
+    cbind(x, m[colData$cell_name, .SD, .SDcols = names(m)[!(names(m) %in% names(x))]])
+} else {
+    cellNames <- if(is.null(colData$cell_name)) colData$cell_id else colData$cell_name
+    data.table(
+        Project     = env$DATA_NAME,
+        Sample_ID   = colData$cell_id,
+        Sample_Name = env$DATA_NAME,
+        Cell_Name   = cellNames,
+        Description = cellNames
+    ) 
+}
+manifest[, ":="(
+    Yield = colData$total_num_reads,
+    Quality = colData$windowPower + colData$bad
+)]
+#=====================================================================================
+
+#=====================================================================================
+# compare cells across samples in a batch
+#-------------------------------------------------------------------------------------
+message('calculating multi-cell batch correction, i.e., common shape')
+sampleNames <- unique(manifest$Sample_Name)
+samples <- lapply(sampleNames, function(sampleName){
+    cell_ids <- manifest[Sample_Name == sampleName, Sample_ID]
+    cell_ids <- colData[cell_id %in% cell_ids & !bad & !replicating & keep, cell_id]
+    if(length(cell_ids) >= 3){
+
+        normalizeBatch(cells[cell_ids])
+        stop("ZZZZZZZZZZZZZZZZZZZZZ")
+        
+
+        raw_counts[[sampleName]] <<- raw_counts[, rowSums(.SD), .SDcols = cell_ids]
+        str(raw_counts)
+        sample <- fitCell_1(sampleName)
+
+
+        sample
+    } else list()
+})
+names(samples) <- sampleNames
+str(samples)
+stop("BATCHING SUCCESS")
 #=====================================================================================
 
 #=====================================================================================
@@ -191,17 +239,16 @@ saveRDS(list(
     windows = windows,
     colData = colData,
     cells = cells,
-    raw_counts = raw_counts
+    raw_counts = raw_counts,
+    states = list(
+        replicating = replicatingStates,
+        nonReplicating = nonReplicatingStates
+    )
 ), file  = env$OUTPUT_FILE)
 write.table(
-    data.table(
-        Project = env$DATA_NAME,
-        Sample_ID = colData$cell_id,
-        Description = if(is.null(colData$cell_name)) colData$cell_id else colData$cell_name,
-        WindowPower = colData$windowPower
-    ), 
+    manifest, 
     file = env$MANIFEST_FILE, 
-    quote = FALSE, 
+    quote = TRUE, 
     sep = ",",
     row.names = FALSE,
     col.names = TRUE

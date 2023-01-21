@@ -70,7 +70,8 @@ condaFamilies:
     r-packages:
         dependencies:
             - bioconductor-rhdf5=2.38.1         
-            - r-mass=7.3_58.1   
+            - r-mass=7.3_58.1
+            # - r-wavelets # =0.3_0.2
 optionFamilies:     
     fastq:
         options:
@@ -129,7 +130,14 @@ optionFamilies:
                 type: integer
                 required: false
                 default: 2
-                description: "expected copy number for autosomes, common to all cells in a sample"  
+                description: "expected copy number for autosomes, common to all cells in a sample"
+            manifest-file: 
+                order: 2
+                short: F
+                type: string
+                required: false
+                default: NA
+                description: "optional path to a cell metadata file with at least columns Sample_Name, Cell_Name"  
     normalization:
         options:
             n-sd-halfCN: 
@@ -137,31 +145,71 @@ optionFamilies:
                 short: S
                 type: double
                 required: false
-                default: 2
-                description: "number of standard deviations at CN == --ploidy + 0.5" 
-            max-window-power: 
+                default: 1.5
+                description: "number of standard deviations at CN == --ploidy + 0.5, used to set minWindowCount" 
+            max_NA95: 
                 order: 2
+                short: X
+                type: double
+                required: false
+                default: 0.8
+                description: "how far the 95% CI is allowed to be from the distribution peak, in number of alleles" 
+            min-window-power: 
+                order: 3
+                short: w
+                type: integer
+                required: false
+                default: 0 # i.e., 2^0 * 20,000 = 20,000 bp windows 
+                description: "enforce a minimum window size of 2^w 20kb bins per window [0]" 
+            max-window-power: 
+                order: 4
                 short: W
                 type: integer
                 required: false
                 default: 7 # i.e., 2^7 * 20,000 = 2,560,000 bp windows 
                 description: "reject cells requiring more than 2^W 20kb bins per window" 
             min-mappability: 
-                order: 3
+                order: 5
                 short: M
                 type: double
                 required: false
                 default: 0.9
                 description: "ignore windows with less than -M fractional mappability"
-    HMM:
-        options:
-            transition-probability: 
-                order: 1
+            max-fit-windows: 
+                order: 6
+                short: D
+                type: integer
+                required: false
+                default: 10000
+                description: "downsample to use at most -D windows when fitting mixture models, for speed"
+            min-fraction-S:
+                order: 7
                 short: s
                 type: double
                 required: false
-                default: 1e-7
-                description: "state transition probability in the CNV hidden Markov model"
+                default: 0.05
+                description: "the smallest fractionS value allowed when fitting replication models"    
+            shape-correction:
+                order: 8
+                short: e
+                type: boolean
+                required: false
+                default: false
+                description: "correct systematic drift across each chromosome, slower but good for unstable data"
+            keep-threshold:
+                order: 9
+                short: k
+                type: double
+                required: false
+                default: 0.4
+                description: "cells are preliminarily marked for keeping when sd(CN==1) <= --keep-threshold"
+            verbose-plots:
+                order: 99
+                short: V
+                type: boolean
+                required: false
+                default: false
+                description: "setting --verbose-plots will output many QC plots for every cell, for developers"  
 package:
     normalize: # the pipeline action after which a data package should assembled
         uploadType: scCNV # a signal to the Stage 2 framework regarding the package contents
@@ -173,9 +221,9 @@ package:
             normalizeFile:
                 type: rds
                 file: $DATA_FILE_PREFIX.$PIPELINE_NAME.normalize.rds
-            plotsArchive:
-                type: archive
-                file: $DATA_FILE_PREFIX.$PIPELINE_NAME.plots.tar.gz        
+            # plotsArchive:
+            #     type: archive
+            #     file: $DATA_FILE_PREFIX.$PIPELINE_NAME.plots.tar.gz        
 # container:
 #     supported: false    
 #     registry:  ghcr.io  # domain name of your OCI-compatible, oras-accessible, container registry [ghcr.io]
