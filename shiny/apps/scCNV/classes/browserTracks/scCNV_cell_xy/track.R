@@ -30,13 +30,16 @@ build.scCNV_cell_xyTrack <- function(track, reference, coord, layout){
 
     x <- getSampleCache(caller, cacheType, sourceId)
     cell <- x$cells[[cellId]]
-    dprint(names(track$settings))
     shapeModel <- track$settings$get("Plot_Options", "Shape_Model")
+    shapeKey <- tolower(shapeModel)
     replicationModel <- track$settings$get("Plot_Options", "Replication_Model")
-    shapeKey <- if(shapeModel == "Unshaped") "unshaped" else "shaped"
     repKey <- if(!cell$cellIsReplicating || forceSequential) "sequential" else "composite"
     w <- x$windows[[cell$windowPower + 1]]
-    cw <- cell$windows[[cell$windowPower + 1]][[shapeKey]]
+    cw <- cell$windows[[shapeKey]]
+    if(is.null(cw)) {
+        shapeKey <- "unshaped" # this sample was not analyzed with the requested shape correction, fall back
+        cw <- cell$windows[[shapeKey]]
+    } 
     chromI <- w[, chrom == coord$chromosome]
 
     # use generic methods and any other custom code to determine the track's (dynamic) Y span

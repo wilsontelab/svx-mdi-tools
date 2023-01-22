@@ -19,6 +19,7 @@ settings:
             choices:
                 - Unshaped            
                 - Shaped
+                - Batched
             value: Unshaped   
         Replication_Model:
             type: radioButtons

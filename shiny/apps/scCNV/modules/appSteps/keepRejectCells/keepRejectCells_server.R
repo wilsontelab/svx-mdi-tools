@@ -89,9 +89,7 @@ slopes <- reactive({
         cell <- sample$cells[[cell_id]]
         if(cell$badCell) return(NA)
         shapeModel <- settings$get("Page_Options", "Shape_Model")
-        cw <- cell$windows[[cell$windowPower + 1]][[shapeModel]]
-
-        dstr(cw)
+        cw <- cell$windows[[shapeModel]]
         gc_fit <- cw$sequential$gc_fit
         if(is.null(gc_fit)) return(NA)
         gc <- gc_fit$gcFractions
@@ -142,18 +140,18 @@ observeEvent(cells(), {
 pointOpacity <- function(x){
     min(1, max(0.15, -1/6000 * length(x) + 1))
 }
-getCnNAColor <- function(cnNa, pointOpacity = NULL){ # by CN (regardless of ploidy)
-    if(is.null(pointOpacity)) pointOpacity <- pointOpacity(cnNa)
+getWindowColors <- function(x, pointOpacity = NULL){ # by CN (regardless of ploidy)
+    if(is.null(pointOpacity)) pointOpacity <- pointOpacity(x)
     defaultPointColor <- rgb(0, 0, 0, pointOpacity)
-    cnNaCols <- c(     
-        defaultPointColor,                # 0 = black/grey (absence of color/copies...)
-        rgb(0,   0,    1,   pointOpacity),       # 1 = blue ("cool" colors are losses)
+    windowColors <- c(     
+        defaultPointColor,                 # 0 = black/grey (absence of color/copies...)
+        rgb(0.1,   0.1,    0.8,   pointOpacity), # 1 = blue ("cool" colors are losses)
         rgb(0.1, 0.8,  0.1, pointOpacity), # 2 = subdued green ("good/go" for typical CN neutral)
-        rgb(1,   0,    0,   pointOpacity),       # 3 = red ("hot" colors are gains)
-        rgb(1,   0.65, 0,   pointOpacity),    # 4 = orange
-        defaultPointColor                 # 5 = back to black/grey to make it obvious
+        rgb(1,   0,    0,   pointOpacity), # 3 = red ("hot" colors are gains)
+        rgb(1,   0.65, 0,   pointOpacity), # 4 = orange
+        defaultPointColor                  # 5 = back to black/grey to make it obvious
     )
-    col <- cnNaCols[cnNa + 1]
+    col <- windowColors[pmin(x, 5) + 1]
     col[is.na(col)] <- defaultPointColor
     col
 }
@@ -200,23 +198,31 @@ plotCellQC <- function(pngFile, sample, cell){
         
     } else {
         shapeModel <- settings$get("Page_Options", "Shape_Model")
+        shapeKey <- tolower(shapeModel)
         replicationModel <- settings$get("Page_Options", "Replication_Model")
         forceSequential <- cell$cellIsReplicating && replicationModel == "Sequential"
-        shapeKey <- if(shapeModel == "Unshaped") "unshaped" else "shaped"
         repKey <- if(!cell$cellIsReplicating || forceSequential) "sequential" else "composite"
-        cw <- cell$windows[[cell$windowPower + 1]][[shapeKey]]
-        cww <- cw[[repKey]]
+
+        cw_pre <- cell$windows$unshaped
+        cw_post <- cell$windows[[shapeKey]]
+        if(is.null(cw_post)) {
+            shapeKey <- "unshaped" # this sample was not analyzed with the requested shape correction, fall back
+            cw_post <- cw_pre
+        } 
+        cww <- cw_post[[repKey]]
         cww$NA_ <- cww$HMM + cww$NAR
 
-        # plot NR_wms vs. gc_w
+        # plot selected model's NR_wms vs. gc_w (color as final replication call)
         par(mar = c(4.1, 4.1, 0.1, 1.1), cex = 1)
-        N <- length(cw$NR_wms)
+        N <- length(cw_post$NR_wms)
         I <- sample.int(N, min(1e4, N))
-        RPA <- cw$NR_wms[I] / (if(forceSequential) cww$HMM[I] else cww$NA_[I])
+        RPA <- cw_post$NR_wms[I] / (if(forceSequential) cww$HMM[I] else cww$NA_[I])
         plot(w$gc_fraction[I], RPA, 
             xlab = "Fraction GC", xlim = c(0.3, 0.6), 
-            ylab = "Reads Per Allele", ylim = c(0, quantile(RPA, 0.975, na.rm = TRUE) * 1.5),
-            pch = 19, cex = 0.4, col =  if(forceSequential) rgb(0, 0, 0, 0.05) else getCnNAColor(cww$NA_[I], 0.05))
+            ylab = "Reads Per Allele", ylim = c(0, quantile(RPA[RPA < Inf], 0.975, na.rm = TRUE) * 1.5),
+            pch = 19, cex = 0.4, 
+            col = getWindowColors(round(cww$NAR[I] * cell$ploidy / cww$HMM[I], 0) + 1)               
+        )
         gc_fit <- if(forceSequential) cww$gc_fit else cell$replicationModel[[shapeKey]]$gc_fit 
         with(gc_fit, { for(percentile in c(0.025, 0.975)) lines(
             gcFractions, 
@@ -224,15 +230,18 @@ plotCellQC <- function(pngFile, sample, cell){
             lty = 3, lwd = 1.5, col = "grey30"
         ) })
         
-        # plot NR_wms vs. window index, i.e., pre-normalization input
+        # plot NR_wm vs. window index, i.e., pre-normalization input (color as final replication call)
         par(mar = c(0.1, 4.1, 0.1, 0.1), cex = 1)
         maxPlotNa <- max(cww$NA_, na.rm = TRUE) + 1.4
-        plotCellByWindow(cw$NR_wms, "# Reads", h = cw$RPA * 0:round(maxPlotNa, 0), v = v, ymax = cw$RPA * maxPlotNa)
+        plotCellByWindow(cw_pre$NR_wms, "# Reads", 
+                         h = cw_pre$RPA * 0:round(maxPlotNa, 0), v = v, ymax = cw_pre$RPA * maxPlotNa,
+                         col = getWindowColors(round(cww$NAR * cell$ploidy / cww$HMM, 0) + 1))
 
-        # plot CN vs. window index, i.e., post-normalization
+        # plot CN vs. window index, i.e., post-normalization (color as final CN call)
         par(mar = c(0.1, 4.1, 0.1, 0.1), cex = 1)
         maxPlotNa <- max(cww$HMM, na.rm = TRUE) + 1
-        plotCellByWindow(cww$CN, "CN", h = 0:maxPlotNa, v = v, col = getCnNAColor(cww$HMM), yaxt = "n")
+        plotCellByWindow(cww$CN, "CN", h = 0:maxPlotNa, v = v, 
+                         col = getWindowColors(cww$HMM), yaxt = "n")
         lines(1:length(cww$HMM), cww$HMM, col = "red")  
         axis(2, at=0:maxPlotNa, labels=0:maxPlotNa)      
     }

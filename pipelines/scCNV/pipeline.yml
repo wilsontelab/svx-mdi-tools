@@ -192,10 +192,10 @@ optionFamilies:
             shape-correction:
                 order: 8
                 short: e
-                type: boolean
+                type: string
                 required: false
-                default: false
-                description: "correct systematic drift across each chromosome, slower but good for unstable data"
+                default: both
+                description: "at what level(s) to correct for systematic window biases (none|cell|sample|both)"
             keep-threshold:
                 order: 9
                 short: k

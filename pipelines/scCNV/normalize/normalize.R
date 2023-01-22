@@ -34,7 +34,8 @@ checkEnvVars(list(
         'OUTPUT_FILE',
         'DATA_NAME',
         'MANIFEST_FILE_IN', # optional user-provided manifest
-        'MANIFEST_FILE'    # created by us
+        'MANIFEST_FILE',    # created by us
+        'SHAPE_CORRECTION'        
     ),
     integer = c(
         "PLOIDY",
@@ -51,8 +52,7 @@ checkEnvVars(list(
         "KEEP_THRESHOLD"
     ),
     logical = c(
-        "VERBOSE_PLOTS",
-        'SHAPE_CORRECTION'
+        "VERBOSE_PLOTS"
     )
 ))
 #-------------------------------------------------------------------------------------
@@ -74,7 +74,7 @@ unlink(paste(env$PLOT_PREFIX, "*", sep = "."))
 # perform standard actions to load and parse genome bins
 #-------------------------------------------------------------------------------------
 scCnvSharedDir <- file.path(env$MODULES_DIR, 'scCNV')
-sourceScripts(scCnvSharedDir, c('loadHdf5', 'parseGenomeBins', 'fitCells', 'normalizeBatch')) # 
+sourceScripts(scCnvSharedDir, c('loadHdf5', 'parseGenomeBins', 'fitCells', 'normalizeBatch'))
 source(file.path(rUtilDir, 'smooth.R'))
 #=====================================================================================
 
@@ -84,33 +84,28 @@ source(file.path(rUtilDir, 'smooth.R'))
 message('characterizing individual cells')
 # cell_ids <- as.character(c(53,126,145,317,298,316,79,141,144,16))
 # cell_ids <- as.character(c(3, 70, 37, 8, 90, 81, 78))
-# cell_ids <- "0" # 78 81
-# cell_ids <- as.character(c(81, 78))
+# cell_ids <- "0"
 # cells <- lapply(cell_ids, fitCell_1)
-# cells <- mclapply(cell_ids, fitCell_1, mc.cores = env$N_CPU)
-# names(cells) <- cell_ids
+cells <- mclapply(cell_ids, fitCell_1, mc.cores = env$N_CPU)
+names(cells) <- cell_ids
 
 # stop("XXXXXXXXXXXXXXXXX")
 DIR <- env$TASK_ACTION_DIR
 RDS_FILE <- file.path(DIR, "TEST.rds")
-# saveRDS(cells, file = RDS_FILE)
-cells <- readRDS(RDS_FILE)
-# # cells <- cells[names(cells) == "145"]
-# # cells <- lapply(cells, fitCell_2)
-# cells <- mclapply(cells, fitCell_2, mc.cores = env$N_CPU)
-# names(cells) <- cell_ids
+saveRDS(cells, file = RDS_FILE)
+# cells <- readRDS(RDS_FILE)
+# stop("XXXXXXXXXXXXXXXXX")
 
 # assemble and organize the per-cell data
 message('recording cell metadata')
-shapeKey <- getShapeModelKey()
+shapeKey <- if(env$SHAPE_CORRECTION %in% c('cell', 'both')) "shaped" else "unshaped"
 getCellValue <- function(cell_id, key){
     x <- cells[[cell_id]][[key]]
     if(is.null(x)) NA else x 
 }
 getWindowsMetadata <- function(cell_id, key){
     if(cells[[cell_id]]$badCell) return(NA)
-    windowPower <- cells[[cell_id]]$windowPower
-    x <- cells[[cell_id]]$windows[[windowPower + 1]][[shapeKey]][[key]]
+    x <- cells[[cell_id]]$windows[[shapeKey]][[key]]
     if(is.null(x)) NA else x
 }
 getReplicationMetadata <- function(cell_id, key) {
@@ -139,27 +134,30 @@ colData[, ':='( # initialize data types (in case first cell is NA)
     modelType    = "NA",
     theta        = 0.0
 )]
-colData[, ':='(
-    #---------------------------------- cell status information
-    bad          = getCellValue(cell_id, "badCell"), # cells rejected BEFORE detailed analysis, not fit or model is present
-    keep         = getCellValue(cell_id, "keep"),    # cells marked as questionable AFTER detailed analysis
-    #---------------------------------- coverage and variance details
-    ploidy       = getCellValue(cell_id, "ploidy"),
-    windowPower  = getCellValue(cell_id, "windowPower"),
-    modal_NA     = getCellValue(cell_id, "modal_NA"),
-    nrModelType  = getWindowsMetadata(cell_id, "nrModelType"),    
-    NA95         = getWindowsMetadata(cell_id, "NA95"),  
-    ER_modal_NA  = getWindowsMetadata(cell_id, "ER_modal_NA"),  
-    ER_ploidy    = getWindowsMetadata(cell_id, "ER_ploidy"),  
-    RPA          = getWindowsMetadata(cell_id, "RPA"),
-    cnsd         = getCellValue(cell_id, "cnsd"),
-    #---------------------------------- replication model details
-    replicating  = getCellValue(cell_id, "cellIsReplicating"),
-    fractionS    = getCellValue(cell_id, "fractionS"),
-    repGcRatio   = getReplicationMetadata(cell_id, "gcRatio"),
-    modelType    = getReplicationMetadata(cell_id, "modelType"),
-    theta        = getReplicationMetadata(cell_id, "theta")
-), by = cell_id]
+updateColData <- function(){
+    colData[, ':='(
+        #---------------------------------- cell status information
+        bad          = getCellValue(cell_id, "badCell"), # cells rejected BEFORE detailed analysis, not fit or model is present
+        keep         = getCellValue(cell_id, "keep"),    # cells marked as questionable AFTER detailed analysis
+        #---------------------------------- coverage and variance details
+        ploidy       = getCellValue(cell_id, "ploidy"),
+        windowPower  = getCellValue(cell_id, "windowPower"),
+        modal_NA     = getCellValue(cell_id, "modal_NA"),
+        nrModelType  = getWindowsMetadata(cell_id, "nrModelType"),    
+        NA95         = getWindowsMetadata(cell_id, "NA95"),  
+        ER_modal_NA  = getWindowsMetadata(cell_id, "ER_modal_NA"),  
+        ER_ploidy    = getWindowsMetadata(cell_id, "ER_ploidy"),  
+        RPA          = getWindowsMetadata(cell_id, "RPA"),
+        cnsd         = getCellValue(cell_id, "cnsd"),
+        #---------------------------------- replication model details
+        replicating  = getCellValue(cell_id, "cellIsReplicating"),
+        fractionS    = getCellValue(cell_id, "fractionS"),
+        repGcRatio   = getReplicationMetadata(cell_id, "gcRatio"),
+        modelType    = getReplicationMetadata(cell_id, "modelType"),
+        theta        = getReplicationMetadata(cell_id, "theta")
+    ), by = cell_id]    
+}
+updateColData()
 #=====================================================================================
 
 #=====================================================================================
@@ -202,30 +200,26 @@ manifest[, ":="(
 #=====================================================================================
 
 #=====================================================================================
-# compare cells across samples in a batch
+# compare cells across a batch, i.e., a sample
 #-------------------------------------------------------------------------------------
-message('calculating multi-cell batch correction, i.e., common shape')
 sampleNames <- unique(manifest$Sample_Name)
-samples <- lapply(sampleNames, function(sampleName){
-    cell_ids <- manifest[Sample_Name == sampleName, Sample_ID]
-    cell_ids <- colData[cell_id %in% cell_ids & !bad & !replicating & keep, cell_id]
-    if(length(cell_ids) >= 3){
+if(env$SHAPE_CORRECTION %in% c('sample', 'both')){ # normalize windows for batch effects
+    message('calculating multi-cell batch correction, i.e., common shape by sample')
+    for(sampleName in sampleNames){
+        cell_ids <- manifest[Sample_Name == sampleName, Sample_ID]
+        cells[cell_ids] <- normalizeBatch(sampleName, cells[cell_ids])
+    }
 
-        normalizeBatch(cells[cell_ids])
-        stop("ZZZZZZZZZZZZZZZZZZZZZ")
-        
-
-        raw_counts[[sampleName]] <<- raw_counts[, rowSums(.SD), .SDcols = cell_ids]
-        str(raw_counts)
-        sample <- fitCell_1(sampleName)
-
-
-        sample
-    } else list()
+    message('applying multi-cell batch correction to individual cells')
+    cells <- mclapply(cells, fitCell_2, mc.cores = env$N_CPU) 
+    shapeKey <- "batched"
+    updateColData()
+}
+sampleProfiles <- lapply(sampleNames, function(sampleNames){ # determine the sample's reference CN
+    cell_ids <- manifest[Sample_Name == sampleNames, Sample_ID]
+    getSampleProfile(cells[cell_ids])
 })
-names(samples) <- sampleNames
-str(samples)
-stop("BATCHING SUCCESS")
+names(sampleProfiles) <- sampleNames
 #=====================================================================================
 
 #=====================================================================================
@@ -243,7 +237,8 @@ saveRDS(list(
     states = list(
         replicating = replicatingStates,
         nonReplicating = nonReplicatingStates
-    )
+    ),
+    sampleProfiles = sampleProfiles
 ), file  = env$OUTPUT_FILE)
 write.table(
     manifest, 

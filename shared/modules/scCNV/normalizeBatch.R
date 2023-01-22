@@ -37,151 +37,146 @@ weighted.median <- function(x, w) { # adapted from spatstat
     approx(Fx, x, xout = 0.5, ties = "ordered", 
            rule = 2, method = "constant", f = 1/2)$y
 }
-# NR_wmB_buffer <- list()
-# getNR_wmB <- function(cell) with(cell, { # apply the batch shape correction to NR_wm
-#     if(!is.list(batchShapes) || env$SHAPE_CORRECTION != "batch") return(windows$NR_wm)
-#     if(is.null(NR_wmB_buffer[[cell_id]])) {
-#         NR_wmB <- windows$NR_wm / batchShapes[[as.character(windowPower)]]       
-#         N_pre  <- sum(windows$NR_wm, na.rm = TRUE)
-#         N_post <- sum(NR_wmB, na.rm = TRUE)
-#         NR_wmB_buffer[[cell_id]] <<- NR_wmB * N_pre / N_post
-#     }
-#     NR_wmB_buffer[[cell_id]]
-# })
+expandBatchValue <- function(x, windowPower, minPower, expandedWindows, force = FALSE){
+    if(windowPower > minPower || force) {
+        expandBy <- 2 ** (windowPower - minPower) # only expand to minPower, not necessarily individual bins
+        if(force) expandBy <- 1 / expandBy
+        x <- windows[[windowPower + 1]][, {
+            chrom_ <- chrom
+            nExpandedWindows <- expandedWindows[chrom == chrom_, .N]
+            uncollapseVector(x[.I], expandBy, nExpandedWindows)
+        }, by = chrom][[2]]
+    } else if(windowPower < minPower){
+        collapseBatchValue(x, windowPower, minPower, expandedWindows, force = TRUE) 
+    }
+    x
+}
+collapseBatchValue <- function(x, windowPower, minPower, expandedWindows, force = FALSE){
+    if(windowPower > minPower || force) {
+        expandBy <- 2 ** (windowPower - minPower)
+        if(force) expandBy <- 1 / expandBy
+        x <- windows[[minPower + 1]][, {
+            collapseVector(x[.I], expandBy) / expandBy
+        }, by = chrom][[2]]
+    } else if(windowPower < minPower){
+        expandBatchValue(x, windowPower, minPower, expandedWindows, force = TRUE)
+    }
+    x
+}
+getBatchWindows <- function(cell){
+    repKey <- if(cell$cellIsReplicating) "composite" else "sequential"
+    cell$windows[[shapeKey]][[repKey]] 
+}
+getExpandedHMM <- function(cells, minPower, expandedWindows, maskExtremes = TRUE){
+    byCell <- simplify2array(mclapply(cells, function(cell){
+        cellWindows <- getBatchWindows(cell)
+        expandBatchValue(cellWindows$HMM, cell$windowPower, minPower, expandedWindows)
+    }, mc.cores = env$N_CPU))
+    windowMedians <- round(apply(byCell, 1, median, na.rm = TRUE), 0)
+    if(maskExtremes) windowMedians <- ifelse(windowMedians > 0 & windowMedians < 4, windowMedians, NA)
+    list(
+        byCell = byCell,
+        median = windowMedians
+    )
+}
 #=====================================================================================
 
 #=====================================================================================
 # main target function that launches the inter-sample batch normalization process
 #-------------------------------------------------------------------------------------
-normalizeBatch <- function(cells){
+normalizeBatch <- function(sampleName, cells){
+
+    # get and check for sufficient working cells
+    cell_ids <- sapply(cells, function(cell) cell$cell_id)
+    cell_ids_working <- colData[cell_id %in% cell_ids & !bad & keep, cell_id]
+    nCells <- length(cell_ids)
+    nWorkingCells <- length(cell_ids_working)
+    if(nWorkingCells < 5){
+        message(paste("  sample", sampleName, ": only", nWorkingCells, "of", nCells, "cells are usable, skipping batch correction"))
+        return(cells)
+    }
+    message(paste("  sample", sampleName, ":", nWorkingCells, "of", nCells, "cells used for batch fit"))
+    workingCells <- cells[cell_ids_working]
 
     # determine the common, expanded window basis for performing cell comparisons
-    cellWindowPowers <- sapply(cells, function(cell) cell$windowPower)
-    workingWindowPowers <- sort(unique(cellWindowPowers))
-    minCellWindowPower <- min(workingWindowPowers)
-    expandedWindows <- windows[[minCellWindowPower + 1]] # the highest resolution windows used by the sample's cells
-
-    # determine the median HMM CN call per expanded window; take as the sample standard
-    expandValue <- function(x, cell){
-        if(cell$windowPower > minCellWindowPower) {
-            windows <- windows[[cell$windowPower + 1]]
-            expandBy <- 2 ** (cell$windowPower - minCellWindowPower) # only expand to minCellWindowPower, not necessarily individual bins
-            x <- windows[, {
-                chrom_ <- chrom
-                nExpandedWindows <- expandedWindows[chrom == chrom_, .N]
-                uncollapseVector(x[.I], expandBy, nExpandedWindows)
-            }, by = chrom][[2]]
-        }
-        x
-    }
-    collapseValue <- function(){
-
-    }
-    expandedHMM <- sapply(cells, function(cell){
-        cellWindows <- cell$windows[[cell$windowPower + 1]][[shapeKey]]$sequential
-        expandValue(cellWindows$HMM, cell)
-    })
-    medianExpandedHMM <- round(apply(expandedHMM, 1, median, na.rm = TRUE), 0)
-
-    # determine the CN standard deviation of each cell
-    cell_ids <- sapply(cells, function(cell) cell$cell_id)
-    cncsd_norm <- lapply(cells, function(cell){
-        cellWindows <- cell$windows[[cell$windowPower + 1]][[shapeKey]]$sequential 
+    allCellWindowPowers <- sapply(cells, function(cell) cell$windowPower)
+    workingCellWindowPowers <- sapply(workingCells, function(cell) cell$windowPower)
+    allWindowPowers <- sort(unique(allCellWindowPowers))
+    workingWindowPowers <- sort(unique(workingCellWindowPowers))
+    minWorkingWindowPower <- min(workingWindowPowers)
+    expandedWindows <- windows[[minWorkingWindowPower + 1]] # the highest resolution windows used by the sample's cells
+    
+    # determine the median HMM call per expanded window; take as the sample's reference, baseline CN
+    expandedHMM <- getExpandedHMM(workingCells, minWorkingWindowPower, expandedWindows)
+    
+    # determine the CN standard deviation of each cell normalized to CN == 1
+    # do this for all cells, not just those being used for batch correction
+    cncsd_norm <- mclapply(cells, function(cell){
+        if(cell$badCell) return(NA)
+        cellWindows <- getBatchWindows(cell)
         I <- cellWindows$HMM == cell$ploidy # restrict SD calculation to the most abundant, highest reliability windows
         sd((cellWindows$CN[I] - cell$ploidy), na.rm = TRUE) / sqrt(cell$ploidy)   
-    })
+    }, mc.cores = env$N_CPU)
     names(cncsd_norm) <- cell_ids
 
-    # establish CN Z scores for every expanded window for each cell
-    zScores <- sapply(cells, function(cell){
-        cellWindows <- cell$windows[[cell$windowPower + 1]][[shapeKey]]$sequential
-        CN  <- expandValue(cellWindows$CN,  cell)
-        ifelse( # restrict Z score calculation to the sample HMM standard, again, the most reliable
-            expandedHMM[, cell$cell_id] == medianExpandedHMM, 
-            (CN - medianExpandedHMM) / sqrt(medianExpandedHMM) / cncsd_norm[[cell$cell_id]], 
+    # establish CN Z scores for every expanded window for each working cell
+    zScores <- simplify2array(mclapply(workingCells, function(cell){
+        cellWindows <- getBatchWindows(cell)
+        CN <- expandBatchValue(cellWindows$CN, cell$windowPower, minWorkingWindowPower, expandedWindows)
+        ifelse( # restrict Z score calculation to the sample HMM reference, again, the most reliable
+            expandedHMM$byCell[, cell$cell_id] == expandedHMM$median,
+            (CN - expandedHMM$median) / sqrt(expandedHMM$median) / cncsd_norm[[cell$cell_id]], 
             NA
         )
-    })
+    }, mc.cores = env$N_CPU))
     
     # establish a weighting scheme when aggregating windows from cells with different windowPowers
-    windowPowerPairs <- as.data.table(expand.grid(workingWindowPowers, workingWindowPowers))
+    windowPowerPairs <- as.data.table(expand.grid(allWindowPowers, allWindowPowers))
     setnames(windowPowerPairs, c("wp1", "wp2"))
     windowPowerPairs$key <- apply(windowPowerPairs, 1, paste, collapse = ":")         
     windowPowerPairs[, weight := 2 ** pmin(wp1, wp2) / 2 ** pmax(wp1, wp2)]        
     setkey(windowPowerPairs, "key")
 
     # calculate the weighted median Z score for expanded windows for all cell windowPowers in use
-    medianZScores <- lapply(workingWindowPowers, function(wp1){
-        keys <- paste(wp1, cellWindowPowers, sep = ":") # cannot embed directly in windowPowerPairs[]
+    medianZScores <- mclapply(allWindowPowers, function(wp1){
+        keys <- paste(wp1, workingCellWindowPowers, sep = ":") # cannot embed directly in windowPowerPairs[]
         weights <- windowPowerPairs[keys, weight]
-        # expandBy <- 2 ** (wp1 - minCellWindowPower)
-        medianZScore <- apply(zScores, 1, function(x){
-            if(all(is.na(x))) return(NA)
-            weighted.median(x, weights)
-            # if(x < 0.1) 1 else x # don't reshape bins with an effectively zero median
-        })
-        # if(expandBy > 1) medianZScore <- windows[[minCellWindowPower + 1]][, {
-        #     collapseVector(medianZScore[.I], expandBy) / expandBy
-        # }, by = chrom][[2]]
-        medianZScore
-    })
-    names(medianZScores) <- as.character(workingWindowPowers)
-
-    saveBatchPlot("medianZScores", function(){
-        plot(density(medianZScores[[1]], na.rm = TRUE))
-        # plot(1:length(medianZScore), log2(medianZScore), pch = 19, cex = 0.3, ylim = c(-3, 3),
-        #     xaxt = "n", xaxs = 'i', xlab = "Genome Window", ylab = "log2(Shape)", col = defaultPointColor)
-        abline(v = -3:3, col = "grey")
-    }, width = 6)
+        apply(zScores, 1, function(x) weighted.median(x, weights))
+    }, mc.cores = env$N_CPU)
+    names(medianZScores) <- as.character(allWindowPowers)
 
     # rescale median Z scores back to copy number units for each cell
-    batchShapes <- sapply(cells, function(cell){
+    maxBatchShape <- 3
+    mclapply(cells, function(cell){
+        if(cell$badCell) return(cell)
+        cellWindows <- getBatchWindows(cell)
         shape <- (1 + medianZScores[[as.character(cell$windowPower)]] * cncsd_norm[[cell$cell_id]]) / 1
-        expandBy <- 2 ** (cell$windowPower - minCellWindowPower)
-        print(cell$cell_id)
-        print(cell$windowPower)
-        print(expandBy)
-        str(shape) 
-        str(windows[[cell$windowPower + 1]])
-        if(expandBy > 1) shape <- windows[[minCellWindowPower + 1]][, {
-            collapseVector(shape[.I], expandBy) / expandBy
-        }, by = chrom][[2]]
-        str(shape)            
-        pmin(10, pmax(0.1, shape))
-    })
+        shape <- collapseBatchValue(shape, cell$windowPower, minWorkingWindowPower, expandedWindows)     
+        cell$windows$batched <- list(
+            shape = pmin(maxBatchShape, pmax(1 / maxBatchShape, shape))
+        )
+        cell
+    }, mc.cores = env$N_CPU)
+}
+#=====================================================================================
 
-    saveBatchPlot("batchShapes", function(){
-        plot(density(batchShapes[[1]], na.rm = TRUE))
-        abline(v = 0:2, col = "grey")
-    }, width = 6)
+#=====================================================================================
+# regardless of whether cells were batch corrected, calculate the median HMM
+#-------------------------------------------------------------------------------------
+getSampleProfile <- function(cells){
 
-    # str(expandedHMM)
-    # str(medianExpandedHMM)
-    # str(cncsd_norm)
-    # str(zScores)
-    # str(medianZScores)
-    # print(range(medianZScores, na.rm = TRUE))
-    str(batchShapes)
-    print(range(unlist(batchShapes), na.rm = TRUE))
-    # str(windows)
+    # get and check for sufficient working cells
+    cell_ids <- sapply(cells, function(cell) cell$cell_id)
+    cell_ids_working <- colData[cell_id %in% cell_ids & !bad & keep, cell_id]
+    if(length(cell_ids_working) == 0) return(NA)    
+    workingCells <- cells[cell_ids_working]
 
-    cellI <- 2
-    saveBatchPlot("before", function(){
-        cell <- cells[[cellI]]
-        cellWindows <- cell$windows[[cell$windowPower + 1]][[shapeKey]]$sequential
-        plot(1:length(cellWindows$CN), cellWindows$CN, pch = 19, cex = 0.3, col = defaultPointColor, ylim = c(0, 5))
-        abline(h = 0:5, col = "grey")
-    }, width = 6)
-    saveBatchPlot("after", function(){
-        cell <- cells[[cellI]]
-        cellWindows <- cell$windows[[cell$windowPower + 1]][[shapeKey]]$sequential        
-        str(cellWindows$CN)
-        str(batchShapes[[cell$cell_id]])
+    # determine the median HMM call per expanded window; take as the sample's reference, baseline CN
+    expandedHMM <- getExpandedHMM(workingCells, 0, windows[[1]], maskExtremes = FALSE)
 
-        plot(1:length(cellWindows$CN), cellWindows$CN / batchShapes[[cell$cell_id]], pch = 19, cex = 0.3, col = defaultPointColor, ylim = c(0, 5))
-        abline(h = 0:5, col = "grey")
-    }, width = 6)
-
-    batchShapes
+    # provide the cell reference HMM CN for all windowPowers
+    mclapply(windowPowers, function(windowPower){
+        round(collapseBatchValue(expandedHMM$median, windowPower, 0, windows[[1]]), 0)
+    }, mc.cores = env$N_CPU)
 }
 #=====================================================================================

@@ -71,7 +71,7 @@ saveCellPlot <- function(cell, name, fn, width = 2, height = 2, increment = TRUE
     if(!env$VERBOSE_PLOTS) return(NULL)
     plotDir <- file.path(plotsDir, cell$cell_id)
     if(!dir.exists(plotDir)) dir.create(plotDir)
-    filename <- paste(cell$cell_id, sprintf("%02d", plotNumber), getShapeModelKey(), name, "png", sep = ".")
+    filename <- paste(cell$cell_id, sprintf("%02d", plotNumber), shapeKey, name, "png", sep = ".")
     pngFile <- file.path(plotDir, filename)
     png(pngFile, width = width, height = height, units = "in", pointsize = 7, res = 300, type = "cairo")
     par(mar = c(4.1, 4.1, 0.1, 1.1), cex = 1)
@@ -80,7 +80,6 @@ saveCellPlot <- function(cell, name, fn, width = 2, height = 2, increment = TRUE
     if(increment) plotNumber <<- plotNumber + 1
 }
 getRepColor <- function(cell, default = NULL){ # after replication fitting, color points by replication state
-    shapeKey <- getShapeModelKey()
     if(is.null(cell$replicationModel) || is.null(cell$replicationModel[[shapeKey]])) {
         if(is.null(default)) defaultPointColor else default
     } else {
@@ -98,7 +97,6 @@ getRepColor <- function(cell, default = NULL){ # after replication fitting, colo
     }
 }
 getCnColor <- function(cell){
-    shapeKey <- getShapeModelKey()
     cols <- c(                            # by CN (regardless of ploidy)
         defaultPointColor,                # 0 = black/grey (absence of color/copies...)
         rgb(0, 0, 1, pointOpacity),       # 1 = blue ("cool" colors are losses)
@@ -176,7 +174,6 @@ plotWindows_counts <- function(cell, name, NR_wm, windowI = TRUE,  # plot window
                                col = defaultPointColor, shape = NULL, 
                                increment = TRUE){
     saveCellPlot(cell, paste("NR_wm", name, sep = "_"), function(){
-        shapeKey <- getShapeModelKey()
         coord <- getWindowCoordinates(cell, windowI)
              if(is.character(col) && col[1] == "useRepColor") col <- getRepColor(cell)
         else if(is.character(col) && col[1] == "useCnColor")  col <- getCnColor(cell)
@@ -220,7 +217,6 @@ plotWindows_FAR_isolated <- function(cell, name, composite = FALSE){ # plot wind
              xaxt = "n", xaxs = 'i', xlab = "Genome Window", ylab = "Fraction Replicated")
         addChromLabels(coord)
         abline(h = 0:1, col = "grey")
-        shapeKey <- getShapeModelKey()
         repKey <- getRepModelKey(composite)
         points(coord$x, cell$windows[[shapeKey]][[repKey]]$FAR, pch = 19, cex = 0.3, col = col)
     }, width = 6)
@@ -233,7 +229,6 @@ plotWindows_CN_isolated <- function(cell, name, composite = FALSE){ # plot windo
              xaxt = "n", xaxs = 'i', xlab = "Genome Window", ylab = "Copy Number")
         addChromLabels(coord)
         abline(h = 0:(maxModelCN + 1), col = "grey")
-        shapeKey <- getShapeModelKey()
         repKey <- getRepModelKey(composite)
         points(coord$x, cell$windows[[shapeKey]][[repKey]]$CN, pch = 19, cex = 0.3, col = col)
         lines(coord$x, cell$windows[[shapeKey]][[repKey]]$HMM, col = "red3")
@@ -253,7 +248,6 @@ plotCellFit <- function(cell, name, model, bestModelByType){ # distributions of 
         NR_ad <- density(NR_a)
         plot(NR_ad, typ="l", col = "black", lwd = 1.5, main = "", xlab = "# of Reads",
              xlim = c(0, max(NR_ad$x)), ylim = c(0, max(NR_ad$y) * 1.1))
-        shapeKey <- getShapeModelKey()
         abline(v = cell$windows[[shapeKey]]$ER_modal_NA * c(1/2, 1, 2))
         bestModelByType[, {
             density <- getModelDensity(.SD)
@@ -265,7 +259,6 @@ plotCellFit <- function(cell, name, model, bestModelByType){ # distributions of 
     }, increment = FALSE)
 }
 plotCountDensity <- function(cell){ # this function plots the initial fits of nrModelTypes to NR_wm for different windowPowers
-    shapeKey <- getShapeModelKey()
     saveCellPlot(cell, paste("NR_dist", paste0("windowPower", cell$windowPower), sep = "_"), function() with(cell$windows[[shapeKey]], {
         cnMax <- 5
         NR_min <- max(RPA / 10, 2)
@@ -275,11 +268,25 @@ plotCountDensity <- function(cell){ # this function plots the initial fits of nr
         abline(v = RPA * 1:5, col = "grey")
         with(density, { lines(NR, density, col = "black", lwd = 1.5) })
         col <- if(allow) "blue" else "red3"
-        shapeKey <- getShapeModelKey()
         d <- nrModelTypes[[nrModelType]]$optFn(unlist(cell$windows[[shapeKey]][1:3]), density$NR)
         lines(density$NR, d, col = col)
         legend("topright", legend = nrModelType, col = col, lwd = 1, cex = 0.75)
     }), increment = FALSE)  
+}
+plotBatchEffect <- function(cell){
+    saveCellPlot(cell, "batchEffect", function() {
+        repKey <- getRepModelKey(cell$cellIsReplicating)
+        getShapeDist <- function(shapeKey){
+            density(cell$windows[[shapeKey]][[repKey]]$FAR, na.rm = TRUE)
+        }
+        d_s <- getShapeDist(if(env$SHAPE_CORRECTION %in% c('cell', 'both')) "shaped" else "unshaped")
+        d_b <- getShapeDist("batched")
+        plot(NA, NA, xlab = "Number of Alleles", ylab = "density",
+             xlim = c(-1, 2), ylim = c(0, max(d_s$y, d_b$y) * 1.1))
+        abline(v = seq(0, 1, 0.5), col = "grey")
+        lines(d_s, col = "black")
+        lines(d_b, col = "blue")
+    }, increment = FALSE)  
 }
 #=====================================================================================
 
@@ -420,7 +427,7 @@ fitCellWindows <- function(windowPower, windows, NR_wm, shape = 1){
             ),
             upper = c(
                 ER_modal_NA = ER_modal_NA * 1.1, 
-                theta = 250, 
+                theta = 1000, 
                 modelType$upper
             )
         )    
@@ -499,11 +506,8 @@ setCellWindows <- function(cell){ # establish the optimal window power for a cel
 #=====================================================================================
 # shared cell fitting functions, for GC bias effects and copy number by HMM
 #-------------------------------------------------------------------------------------
-isShaped <- FALSE
-getShapeModelKey <- function() if(isShaped) "shaped" else "unshaped"
 getRepModelKey <- function(composite) if(composite) "composite" else "sequential"
 getGcFit <- function(cell, composite) {
-    shapeKey <- getShapeModelKey()
     if(composite) cell$replicationModel[[shapeKey]]$gc_fit
     else cell$windows[[shapeKey]]$sequential$gc_fit # this fit squashes replication GC effects
 }
@@ -515,7 +519,6 @@ fitGcBias <- function(cell, name, NR_wm, windowI = TRUE, chroms = NULL,
     NR_wmf <- NR_wm[windowI]
     if(is.null(windowCN)) windowCN <- cell$ploidy
     if(length(windowCN) > 1 && length(windowCN) != length(NR_wmf)) windowCN <- windowCN[windowI]
-    shapeKey <- getShapeModelKey()
     repKey <- getRepModelKey(composite)
     cell$windows[[shapeKey]][[repKey]]$gc_fit <- new_nbinomCountsGC2(NR_wmf, gc_wf, binCN = windowCN)
     plotWindows_counts(cell, name, NR_wm, col = col_w)   
@@ -526,7 +529,6 @@ solveSquashedHMM <- function(cell, name, NR_wm, windowI = TRUE){ # i.e., the CN 
     windows <- windows[[cell$windowPower + 1]]
     gc_wf <- windows[windowI, gc_fraction]
     NR_wmf <- NR_wm[windowI]
-    shapeKey <- getShapeModelKey()
     cell$windows[[shapeKey]]$sequential$HMM <- viterbi(
         cell$windows[[shapeKey]]$sequential$gc_fit, 
         NR_wmf, # note, could simply be NR_wm if windowI == TRUE
@@ -551,7 +553,6 @@ setChromCN <- function(cell){
     workingStep <<- "setChromCN"
     windows <- windows[[cell$windowPower + 1]]
     chroms  <- windows[, unique(chrom)]
-    shapeKey <- getShapeModelKey()
 
     # determine a first crude aneuploidy copy number estimate for each whole chromosome
     # this method based on the Mann-Whitney test does not assume anything about the NR_wm distribution
@@ -620,7 +621,7 @@ sumLogLikelihoods <- function(x){
     sum(x)
 }
 getModelER_unreplicated <- function(modelType, cell){ # set read count expectations (ER) for a combination of modelType and cell$ER_modal_NA
-    with(cell$windows[[getShapeModelKey()]], { switch(
+    with(cell$windows[[shapeKey]], { switch(
         modelType,
         notReplicating     = ER_modal_NA,
         peakIsUnreplicated = ER_modal_NA,    # the modal window count corresponds to unreplicated DNA
@@ -631,6 +632,7 @@ fitReplicationModel <- function(modelType, fractionS, cell){
     # use a rich subset of the data to fit the candidate model to the data as best as possible
     # models are defined by replication peak type and fractionS increments    
     ER_unreplicated <- getModelER_unreplicated(modelType, cell)
+    theta <- cell$windows[[shapeKey]]$theta
     weights <- fractionSLookup$getRepStateProbs(fractionSLookup, env$PLOIDY, fractionS)
     optFn <- function(par) with(cell$tmp$density, { 
         d <- dnbinom(NR, mu = par[1] * 1,   size = par[2]) * weights[1] +   
@@ -639,11 +641,11 @@ fitReplicationModel <- function(modelType, fractionS, cell){
         sqrt(mean((d - density) ** 2))
     })
     opt <- optim( # by fitting both ER_unreplicated and theta, we arrive at mu and size parameters for nbinom
-        c(ER_unreplicated = ER_unreplicated, theta = 25), # adjusted from our initial estimate made from the peak, i.e., mode
+        c(ER_unreplicated = ER_unreplicated, theta = theta), # adjusted from our initial estimate made from the peak, i.e., mode
         optFn,
         method = "L-BFGS-B",
         lower = c(ER_unreplicated = ER_unreplicated * 0.9, theta = 1),
-        upper = c(ER_unreplicated = ER_unreplicated * 1.1, theta = 1000)
+        upper = c(ER_unreplicated = ER_unreplicated * 1.1, theta = theta * 10)
     )
     opt$par[3] <- opt$value
     opt$par
@@ -676,7 +678,6 @@ setBestReplicationModel <- function(cell, models, name, windows, fitI){  # selec
 
     # update the likelihood of each candidate model by fitting replication HMMs
     gc_wf <- windows[fitI, gc_fraction]
-    shapeKey <- getShapeModelKey()
     bestModelByType <- merge(bestModelByType, bestModelByType[, {
         model <- .SD
         if(modelType == "notReplicating") { # always allow the default nonReplicating model
@@ -685,7 +686,7 @@ setBestReplicationModel <- function(cell, models, name, windows, fitI){  # selec
             ER_whf <- RPA_wf * cell$ploidy
             gcModel <- optimize(function(theta){
                 sumLogLikelihoods(log(dnbinom(cell$tmp$NR_wmshf, mu = ER_whf, size = theta)))
-            }, c(1, 1000), maximum = TRUE)
+            }, c(1, model$theta * 10), maximum = TRUE)
             list(
                 NAR = list(rep(0, length(fitI))),
                 logLikelihood = gcModel$objective,
@@ -712,7 +713,7 @@ setBestReplicationModel <- function(cell, models, name, windows, fitI){  # selec
             ER_whf <- RPA_wf * na_hmm
             model$theta <- optimize(function(theta){
                 sumLogLikelihoods(log(dnbinom(cell$tmp$NR_wmshf, mu = ER_whf, size = theta)))
-            }, c(1, 1000), maximum = TRUE)$maximum
+            }, c(1, model$theta * 10), maximum = TRUE)$maximum
             emissProbs <- getRepEmissProbs(cell, model)
             hmm <- new_hmmEPTable(emissProbs, transProb = repTransProb, keys = windows$chrom[fitI])
             nar_hmm <- keyedViterbi(hmm) - 1 # based on NR_wmshf
@@ -768,7 +769,7 @@ setBestReplicationModel <- function(cell, models, name, windows, fitI){  # selec
                 ER_whf <- RPA_wf * na_hmm
                 gcModel <- optimize(function(theta){
                     sumLogLikelihoods(log(dnbinom(cell$tmp$NR_wmshf, mu = ER_whf, size = theta)))
-                }, c(1, 1000), maximum = TRUE)
+                }, c(1, model$theta * 10), maximum = TRUE)
                 list(
                     NAR = list({
                         NAR <- rep(NA, length(fitI))
@@ -825,7 +826,6 @@ setBestReplicationModel <- function(cell, models, name, windows, fitI){  # selec
 # convert a cell's HMM + NAR results to derivative values
 #-------------------------------------------------------------------------------------
 setHMMProfiles <- function(cell, composite){
-    shapeKey <- getShapeModelKey()
     repKey <- getRepModelKey(composite)
     informative <- with(cell$windows[[shapeKey]][[repKey]], { HMM > 0 & HMM < 4 }) # the HMM CN states that can be used and trusted in aggregated calculations  
     cell$windows[[shapeKey]][[repKey]]$fractionS <- with(cell$windows[[shapeKey]][[repKey]], { 
@@ -865,7 +865,6 @@ setHMMProfiles <- function(cell, composite){
 replicatingStates <- fread(file.path(env$ACTION_DIR, "composite_states.csv"))
 nonReplicatingStates <- replicatingStates[NAR == 0]
 getHmmSegments <- function(cell, composite){
-    shapeKey <- getShapeModelKey()
     repKey <- getRepModelKey(composite)
     cellStates <- copy(cell$states[[shapeKey]])
     setkey(cellStates, "NAME")
@@ -927,7 +926,6 @@ setReplicationModel <- function(cell){
     workingStep <<- "setReplicationModel"
     windows <- windows[[cell$windowPower + 1]]
     chroms  <- windows[, unique(chrom)]
-    shapeKey <- getShapeModelKey()
 
     # use CNV-corrected counts to establish cell-specific likelihoods for replication models
     cell$tmp$NR_wmsh <- with(cell, { windows[[shapeKey]]$NR_wms * ploidy / windows[[shapeKey]]$sequential$HMM }) 
@@ -982,7 +980,6 @@ nGcSteps <- 50
 gcIndices  <- 1:nGcSteps
 minPNar <- 0.01
 getP_gc_nar <- function(cell, gc_w, iteration) with(cell, {
-    shapeKey <- getShapeModelKey()
     repKey <- if(iteration == 1) "sequential" else "composite"
     cnNeutralI <- windows[[shapeKey]][[repKey]]$HMM[windows$fitI] == ploidy
     dt <- dcast(
@@ -1063,8 +1060,7 @@ getP_gc_nar <- function(cell, gc_w, iteration) with(cell, {
 # none of these are deterministic for a window, they are only trends determined from aggregated data
 # thus, the model output is not dictated or forced at any window by upstream preparative work
 #-------------------------------------------------------------------------------------
-suppressFalseCompositeCnvs <- function(cell){
-    shapeKey <- getShapeModelKey()    
+suppressFalseCompositeCnvs <- function(cell){    
     cell$segments[[shapeKey]]$composite <- getHmmSegments(cell, TRUE)
     checkReplicatingSegment <- function(i, requiredStates, fallbackState) with(cell$segments[[shapeKey]]$composite, {
         if(CN[i, !any(requiredStates %in% unlist(NAME))]){
@@ -1098,7 +1094,6 @@ suppressFalseCompositeCnvs <- function(cell){
 }
 solveCompositeHmm <- function(cell){
     workingStep <<- "solveCompositeHmm"
-    shapeKey <- getShapeModelKey()
 
     # get window values
     windows <- windows[[cell$windowPower + 1]]
@@ -1167,7 +1162,6 @@ solveCompositeHmm <- function(cell){
 #-------------------------------------------------------------------------------------
 finishShapeModel <- function(cell){
     workingStep <<- "finishShapeModel"
-    shapeKey <- getShapeModelKey()
     if(cell$replicationModel[[shapeKey]]$cellIsReplicating){
         cell$windows[[shapeKey]]$cnsd <- with(cell$windows[[shapeKey]], { min(sequential$cnsd, composite$cnsd) })
         cell$windows[[shapeKey]]$keep <- with(cell$windows[[shapeKey]], { sequential$keep || composite$keep })
@@ -1180,7 +1174,6 @@ finishShapeModel <- function(cell){
     cell
 }
 finishCell <- function(cell){
-    shapeKey <- getShapeModelKey()
     cell$cellIsReplicating <- cell$replicationModel[[shapeKey]]$cellIsReplicating
     cell$cnsd <- cell$windows[[shapeKey]]$cnsd
     cell$keep <- cell$windows[[shapeKey]]$keep
@@ -1189,35 +1182,39 @@ finishCell <- function(cell){
     for(key in c("fitI")) cell$windows[[key]] <- NULL
     for(key in c("shape", "density")) {
         cell$windows$unshaped[[key]] <- NULL
-        cell$windows$shaped[[key]] <- NULL
+        if(!is.null(cell$windows$shaped))  cell$windows$shaped[[key]]  <- NULL
+        if(!is.null(cell$windows$batched)) cell$windows$batched[[key]] <- NULL
     }
     for(key in c("stateI")) {
         cell$windows$unshaped$sequential[[key]] <- NULL
-        cell$windows$shaped$sequential[[key]] <- NULL
+        if(!is.null(cell$windows$shaped))  cell$windows$shaped$sequential[[key]]  <- NULL
+        if(!is.null(cell$windows$batched)) cell$windows$batched$sequential[[key]] <- NULL
         if(cell$cellIsReplicating) {
             cell$windows$unshaped$composite[[key]] <- NULL
-            cell$windows$shaped$composite[[key]] <- NULL
+            if(!is.null(cell$windows$shaped))  cell$windows$shaped$composite[[key]] <- NULL
+            if(!is.null(cell$windows$batched)) cell$windows$batched$composite[[key]] <- NULL
         }
     }
     for(key in c("NAME", "NAR", "FAR", "N_ALLELES")) {
         cell$segments$unshaped$sequential$CN[[key]] <- NULL
-        cell$segments$shaped$sequential$CN[[key]] <- NULL
+        if(!is.null(cell$segments$shaped))  cell$segments$shaped$sequential$CN[[key]] <- NULL
+        if(!is.null(cell$segments$batched)) cell$segments$batched$sequential$CN[[key]] <- NULL
         if(cell$cellIsReplicating) {
             cell$segments$unshaped$composite$CN[[key]] <- NULL
-            cell$segments$shaped$composite$CN[[key]] <- NULL
+            if(!is.null(cell$segments$shaped))  cell$segments$shaped$composite$CN[[key]] <- NULL
+            if(!is.null(cell$segments$batched)) cell$segments$batched$composite$CN[[key]] <- NULL
         }
     }
     for(key in c("NAME", "CN",  "NAR", "N_ALLELES")) {
         cell$segments$unshaped$sequential$FAR[[key]] <- NULL
-        cell$segments$shaped$sequential$FAR[[key]] <- NULL
+        if(!is.null(cell$segments$shaped))  cell$segments$shaped$sequential$FAR[[key]] <- NULL
+        if(!is.null(cell$segments$batched)) cell$segments$batched$sequential$FAR[[key]] <- NULL
         if(cell$cellIsReplicating) {
             cell$segments$unshaped$composite$FAR[[key]] <- NULL
-            cell$segments$shaped$composite$FAR[[key]] <- NULL
+            if(!is.null(cell$segments$shaped))  cell$segments$shaped$composite$FAR[[key]] <- NULL
+            if(!is.null(cell$segments$batched)) cell$segments$batched$composite$FAR[[key]] <- NULL
         }
     }
-    windows <- as.list(rep(NA, env$MAX_WINDOW_POWER + 1))
-    windows[[cell$windowPower + 1]] <- cell$windows
-    cell$windows <- windows
     cell    
 }
 #=====================================================================================
@@ -1227,7 +1224,7 @@ finishCell <- function(cell){
 # of individual chromosome coverage profiles, which results from amplification artifacts
 #-------------------------------------------------------------------------------------
 getNR_wms <- function(NR_wm, shape) { # apply the chromosome shape correction to NR_wm
-    if(!isShaped || length(shape) == 1) return(NR_wm)
+    if(shapeKey == "unshaped" || length(shape) == 1) return(NR_wm)
     NR_wms <- NR_wm / shape
     N_pre  <- sum(NR_wm,  na.rm = TRUE)
     N_post <- sum(NR_wms, na.rm = TRUE)
@@ -1278,37 +1275,53 @@ processChromShape <- function(cell, windows, I){ # shape fit a single chromosome
 }
 setChromShapes <- function(cell){
     workingStep <<- "setChromShapes"
-    shapeKey <- "unshaped"
     windows <- windows[[cell$windowPower + 1]]
     gc_w <- windows[, gc_fraction]    
     fitI <- cell$windows$fitI
-    NA_ <- with(cell$windows[[shapeKey]]$sequential, { HMM + NAR })
-    cell$tmp$NR_wmshr <- with(cell, { windows[[shapeKey]]$NR_wms * ploidy / (windows[[shapeKey]]$sequential$HMM + windows[[shapeKey]]$sequential$NAR) }) # thus, correct counts toward ploidy
-    cell$tmp$NR_wmsr  <- with(cell, { windows[[shapeKey]]$NR_wms * windows[[shapeKey]]$sequential$HMM / NA_ }) # correct toward unreplicated, CNVs persist
-    RPA <- predict(cell$replicationModel[[shapeKey]]$gc_fit, gc_w) # this is an unsquashed GC model corrected for both HMM and NAR
+    NA_ <- with(cell$windows$unshaped$sequential, { HMM + NAR })
+    cell$tmp$NR_wmshr <- with(cell, { windows$unshaped$NR_wms * ploidy / (windows$unshaped$sequential$HMM + windows$unshaped$sequential$NAR) }) # thus, correct counts toward ploidy
+    cell$tmp$NR_wmsr  <- with(cell, { windows$unshaped$NR_wms * windows$unshaped$sequential$HMM / NA_ }) # correct toward unreplicated, CNVs persist
+    RPA <- predict(cell$replicationModel$unshaped$gc_fit, gc_w) # this is an unsquashed GC model corrected for both HMM and NAR
     cell$tmp$CN_wmshr <- cell$tmp$NR_wmshr / RPA
     cell$tmp$CN_wmsr  <- cell$tmp$NR_wmsr  / RPA
     shape <- windows[, { # shape chromosomes one at a time
         processChromShape(cell, .SD, .I)
     }, by = "chrom"][[2]]
     plotWindows_cn(cell, "shapes", FALSE, gc_w, cell$tmp$NR_wmshr, windowI = TRUE, 
-                   gc_fit = cell$replicationModel[[shapeKey]]$gc_fit, shape = shape,
+                   gc_fit = cell$replicationModel$unshaped$gc_fit, shape = shape,
                    col = defaultPointColor)
     cell$nextWindows <- NULL # go back to the beginning to solve GC and replication, now with the benefit of chromosome shapes
     cell$tmp <- NULL
-    cell$windows$shaped <- fitCellWindows(cell$windowPower, windows, cell$windows[[shapeKey]]$NR_wms, shape)
-    shapeKey <- "shaped"    
+    shapeKey <<- "shaped" 
+    cell$windows$shaped <- fitCellWindows(cell$windowPower, windows, cell$windows$unshaped$NR_wms, shape)    
     cell
+}
+#=====================================================================================
+
+#=====================================================================================
+# apply a further correction to normalize for batch effects accross a given sample of cells
+#-------------------------------------------------------------------------------------
+setBatchShapes <- function(cell){
+    workingStep <<- "setBatchShapes"
+    windows <- windows[[cell$windowPower + 1]]
+    cell$nextWindows <- NULL # go back to the beginning to solve GC and replication, now with the benefit of chromosome shapes
+    cell$tmp <- NULL
+    workingShapeKey <- shapeKey
+    shapeKey <<- "batched"     
+    cell$windows$batched <- fitCellWindows(cell$windowPower, windows, cell$windows[[workingShapeKey]]$NR_wms, cell$windows$batched$shape)
+    plotCountDensity(cell)
+    plotNumber <<- plotNumber + 1
+    cell 
 }
 #=====================================================================================
 
 #=====================================================================================
 # main target function that launches the process
 #-------------------------------------------------------------------------------------
-fitCell_1 <- function(cell_id){ # usually the only fit_cell function that is called 
+fitCell_1 <- function(cell_id){ # creates the unshaped and shaped, i.e., cell-specific, fits
     plotNumber <<- 1 # so developer plots are ordered in lists as they were created
     workingStep <<- "fitCell_1"
-    isShaped <<- FALSE
+    shapeKey <<- "unshaped"
     cell <- list(
         cell_id  = cell_id,
         badCell  = FALSE,
@@ -1322,13 +1335,11 @@ fitCell_1 <- function(cell_id){ # usually the only fit_cell function that is cal
         cell$minWindowCount <- getMinWindowCount(env$PLOIDY)
         cell$minWindowPower <- getMinWindowPower(cell_id, cell$minWindowCount)
         cell <- setCellWindows(cell)
-        if(env$SHAPE_CORRECTION){
-            isShaped <<- TRUE
+        if(env$SHAPE_CORRECTION %in% c('cell', 'both')){
             cell <- setChromShapes(cell)
             cell <- setChromCN(cell)
         }
         cell <- finishCell(cell)
-        cell$plotNumber <- plotNumber # for developers using split analysis
     }, error = function(e) {
         message(paste("error at fitCell_1 step:", workingStep))
         message(paste("cell_id", cell_id))
@@ -1337,15 +1348,19 @@ fitCell_1 <- function(cell_id){ # usually the only fit_cell function that is cal
     })
     cell
 }
-fitCell_2 <- function(cell){ # can be used by developers testing later portions of cell_fit code
-    plotNumber <<- cell$plotNumber
-    workingStep <<- "fitCell_2"
-    if(cell$badCell) return(cell)
+fitCell_2 <- function(cell){ # creates the batched fits per cell, after running normalizeBatch on a set of cells from a sample
+    plotNumber <<- 100
+    workingStep <<- "fitCell_2"    
+    if(cell$badCell || is.null(cell$windows$batched)) return(cell)
     tryCatch({    
-        solveCompositeHmm(cell) # or, replace with another appropriate function call
+        shapeKey <<- if(env$SHAPE_CORRECTION %in% c('cell', 'both')) "shaped" else "unshaped"
+        cell <- setBatchShapes(cell)
+        cell <- setChromCN(cell)
+        plotBatchEffect(cell)
+        cell <- finishCell(cell)
     }, error = function(e) {
         message(paste("error at fitCell_2 step:", workingStep))
-        message(paste("cell_id", cell_id))
+        message(paste("cell_id", cell$cell_id))
         print(e)
         cell$badCell <- TRUE
     })
