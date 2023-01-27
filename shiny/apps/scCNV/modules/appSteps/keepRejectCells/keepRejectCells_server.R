@@ -23,27 +23,33 @@ settings <- activateMdiHeaderLinks( # uncomment as needed
     baseDirs = appStepDir, # for code viewer/editor
     settings = id, # for step-level settings
     # immediate = TRUE # plus any other arguments passed to settingsServer()
+    size = "m"
 )
 outcomes <- reactiveValues() # outcomes[[sourceId]][i] <- TRUE if library i failed
 overrides <- reactiveValues()
-isUserOverride <- Vectorize(function(cell_id, key, sourceId) {
-    !is.null(overrides[[sourceId]][[cell_id]][[key]]) && overrides[[sourceId]][[cell_id]][[key]]
+showFiltersAsOverrides <- reactive({
+    x <- settings$get("Page_Options", "Show_Filters_As")
+    if(isTruthy(x)) x == "User Overrides" else TRUE
 })
-getKeep <- function(bad, keep, cell_id, sourceId = NULL) {
+isUserOverride <- Vectorize(function(cell_id, key, sourceId, forceOverrides = TRUE) {
+    if(!forceOverrides && !showFiltersAsOverrides()) FALSE 
+    else !is.null(overrides[[sourceId]][[cell_id]][[key]]) && overrides[[sourceId]][[cell_id]][[key]]
+})
+getKeep <- function(bad, keep, cell_id, sourceId = NULL, forceOverrides = TRUE) {
     if(is.null(sourceId)) sourceId <- sourceId()
-    overridden <- isUserOverride(cell_id, "keep", sourceId)
+    overridden <- isUserOverride(cell_id, "keep", sourceId, forceOverrides)
     (!bad &  keep & !overridden) | 
     (!bad & !keep &  overridden)
 }
-getRejected <- function(bad, keep, cell_id, sourceId = NULL){
+getRejected <- function(bad, keep, cell_id, sourceId = NULL, forceOverrides = TRUE){
     if(is.null(sourceId)) sourceId <- sourceId()
-    overridden <- isUserOverride(cell_id, "keep", sourceId)
+    overridden <- isUserOverride(cell_id, "keep", sourceId, forceOverrides)
     (!bad & !keep & !overridden) | 
     (!bad &  keep &  overridden)
 }
-getReplicating <- function(bad, replicating, cell_id, sourceId = NULL){
+getReplicating <- function(bad, replicating, cell_id, sourceId = NULL, forceOverrides = TRUE){
     if(is.null(sourceId)) sourceId <- sourceId()
-    overridden <- isUserOverride(cell_id, "replicating", sourceId)
+    overridden <- isUserOverride(cell_id, "replicating", sourceId, forceOverrides)
     !bad & replicating & !overridden
 }
 
@@ -66,13 +72,13 @@ cells <- reactive({
             input$cellStatus,
             All    = rep(TRUE, .N),
             Bad    = bad,
-            Keep   = getKeep(bad, keep, cell_id, sourceId),
-            Reject = getRejected(bad, keep, cell_id, sourceId)
+            Keep   = getKeep(bad, keep, cell_id, sourceId, FALSE),
+            Reject = getRejected(bad, keep, cell_id, sourceId, FALSE)
         ) & switch(
             input$replicating,
             All = TRUE,
-            Yes = !bad &  getReplicating(bad, replicating, cell_id, sourceId),
-            No  = !bad & !getReplicating(bad, replicating, cell_id, sourceId)
+            Yes = !bad &  getReplicating(bad, replicating, cell_id, sourceId, FALSE),
+            No  = !bad & !getReplicating(bad, replicating, cell_id, sourceId, FALSE)
         ) & (projectCellIds[1] == ALL | cell_id %in% projectCellIds) &
           if(input$cellIdFilter != ALL) cell_id == input$cellIdFilter else TRUE
     }]
@@ -83,14 +89,15 @@ cells <- reactive({
         maxPage = ceiling(n / input$cellsPerPage)
     )
 })
+
 slopes <- reactive({
     project <- project()
     req(project)    
     sapply(project$colData$cell_id, function(cell_id){
         cell <- project$cells[[cell_id]]
         if(cell$badCell) return(NA)
-        shapeModel <- settings$get("Page_Options", "Shape_Model")
-        cw <- cell$windows[[shapeModel]]
+        shapeModel <- getShapeModel(settings, cell)
+        cw <- cell$windows[[shapeModel$key]]
         gc_fit <- cw$sequential$gc_fit
         if(is.null(gc_fit)) return(NA)
         gc <- gc_fit$gcFractions
@@ -130,10 +137,10 @@ observeEvent(sourceId(), {
 observeEvent(input$sampleNameFilter, {
     updateCellFilter()
 })
-observeEvent(cells(), {
-    freezeReactiveValue(input, "pageNumber")
-    updateTextInput(session, "pageNumber", value = 1)
-})
+# observeEvent(cells(), {
+#     freezeReactiveValue(input, "pageNumber")
+#     updateTextInput(session, "pageNumber", value = 1)
+# })
 
 #----------------------------------------------------------------------
 # a stack of individual cell plots

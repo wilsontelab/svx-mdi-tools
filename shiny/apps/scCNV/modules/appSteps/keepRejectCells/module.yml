@@ -41,24 +41,30 @@ settings:
                 - slope
             value: windowPower
         Order:
-            type: radioButtons
+            type: selectInput
             choices:
                 - Ascending
                 - Descending
             value: Ascending 
         Shape_Model:
-            type: radioButtons
+            type: selectInput
             choices:
+                - Batched  
+                - Shaped                          
                 - Unshaped            
-                - Shaped
-                - Batched
             value: Batched   
         Replication_Model:
-            type: radioButtons
+            type: selectInput
             choices:
                 - Sequential
                 - Composite
             value: Sequential 
+        Show_Filters_As:
+            type: selectInput
+            choices:
+                - User Overrides            
+                - Pipeline Values
+            value: User Overrides 
 #         Track_Height_Pixels:
 #             type:   numericInput
 #             value:  300

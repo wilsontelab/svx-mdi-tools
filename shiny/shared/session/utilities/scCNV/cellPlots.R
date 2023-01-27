@@ -1,3 +1,37 @@
+#----------------------------------------------------------------------
+# parse metadata on how to plot a cell given it's pipeline options and cell outcomes
+#----------------------------------------------------------------------
+shapeModels <- c( # in priority order
+    "Batched",
+    "Shaped",
+    "Unshaped"
+)
+getShapeModel <- function(settings, cell){
+    model <- settings$get("Page_Options", "Shape_Model")
+    while(!(tolower(model) %in% names(cell$windows))) 
+        model <- shapeModels[which(shapeModels == model) + 1]
+    list(
+        model = model,
+        key = tolower(model)
+    )
+}
+getReplicationModel <- function(settings, cell, getReplicating){
+    model <- settings$get("Page_Options", "Replication_Model")
+    isReplicating <- if(is.null(getReplicating)) cell$cellIsReplicating 
+                     else getReplicating(cell$badCell, cell$cellIsReplicating, cell$cell_id)
+    forceSequential <- isReplicating && model == "Sequential"    
+    list(
+        model = model,
+        key = if(!isReplicating || forceSequential) "sequential" else "composite",
+        isReplicating = isReplicating,
+        forceSequential = forceSequential,
+        isSequential = model == "Sequential"
+    )
+}
+
+#----------------------------------------------------------------------
+# make a composite plot of a single cell
+#----------------------------------------------------------------------
 pointOpacity <- function(x){
     min(1, max(0.15, -1/6000 * length(x) + 1))
 }
@@ -25,7 +59,7 @@ plotCellByWindow <- function(y, ylab, h, v, col = NULL, yaxt = NULL, ymax = NULL
     abline(h = h, v = v, col = "grey")
     points(x, y, pch = 19, cex = 0.4, col = col)
 }
-plotCellQC <- function(project, cell, shapeKey, repKey, isReplicating){
+plotCellQC <- function(project, cell, shapeModel, replicationModel){
     w <- project$windows[[cell$windowPower + 1]]
     v <- c(0, w[, max(i), by = "chrom"][[2]]) + 0.5
     if(cell$badCell){
@@ -45,14 +79,13 @@ plotCellQC <- function(project, cell, shapeKey, repKey, isReplicating){
         plotCellByWindow(cw$NR_wms, "# Reads", h = max(cw$NR_wms, na.rm = TRUE), v = v)
         
     } else {
-        isSequential <- repKey == "sequential"
         cw_pre <- cell$windows$unshaped
-        cw_post <- cell$windows[[shapeKey]]
-        if(is.null(cw_post)) {
-            shapeKey <- "unshaped" # this sample was not analyzed with the requested shape correction, fall back
-            cw_post <- cw_pre
-        } 
-        cww <- cw_post[[repKey]]
+        cw_post <- cell$windows[[shapeModel$key]]
+        # if(is.null(cw_post)) {
+        #     shapeKey <- "unshaped" # this sample was not analyzed with the requested shape correction, fall back
+        #     cw_post <- cw_pre
+        # } 
+        cww <- cw_post[[replicationModel$key]]
         cww$NA_ <- cww$HMM + cww$NAR
 
         # plot selected model's NR_wms vs. gc_w (color as final replication call)
@@ -60,15 +93,15 @@ plotCellQC <- function(project, cell, shapeKey, repKey, isReplicating){
         N <- length(cw_post$NR_wms)
         N_d <- min(1e4, N)
         I <- sample.int(N, N_d)
-        RPA <- cw_post$NR_wms[I] / (if(isSequential) cww$HMM[I] else cww$NA_[I])
-        colNA <- if(isReplicating) round(cww$NAR[I] * cell$ploidy / cww$HMM[I], 0) else rep(0, N_d)
+        RPA <- cw_post$NR_wms[I] / (if(replicationModel$isSequential) cww$HMM[I] else cww$NA_[I])
+        colNA <- if(replicationModel$isReplicating) round(cww$NAR[I] * cell$ploidy / cww$HMM[I], 0) else rep(0, N_d)
         plot(w$gc_fraction[I], RPA, 
             xlab = "Fraction GC", xlim = c(0.3, 0.6), 
             ylab = "Reads Per Allele", ylim = c(0, quantile(RPA[RPA < Inf], 0.975, na.rm = TRUE) * 1.5),
             pch = 19, cex = 0.4, 
             col = getWindowColors(colNA + 1)               
         )
-        gc_fit <- if(isSequential) cww$gc_fit else cell$replicationModel[[shapeKey]]$gc_fit 
+        gc_fit <- if(replicationModel$isSequential) cww$gc_fit else cell$replicationModel[[shapeModel$key]]$gc_fit 
         with(gc_fit, { for(percentile in c(0.025, 0.975)) lines(
             gcFractions, 
             qnbinom(percentile, size = theta, mu = mu), 
@@ -78,7 +111,7 @@ plotCellQC <- function(project, cell, shapeKey, repKey, isReplicating){
         # plot NR_wm vs. window index, i.e., pre-normalization input (color as final replication call)
         par(mar = c(0.1, 4.1, 0.1, 0.1), cex = 1)
         maxPlotNa <- max(cww$NA_, na.rm = TRUE) + 2
-        colNA <- if(isReplicating) round(cww$NAR * cell$ploidy / cww$HMM, 0) else rep(0, length(cww$HMM))
+        colNA <- if(replicationModel$isReplicating) round(cww$NAR * cell$ploidy / cww$HMM, 0) else rep(0, length(cww$HMM))
         plotCellByWindow(cw_pre$NR_wms, "# Reads", 
                          h = cw_pre$RPA * 0:round(maxPlotNa, 0), v = v, 
                          ymax = max(cw_pre$RPA * maxPlotNa, quantile(cw_pre$NR_wms, 0.95, na.rm = TRUE)),
@@ -88,32 +121,36 @@ plotCellQC <- function(project, cell, shapeKey, repKey, isReplicating){
         par(mar = c(0.1, 4.1, 0.1, 0.1), cex = 1)
         maxPlotNa <-  max(cww$HMM, 3, na.rm = TRUE) + 1
         sampleName <- project$manifest[Sample_ID == cell$cell_id, Sample_Name]
-        cellHMM <- project$sampleProfiles[[sampleName]][[cell$windowPower + 1]]        
+        sampleHMM <- project$sampleProfiles[[sampleName]][[cell$windowPower + 1]]        
         plotCellByWindow(cww$CN, "CN", h = 0:maxPlotNa, v = v, 
-                         col = getWindowColors(cww$HMM - cellHMM + cell$ploidy), yaxt = "n")
+                         col = getWindowColors(cww$HMM - sampleHMM + cell$ploidy), yaxt = "n")
         axis(2, at=0:maxPlotNa, labels=0:maxPlotNa) 
 
-        # segments <- cell$segments[[shapeKey]][[repKey]]$CN
-        # HMM <- unlist(sapply(1:nrow(segments), function(j){
-        #     x <- segments[j]
-        #     length <- x[, chromEndI - chromStartI + 1]
-        #     if(length < 10) return(rep(as.integer(NA), length))
-        #     w[chrom == x$chrom][x$chromStartI:x$chromEndI, cww$HMM[i]]
-        # }))
-        # lines(1:length(HMM), HMM, col = "red")
-        lines(1:length(cww$HMM), cww$HMM, col = "red")  
+        # add HMM traces to CN plot
+        lines(1:length(sampleHMM), sampleHMM, col = "black")
+        segments <- cell$segments[[shapeModel$key]][[replicationModel$key]]$CN
+        maskedHMM <- unlist(sapply(1:nrow(segments), function(j){
+            x <- segments[j]
+            length <- x[, chromEndI - chromStartI + 1]
+            c_i <- x$chromStartI:x$chromEndI
+            w_i <- w[chrom == x$chrom, i]
+            cell   <- cww$HMM[w_i][c_i]
+            sample <- sampleHMM[w_i][c_i]
+
+            tooSmall <- length < 100 # TODO: expose as setting, then 1) vertical lines 2) save outcomes,etc. 
+
+            ifelse(cell == sample, cell, if(tooSmall) rep(as.integer(NA), length) else cell)
+        }))
+        lines(1:length(maskedHMM), maskedHMM, col = "red")
+
+        # lines(1:length(cww$HMM), cww$HMM, col = "red")  
     }
 }
 getCellCompositePlot <- function(project, cell, settings, getReplicating){
     name <- if(cell$badCell) "bad" else {
-        shapeModel <- settings$get("Page_Options", "Shape_Model")
-        shapeKey <- tolower(shapeModel)
-        replicationModel <- settings$get("Page_Options", "Replication_Model")
-        isReplicating <- if(is.null(getReplicating)) cell$cellIsReplicating 
-                         else getReplicating(cell$badCell, cell$cellIsReplicating, cell$cell_id)            
-        forceSequential <- isReplicating && replicationModel == "Sequential"
-        repKey <- if(!isReplicating || forceSequential) "sequential" else "composite"
-        paste(shapeKey, repKey, isReplicating, sep = "_")
+        shapeModel <- getShapeModel(settings, cell)
+        replicationModel <- getReplicationModel(settings, cell, getReplicating)
+        paste(shapeModel$key, replicationModel$key, replicationModel$isReplicating, sep = "_")
     }
     fileName <- paste(cell$cell_id, "qc", name, "png", sep = ".")
     pngFile <- file.path(project$qcPlotsDir, fileName)
@@ -134,11 +171,15 @@ getCellCompositePlot <- function(project, cell, settings, getReplicating){
             type = "cairo"
         )
         layout(matrix(c(c(1,1), rep(c(2,3), 5)), nrow = 2, ncol = 6))
-        plotCellQC(project, cell, shapeKey, repKey, isReplicating)
+        plotCellQC(project, cell, shapeModel, replicationModel)
         dev.off()
     }
     tags$img(src = pngFileToBase64(pngFile), style = "vertical-align: top;")
 }
+
+#----------------------------------------------------------------------
+# create a div of metadata about a cell and buttons to manipulate it
+#----------------------------------------------------------------------
 getCellSummary <- function(project, cell, buttons){
     colData <- project$colData[cell$cell_id]
     desc <- project$manifest[as.character(Sample_ID) == cell$cell_id, Description]
@@ -153,6 +194,10 @@ getCellSummary <- function(project, cell, buttons){
         ) 
     )
 }
+
+#----------------------------------------------------------------------
+# master function for plotting a single cell
+#----------------------------------------------------------------------
 plotOneCellUI <- function(project, cell, settings, buttons = NULL, getReplicating = NULL){
     req(project)
     tags$div(
