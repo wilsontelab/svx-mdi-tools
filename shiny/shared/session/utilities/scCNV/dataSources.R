@@ -15,10 +15,6 @@ normalizeDataReactive <- function(sourceId, ...){
         setkey(x$colData, "cell_id")  
         x$qcPlotsDir <- expandSourceFilePath(sourceId, "qc_plots")
         if(!dir.exists(x$qcPlotsDir)) dir.create(x$qcPlotsDir)
-        # if(!dir.exists(x$qcPlotsDir)) untar(
-        #     getSourceFilePath(sourceId, "plotsArchive"), 
-        #     exdir = x$qcPlotsDir
-        # )
         stopSpinner(session)
         x
     }) 

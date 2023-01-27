@@ -28,7 +28,7 @@ keepRejectCellsUI <- function(id, options) {
         code = serverEnv$IS_DEVELOPER,
         settings = TRUE,
 
-        # box for selecting sample source
+        # box for selecting data source
         dataSourceTableUI(
             ns("source"), 
             "Project Source", 

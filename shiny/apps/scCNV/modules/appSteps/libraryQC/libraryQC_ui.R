@@ -17,6 +17,14 @@ libraryQCUI <- function(id, options) {
         HTML(options$longLabel),
         leaderText,
 
+        # page header links
+        id = id,
+        # documentation = TRUE,
+        # terminal = TRUE,
+        console = serverEnv$IS_DEVELOPER,
+        code = serverEnv$IS_DEVELOPER,
+        settings = TRUE,
+
         # box for selecting sample source
         dataSourceTableUI(
             ns("source"), 
@@ -25,49 +33,25 @@ libraryQCUI <- function(id, options) {
             collapsible = TRUE
         ),
 
-        fluidRow( box(
-            width = 12,
-            column(
-                width = 12,
-                textOutput(ns('nFailedLibraries'), inline = TRUE)           
-            )
-        ) ),
+        # fluidRow( box(
+        #     width = 12,
+        #     column(
+        #         width = 12,
+        #         textOutput(ns('nFailedLibraries'), inline = TRUE)           
+        #     )
+        # ) ),
 
         # box with plots to explore QC metric relationships and click to reject cells
-        fluidRow(
-            # mdiInteractivePlotUI(ns("nReads_vs_alignRate")),
-            staticPlotBoxUI(
-                ns("nReads_vs_alignRate"),
-                NULL, 
-                documentation = serverEnv$IS_DEVELOPER,
-                code = serverEnv$IS_DEVELOPER,
-                console = serverEnv$IS_DEVELOPER,
-                terminal = FALSE 
-            ),
-            staticPlotBoxUI(
-                ns("nReads_vs_dupRate"),
-                NULL, 
-                documentation = serverEnv$IS_DEVELOPER,
-                code = serverEnv$IS_DEVELOPER,
-                console = serverEnv$IS_DEVELOPER,
-                terminal = FALSE 
-            ),
-            staticPlotBoxUI(
-                ns("nReads_vs_windowPower"),
-                NULL, 
-                documentation = serverEnv$IS_DEVELOPER,
-                code = serverEnv$IS_DEVELOPER,
-                console = serverEnv$IS_DEVELOPER,
-                terminal = FALSE 
-            ),
-            staticPlotBoxUI(
-                ns("nReads_vs_cnsd"),
-                NULL, 
-                documentation = serverEnv$IS_DEVELOPER,
-                code = serverEnv$IS_DEVELOPER,
-                console = serverEnv$IS_DEVELOPER,
-                terminal = FALSE 
-            )
-        )
+        fluidRow( box(
+            width = 12,
+            mdiInteractivePlotUI(ns("nReads_vs_alignRate")),
+            mdiInteractivePlotUI(ns("nReads_vs_dupRate")),
+            mdiInteractivePlotUI(ns("nReads_vs_windowPower")),
+            mdiInteractivePlotUI(ns("nReads_vs_cnsd")),
+        )),
+        fluidRow( box(
+            width = 12,
+            uiOutput(ns("cellPlot"))            
+        ))
     )    
 }

@@ -33,6 +33,7 @@ build.scCNV_cell_xyTrack <- function(track, reference, coord, layout){
     shapeModel <- track$settings$get("Plot_Options", "Shape_Model")
     shapeKey <- tolower(shapeModel)
     replicationModel <- track$settings$get("Plot_Options", "Replication_Model")
+    forceSequential <- cell$cellIsReplicating && replicationModel == "Sequential"
     repKey <- if(!cell$cellIsReplicating || forceSequential) "sequential" else "composite"
     w <- x$windows[[cell$windowPower + 1]]
     cw <- cell$windows[[shapeKey]]
@@ -46,8 +47,8 @@ build.scCNV_cell_xyTrack <- function(track, reference, coord, layout){
     padding <- padding(track, layout)
     height <- height(track, 3) + padding$total # or set a known, fixed height in inches
     maxCN <- 6
-    # ylim <- c(0, cw$RPA * maxCN)
-    ylim <- c(0, maxCN)
+    ylim <- c(0, cw$RPA * maxCN)
+    # ylim <- c(0, maxCN)
 
     pointOpacity <- 1
     defaultPointColor <- rgb(0, 0, 0, pointOpacity)
@@ -86,10 +87,10 @@ build.scCNV_cell_xyTrack <- function(track, reference, coord, layout){
             ylim = ylim,  ylab = "# Reads",
             xaxs = "i", yaxs = "i") # always set `xaxs` and `yaxs` to "i"
 
-        # points(w[chromI, start], cw$NR_wms[chromI], pch = 16, cex = 1, col = getCnColor(cw[[repKey]]$NAR[chromI] + 1))
-        points(w[chromI, start], cw[[repKey]]$CN[chromI], pch = 16, cex = 1, col = getCnColor(cw[[repKey]]$HMM[chromI] + 1))
+        points(w[chromI, start], cw$NR_wms[chromI], pch = 16, cex = 1, col = getCnColor(cw[[repKey]]$NAR[chromI] + 1))
+        # points(w[chromI, start], cw[[repKey]]$CN[chromI], pch = 16, cex = 1, col = getCnColor(cw[[repKey]]$HMM[chromI] + 1))
         # points(w[chromI, start], rep(cw$RPA * 0.5, sum(chromI)), pch = 16, cex = 1, col = getGcColor(w[chromI, gc_fraction]))
-        # points(w[chromI, start], rep(cw$RPA * 0.7, sum(chromI)), pch = 16, cex = 1, col = getCnColor(cw$HMM[chromI]))
+        points(w[chromI, start], rep(cw$RPA * 0.7, sum(chromI)), pch = 16, cex = 1, col = getCnColor(cw[[repKey]]$HMM[chromI]))
         # points(w[chromI, start], rep(cw$RPA * 0.8, sum(chromI)), pch = 16, cex = 1, col = getCnColor(cw$NAR[chromI] + 1))
 
         # lines(w$start, x$hmm[[cellI]], lwd = 2, col = "red")

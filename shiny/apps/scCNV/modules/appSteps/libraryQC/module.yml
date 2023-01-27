@@ -20,7 +20,21 @@ sourceTypes:
 #----------------------------------------------------------------------
 # settings: use camel case and '_' in names (it is replaced with a space in the UI)
 #----------------------------------------------------------------------
-# settings:
+settings:
+    Page_Options:
+        Shape_Model:
+            type: radioButtons
+            choices:
+                - Unshaped            
+                - Shaped
+                - Batched
+            value: Batched   
+        Replication_Model:
+            type: radioButtons
+            choices:
+                - Sequential
+                - Composite
+            value: Sequential 
 #     QC_Thresholds:
 #         Minimum_Unique_Reads_M:
 #             type:   numericInput

@@ -74,8 +74,10 @@ unlink(paste(env$PLOT_PREFIX, "*", sep = "."))
 # perform standard actions to load and parse genome bins
 #-------------------------------------------------------------------------------------
 scCnvSharedDir <- file.path(env$MODULES_DIR, 'scCNV')
-sourceScripts(scCnvSharedDir, c('loadHdf5', 'parseGenomeBins', 'fitCells', 'normalizeBatch'))
-source(file.path(rUtilDir, 'smooth.R'))
+sourceScripts(scCnvSharedDir, c(
+    'loadHdf5', 'parseGenomeBins', 
+    'fitCells', 'normalizeBatch', 'collateCNVs'
+))
 #=====================================================================================
 
 #=====================================================================================
@@ -84,7 +86,7 @@ source(file.path(rUtilDir, 'smooth.R'))
 message('characterizing individual cells')
 # cell_ids <- as.character(c(53,126,145,317,298,316,79,141,144,16))
 # cell_ids <- as.character(c(3, 70, 37, 8, 90, 81, 78))
-# cell_ids <- "0"
+# cell_ids <- "95"
 # cells <- lapply(cell_ids, fitCell_1)
 cells <- mclapply(cell_ids, fitCell_1, mc.cores = env$N_CPU)
 names(cells) <- cell_ids
@@ -177,9 +179,10 @@ manifest <- if(env$MANIFEST_FILE_IN != "NA"){
     names(m)[names(m) %in% c("", "", "", "")]
     x <- data.table(
         Project     = env$DATA_NAME,
-        Sample_ID   = colData$cell_id, # the index value, i.e. "0", "1", etc.
-        Sample_Name = m[colData$cell_name, Sample_Name],
-        Cell_Name   = m[colData$cell_name, Cell_Name],
+        Sample_ID   = colData$cell_id, # the index value, i.e. "0", "1", etc.; this is actually a CELL ID but is called Sample_ID per MDI standards
+        Sample_Name = m[colData$cell_name, Sample_Name], # this is an identifier for a sample of multiple cells, need not be unique in a manifest
+        Cell_Name   = m[colData$cell_name, Cell_Name], # together, Project + Sample_Name + Cell_Name should be unique, as is Project + Sample_ID
+        Cell_Type   = m[colData$cell_name, if(is.null(m$Cell_Type)) "unspecified" else Cell_Type],
         Description = m[colData$cell_name, if(is.null(m$Description)) paste(Sample_Name, Cell_Name, sep = ":") else Description]
     )
     cbind(x, m[colData$cell_name, .SD, .SDcols = names(m)[!(names(m) %in% names(x))]])
@@ -190,6 +193,7 @@ manifest <- if(env$MANIFEST_FILE_IN != "NA"){
         Sample_ID   = colData$cell_id,
         Sample_Name = env$DATA_NAME,
         Cell_Name   = cellNames,
+        Cell_Type   = "unspecified",
         Description = cellNames
     ) 
 }
@@ -200,13 +204,14 @@ manifest[, ":="(
 #=====================================================================================
 
 #=====================================================================================
-# compare cells across a batch, i.e., a sample
+# compare cells across a batch, i.e., a sample of mutiple cells
+# this is not applied across multiple samples, since they might have different baseline CN states
 #-------------------------------------------------------------------------------------
 sampleNames <- unique(manifest$Sample_Name)
 if(env$SHAPE_CORRECTION %in% c('sample', 'both')){ # normalize windows for batch effects
     message('calculating multi-cell batch correction, i.e., common shape by sample')
     for(sampleName in sampleNames){
-        cell_ids <- manifest[Sample_Name == sampleName, Sample_ID]
+        cell_ids <- manifest[Sample_Name == sampleName, Sample_ID] # again, in manifests, Sample_ID == cell_id
         cells[cell_ids] <- normalizeBatch(sampleName, cells[cell_ids])
     }
 
@@ -215,11 +220,25 @@ if(env$SHAPE_CORRECTION %in% c('sample', 'both')){ # normalize windows for batch
     shapeKey <- "batched"
     updateColData()
 }
-sampleProfiles <- lapply(sampleNames, function(sampleNames){ # determine the sample's reference CN
+sampleProfiles <- lapply(sampleNames, function(sampleNames){ # determine each sample's reference CN, i.e., the most common cell values
     cell_ids <- manifest[Sample_Name == sampleNames, Sample_ID]
     getSampleProfile(cells[cell_ids])
 })
 names(sampleProfiles) <- sampleNames
+#=====================================================================================
+
+# stop("XXXXXXXXXXXXXXXXX")
+DIR <- env$TASK_ACTION_DIR
+R_DATA_FILE <- file.path(DIR, "TEST2.RData")
+save.image(R_DATA_FILE)
+# load(R_DATA_FILE)
+
+#=====================================================================================
+# perform cross-comparisons of CNV segments between all cells in all samples
+# this is not sample-specific, to allow for shared CNVs across similar samples (e.g., a mouse strain)
+#-------------------------------------------------------------------------------------
+cnvs <- collateCNVs(cells)
+# stop("XXXXXXXXXXXXXXXXX")
 #=====================================================================================
 
 #=====================================================================================
@@ -232,13 +251,15 @@ saveRDS(list(
     rowRanges = rowRanges, 
     windows = windows,
     colData = colData,
+    manifest = manifest,
     cells = cells,
     raw_counts = raw_counts,
     states = list(
         replicating = replicatingStates,
         nonReplicating = nonReplicatingStates
     ),
-    sampleProfiles = sampleProfiles
+    sampleProfiles = sampleProfiles,
+    cnvs = cnvs
 ), file  = env$OUTPUT_FILE)
 write.table(
     manifest, 

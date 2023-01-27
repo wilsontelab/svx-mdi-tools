@@ -26,19 +26,25 @@ settings <- activateMdiHeaderLinks( # uncomment as needed
 )
 outcomes <- reactiveValues() # outcomes[[sourceId]][i] <- TRUE if library i failed
 overrides <- reactiveValues()
-isUserOverride <- Vectorize(function(cell_id, sourceId = NULL) {
-    if(is.null(sourceId)) sourceId <- sourceId()
-    !is.null(overrides[[sourceId]][[cell_id]]) && overrides[[sourceId]][[cell_id]]
+isUserOverride <- Vectorize(function(cell_id, key, sourceId) {
+    !is.null(overrides[[sourceId]][[cell_id]][[key]]) && overrides[[sourceId]][[cell_id]][[key]]
 })
-getKeep <- function(bad, keep, cell_id, sourceId) {
-    overridden <- isUserOverride(cell_id, sourceId)
+getKeep <- function(bad, keep, cell_id, sourceId = NULL) {
+    if(is.null(sourceId)) sourceId <- sourceId()
+    overridden <- isUserOverride(cell_id, "keep", sourceId)
     (!bad &  keep & !overridden) | 
     (!bad & !keep &  overridden)
 }
-getRejected <- function(bad, keep, cell_id, sourceId){
-    overridden <- isUserOverride(cell_id, sourceId)
+getRejected <- function(bad, keep, cell_id, sourceId = NULL){
+    if(is.null(sourceId)) sourceId <- sourceId()
+    overridden <- isUserOverride(cell_id, "keep", sourceId)
     (!bad & !keep & !overridden) | 
     (!bad &  keep &  overridden)
+}
+getReplicating <- function(bad, replicating, cell_id, sourceId = NULL){
+    if(is.null(sourceId)) sourceId <- sourceId()
+    overridden <- isUserOverride(cell_id, "replicating", sourceId)
+    !bad & replicating & !overridden
 }
 
 #----------------------------------------------------------------------
@@ -49,18 +55,13 @@ sourceId <- dataSourceTableServer(
     selection = "single"
 )
 # projectName <- projectNameReactive(sourceId)
-sample <- normalizeDataReactive(sourceId)
-manifest <- reactive({
-    sourceId <- sourceId()
-    req(sourceId)
-    fread(getSourceFilePath(sourceId, "manifestFile"))
-})
+project <- normalizeDataReactive(sourceId)
 cells <- reactive({
-    sample <- sample()
-    req(sample)  
+    project <- project()
+    req(project)  
     sourceId <- sourceId()
-    sampleCellIds <- sampleCellIds()
-    i <- sample$colData[, {
+    projectCellIds <- projectCellIds()
+    i <- project$colData[, {
         switch(
             input$cellStatus,
             All    = rep(TRUE, .N),
@@ -70,9 +71,9 @@ cells <- reactive({
         ) & switch(
             input$replicating,
             All = TRUE,
-            Yes = !bad &  replicating,
-            No  = !bad & !replicating
-        ) & (sampleCellIds[1] == ALL | cell_id %in% sampleCellIds) &
+            Yes = !bad &  getReplicating(bad, replicating, cell_id, sourceId),
+            No  = !bad & !getReplicating(bad, replicating, cell_id, sourceId)
+        ) & (projectCellIds[1] == ALL | cell_id %in% projectCellIds) &
           if(input$cellIdFilter != ALL) cell_id == input$cellIdFilter else TRUE
     }]
     n <- sum(i)
@@ -83,10 +84,10 @@ cells <- reactive({
     )
 })
 slopes <- reactive({
-    sample <- sample()
-    req(sample)    
-    sapply(sample$colData$cell_id, function(cell_id){
-        cell <- sample$cells[[cell_id]]
+    project <- project()
+    req(project)    
+    sapply(project$colData$cell_id, function(cell_id){
+        cell <- project$cells[[cell_id]]
         if(cell$badCell) return(NA)
         shapeModel <- settings$get("Page_Options", "Shape_Model")
         cw <- cell$windows[[shapeModel]]
@@ -104,23 +105,23 @@ slopes <- reactive({
 # cascade update sample and cell selectors
 #----------------------------------------------------------------------
 ALL <- "__ALL__"
-sampleCellIds <- reactiveVal(ALL)
+projectCellIds <- reactiveVal(ALL)
 updateCellFilter <- function(){
-    manifest <- manifest()
-    req(manifest)
-    i <- manifest[, input$sampleNameFilter == ALL | Sample_Name == input$sampleNameFilter]
-    choices <- manifest[i, Sample_ID]
-    names(choices) <- manifest[i, Description]
-    sampleCellIds(choices)
+    project <- project()
+    req(project)
+    i <- project$manifest[, input$sampleNameFilter == ALL | Sample_Name == input$sampleNameFilter]
+    choices <- project$manifest[i, Sample_ID]
+    names(choices) <- project$manifest[i, Description]
+    projectCellIds(choices)
     freezeReactiveValue(input, "pageNumber")
     updateTextInput(session, "pageNumber", value = 1)
     freezeReactiveValue(input, "cellIdFilter")
     updateSelectInput(session, "cellIdFilter", choices = c(All = ALL, sort(choices)), selected = ALL)    
 }
 observeEvent(sourceId(), {
-    manifest <- manifest()
-    req(manifest)
-    choices <- manifest$Sample_Name
+    project <- project()
+    req(project)
+    choices <- project$manifest$Sample_Name
     names(choices) <- choices
     freezeReactiveValue(input, "sampleNameFilter")
     updateSelectInput(session, "sampleNameFilter", choices = c(All = ALL, sort(unique(choices))), selected = ALL)
@@ -137,185 +138,65 @@ observeEvent(cells(), {
 #----------------------------------------------------------------------
 # a stack of individual cell plots
 #----------------------------------------------------------------------
-pointOpacity <- function(x){
-    min(1, max(0.15, -1/6000 * length(x) + 1))
-}
-getWindowColors <- function(x, pointOpacity = NULL){ # by CN (regardless of ploidy)
-    if(is.null(pointOpacity)) pointOpacity <- pointOpacity(x)
-    defaultPointColor <- rgb(0, 0, 0, pointOpacity)
-    windowColors <- c(     
-        defaultPointColor,                 # 0 = black/grey (absence of color/copies...)
-        rgb(0.1,   0.1,    0.8,   pointOpacity), # 1 = blue ("cool" colors are losses)
-        rgb(0.1, 0.8,  0.1, pointOpacity), # 2 = subdued green ("good/go" for typical CN neutral)
-        rgb(1,   0,    0,   pointOpacity), # 3 = red ("hot" colors are gains)
-        rgb(1,   0.65, 0,   pointOpacity), # 4 = orange
-        defaultPointColor                  # 5 = back to black/grey to make it obvious
-    )
-    col <- windowColors[pmin(x, 5) + 1]
-    col[is.na(col)] <- defaultPointColor
-    col
-}
-plotCellByWindow <- function(y, ylab, h, v, col = NULL, yaxt = NULL, ymax = NULL){
-    if(is.null(col)) col <- rgb(0, 0, 0, pointOpacity(y))
-    x <- 1:length(y)
-    if(is.null(ymax)) ymax <- max(h)
-    plot(NA, NA, bty = "n", xaxt = "n", yaxt = yaxt,
-         xlab = NULL, ylab = ylab, xlim = range(x), ylim = c(0, ymax))
-    abline(h = h, v = v, col = "grey")
-    points(x, y, pch = 19, cex = 0.4, col = col)
-}
-plotCellQC <- function(pngFile, sample, cell){
-    png(
-        filename = pngFile,
-        width  = 1.5 * 6, 
-        height = 1.35, 
-        units = "in", 
-        pointsize = 7,
-        bg = "white",
-        res = 96, # i.e., optimized for on-screen display
-        type = "cairo"
-    )
-    layout(matrix(c(c(1,1), rep(c(2,3), 5)), nrow = 2, ncol = 6))
-
-    w <- sample$windows[[cell$windowPower + 1]]
-    v <- c(0, w[, max(i), by = "chrom"][[2]]) + 0.5
-
-    if(cell$badCell){
-        cw <- cell$windows$unshaped # bad cells only have a windows entry for windowPower 7, which is unshaped
-
-        # plot NR_wms vs. gc_w
-        par(mar = c(4.1, 4.1, 0.1, 1.1), cex = 1)
-        N <- length(cw$NR_wms)
-        I <- sample.int(N, min(1e4, N))
-        plot(w$gc_fraction[I], cw$NR_wms[I], 
-            xlab = "Fraction GC", xlim = c(0.3, 0.6), 
-            ylab = "# of Reads", #ylim = c(0, quantile(RPA, 0.975, na.rm = TRUE) * 1.5),
-            pch = 19, cex = 0.4)
-
-        # plot NR_wm vs. window index, i.e., pre-normalization input
-        par(mar = c(0.1, 4.1, 0.1, 0.1), cex = 1)
-        plotCellByWindow(cw$NR_wms, "# Reads", h = max(cw$NR_wms, na.rm = TRUE), v = v)
-        
-    } else {
-        shapeModel <- settings$get("Page_Options", "Shape_Model")
-        shapeKey <- tolower(shapeModel)
-        replicationModel <- settings$get("Page_Options", "Replication_Model")
-        forceSequential <- cell$cellIsReplicating && replicationModel == "Sequential"
-        repKey <- if(!cell$cellIsReplicating || forceSequential) "sequential" else "composite"
-
-        cw_pre <- cell$windows$unshaped
-        cw_post <- cell$windows[[shapeKey]]
-        if(is.null(cw_post)) {
-            shapeKey <- "unshaped" # this sample was not analyzed with the requested shape correction, fall back
-            cw_post <- cw_pre
-        } 
-        cww <- cw_post[[repKey]]
-        cww$NA_ <- cww$HMM + cww$NAR
-
-        # plot selected model's NR_wms vs. gc_w (color as final replication call)
-        par(mar = c(4.1, 4.1, 0.1, 1.1), cex = 1)
-        N <- length(cw_post$NR_wms)
-        I <- sample.int(N, min(1e4, N))
-        RPA <- cw_post$NR_wms[I] / (if(forceSequential) cww$HMM[I] else cww$NA_[I])
-        plot(w$gc_fraction[I], RPA, 
-            xlab = "Fraction GC", xlim = c(0.3, 0.6), 
-            ylab = "Reads Per Allele", ylim = c(0, quantile(RPA[RPA < Inf], 0.975, na.rm = TRUE) * 1.5),
-            pch = 19, cex = 0.4, 
-            col = getWindowColors(round(cww$NAR[I] * cell$ploidy / cww$HMM[I], 0) + 1)               
-        )
-        gc_fit <- if(forceSequential) cww$gc_fit else cell$replicationModel[[shapeKey]]$gc_fit 
-        with(gc_fit, { for(percentile in c(0.025, 0.975)) lines(
-            gcFractions, 
-            qnbinom(percentile, size = theta, mu = mu), 
-            lty = 3, lwd = 1.5, col = "grey30"
-        ) })
-        
-        # plot NR_wm vs. window index, i.e., pre-normalization input (color as final replication call)
-        par(mar = c(0.1, 4.1, 0.1, 0.1), cex = 1)
-        maxPlotNa <- max(cww$NA_, na.rm = TRUE) + 1.4
-        plotCellByWindow(cw_pre$NR_wms, "# Reads", 
-                         h = cw_pre$RPA * 0:round(maxPlotNa, 0), v = v, ymax = cw_pre$RPA * maxPlotNa,
-                         col = getWindowColors(round(cww$NAR * cell$ploidy / cww$HMM, 0) + 1))
-
-        # plot CN vs. window index, i.e., post-normalization (color as final CN call)
-        par(mar = c(0.1, 4.1, 0.1, 0.1), cex = 1)
-        maxPlotNa <- max(cww$HMM, na.rm = TRUE) + 1
-        plotCellByWindow(cww$CN, "CN", h = 0:maxPlotNa, v = v, 
-                         col = getWindowColors(cww$HMM), yaxt = "n")
-        lines(1:length(cww$HMM), cww$HMM, col = "red")  
-        axis(2, at=0:maxPlotNa, labels=0:maxPlotNa)      
-    }
-
-    dev.off()
-}
-getCellCompositePlot <- function(sample, cell){
-    fileName <- paste(cell$cell_id, "qc", "png", sep = ".")
-    pngFile <- file.path(sample$qcPlotsDir, fileName)
-
-    if(TRUE || !file.exists(pngFile)) plotCellQC(pngFile, sample, cell)
-
-    tags$img(src = pngFileToBase64(pngFile), style = "vertical-align: top;")
-}
-getCellSummary <- function(colData, sourceId){
-    manifest <- manifest()
-    desc <- manifest[as.character(Sample_ID) == colData$cell_id, Description]
-    prefix <- session$ns("")
-    kept <- colData[, getKeep(bad, keep, cell_id, sourceId)]
-    override <- if(colData$bad) "" else if(colData$keep){
-        if( kept) TRUE else FALSE        
-    } else {
-        if(!kept) TRUE else FALSE
-    }
-    tags$div(
-        style = "display: inline-block; padding: 5px; margin-left:5px;",
-        tags$div(tags$strong( paste("cell:", colData$cell_id, '(', desc, ')') )), 
-        tags$div(paste("windowPower: ", colData$windowPower, '(', commify(2**colData$windowPower * 20), 'kb )')),
-        if(colData$bad) tags$div("bad cell, not processed") else tagList(
-            tags$div(paste("repGcRatio:", round(colData$repGcRatio, 2), '(', colData$modelType, ',', round(colData$fractionS, 2), ')')), 
-            tags$div(paste("cnsd:", round(colData$cnsd, 2), '(', if(colData$keep) "" else "not", "passed", ')')),
-            tags$div(
-                style = "margin-top: 5px;",
-                tags$button(
-                    onclick = paste0("cellKeepReject('", prefix, "', '", colData$cell_id, "', '", override, "')"),
-                    if(kept) "Reject" else "Keep"
-                )   
-            )        
-        ) 
-    )
-}
 output$cellPlots <- renderUI({ 
     sourceId <- sourceId()     
     cells <- cells()
     req(cells)
     if(cells$n == 0) return("no cells to plot")
     startSpinner(session, message = "loading cell plots")
-    sample <- sample()
+    project <- project()
     sortBy <- settings$get("Page_Options", "Sort_By")   
     ascDesc <- if(settings$get("Page_Options", "Order") == "Ascending") 1 else -1
-    colData <- sample$colData[cells$i][order(ascDesc * switch(
+    colData <- project$colData[cells$i][order(ascDesc * switch(
         sortBy,
-        windowPower = sample$colData[cells$i, windowPower + bad],
-        # manifest = manifest()[Sample_ID %in% sample$colData[cells$i][, cell_id], .I],
-        cnsd = sample$colData[cells$i, cnsd],
-        fractionS = sample$colData[cells$i, fractionS],
+        windowPower = project$colData[cells$i, windowPower + bad],
+        cnsd = project$colData[cells$i, cnsd],
+        fractionS = project$colData[cells$i, fractionS],
         slope = slopes()[cells$i],
-        sample$colData[cells$i, cell_id]
+        project$colData[cells$i, cell_id]
     ))]
     cellIndices <- 1:input$cellsPerPage + input$cellsPerPage * (as.integer(input$pageNumber) - 1)
     x <- lapply(cellIndices, function(i){
         if(i > cells$n) return(NULL)
         colData <- colData[i, ]
-        cell <- sample$cells[[colData$cell_id]]
-        tags$div(
-            style = paste("border: 1px solid grey; white-space: nowrap;"),
-            tagList(
-                getCellCompositePlot(sample, cell),
-                getCellSummary(colData, sourceId)                
-            )
-        )
+        cell <- project$cells[[colData$cell_id]]
+        plotOneCellUI(project, cell, settings, keepRejectButtons, getReplicating)
     })
     stopSpinner(session)
     x
+})
+
+#----------------------------------------------------------------------
+# buttons for setting user cell overrides
+#----------------------------------------------------------------------
+keepRejectButtons <- function(colData, cell){
+    prefix <- session$ns("")
+    kept <- colData[, getKeep(bad, keep, cell_id, sourceId())]        
+    keepRejectOverride <- if(colData$keep){
+        if( kept) TRUE else FALSE        
+    } else {
+        if(!kept) TRUE else FALSE
+    }
+    if(cell$cellIsReplicating){
+        replicating <- getReplicating(cell$badCell, cell$cellIsReplicating, cell$cell_id, sourceId())
+        replicatingOverride <- if(replicating) TRUE else FALSE
+    }
+    tags$div(
+        style = "margin-top: 5px;",
+        tags$button(
+            onclick = paste0("cellToggleOverride('", prefix, "', '", cell$cell_id, "', 'keep', '", keepRejectOverride, "')"),
+            if(kept) "Reject" else "Keep"
+        ),
+        if(cell$cellIsReplicating) tags$button(
+            onclick = paste0("cellToggleOverride('", prefix, "', '", cell$cell_id, "', 'replicating', '", replicatingOverride, "')"),
+            if(replicating) "Not Replicating" else "Replicating"
+        ) else ""
+    )
+}
+observeEvent(input$cellToggleOverride, {
+    sourceId <- sourceId()
+    x <- input$cellToggleOverride
+    overrides[[sourceId]][[x$cell_id]][[x$key]] <- as.logical(x$override)
 })
 
 #----------------------------------------------------------------------

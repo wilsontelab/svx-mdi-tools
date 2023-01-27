@@ -1,0 +1,165 @@
+pointOpacity <- function(x){
+    min(1, max(0.15, -1/6000 * length(x) + 1))
+}
+getWindowColors <- function(x, pointOpacity = NULL){ # by CN (regardless of ploidy)
+    if(is.null(pointOpacity)) pointOpacity <- pointOpacity(x)
+    defaultPointColor <- rgb(0, 0, 0, pointOpacity)
+    windowColors <- c(     
+        defaultPointColor,                 # 0 = black/grey (absence of color/copies...)
+        rgb(0.1, 0.1,  0.8, pointOpacity), # 1 = blue ("cool" colors are losses)
+        rgb(0.1, 0.8,  0.1, pointOpacity), # 2 = subdued green ("good/go" for typical CN neutral)
+        rgb(1,   0,    0,   pointOpacity), # 3 = red ("hot" colors are gains)
+        rgb(1,   0.65, 0,   pointOpacity), # 4 = orange
+        defaultPointColor                  # 5 = back to black/grey to make it obvious
+    )
+    col <- windowColors[pmin(x, 5) + 1]
+    col[is.na(col)] <- defaultPointColor
+    col
+}
+plotCellByWindow <- function(y, ylab, h, v, col = NULL, yaxt = NULL, ymax = NULL){
+    if(is.null(col)) col <- rgb(0, 0, 0, pointOpacity(y))
+    x <- 1:length(y)
+    if(is.null(ymax)) ymax <- max(h)
+    plot(NA, NA, bty = "n", xaxt = "n", yaxt = yaxt, xaxs = "i", , yaxs = "i",
+         xlab = NULL, ylab = ylab, xlim = range(x), ylim = c(0, ymax))
+    abline(h = h, v = v, col = "grey")
+    points(x, y, pch = 19, cex = 0.4, col = col)
+}
+plotCellQC <- function(project, cell, shapeKey, repKey, isReplicating){
+    w <- project$windows[[cell$windowPower + 1]]
+    v <- c(0, w[, max(i), by = "chrom"][[2]]) + 0.5
+    if(cell$badCell){
+        cw <- cell$windows$unshaped # bad cells only have a windows entry for windowPower 7, which is unshaped
+
+        # plot NR_wms vs. gc_w
+        par(mar = c(4.1, 4.1, 0.1, 1.1), cex = 1)
+        N <- length(cw$NR_wms)
+        I <- sample.int(N, min(1e4, N))
+        plot(w$gc_fraction[I], cw$NR_wms[I], 
+            xlab = "Fraction GC", xlim = c(0.3, 0.6), 
+            ylab = "# of Reads", #ylim = c(0, quantile(RPA, 0.975, na.rm = TRUE) * 1.5),
+            pch = 19, cex = 0.4)
+
+        # plot NR_wm vs. window index, i.e., pre-normalization input
+        par(mar = c(0.1, 4.1, 0.1, 0.1), cex = 1)
+        plotCellByWindow(cw$NR_wms, "# Reads", h = max(cw$NR_wms, na.rm = TRUE), v = v)
+        
+    } else {
+        isSequential <- repKey == "sequential"
+        cw_pre <- cell$windows$unshaped
+        cw_post <- cell$windows[[shapeKey]]
+        if(is.null(cw_post)) {
+            shapeKey <- "unshaped" # this sample was not analyzed with the requested shape correction, fall back
+            cw_post <- cw_pre
+        } 
+        cww <- cw_post[[repKey]]
+        cww$NA_ <- cww$HMM + cww$NAR
+
+        # plot selected model's NR_wms vs. gc_w (color as final replication call)
+        par(mar = c(4.1, 4.1, 0.1, 1.1), cex = 1)
+        N <- length(cw_post$NR_wms)
+        N_d <- min(1e4, N)
+        I <- sample.int(N, N_d)
+        RPA <- cw_post$NR_wms[I] / (if(isSequential) cww$HMM[I] else cww$NA_[I])
+        colNA <- if(isReplicating) round(cww$NAR[I] * cell$ploidy / cww$HMM[I], 0) else rep(0, N_d)
+        plot(w$gc_fraction[I], RPA, 
+            xlab = "Fraction GC", xlim = c(0.3, 0.6), 
+            ylab = "Reads Per Allele", ylim = c(0, quantile(RPA[RPA < Inf], 0.975, na.rm = TRUE) * 1.5),
+            pch = 19, cex = 0.4, 
+            col = getWindowColors(colNA + 1)               
+        )
+        gc_fit <- if(isSequential) cww$gc_fit else cell$replicationModel[[shapeKey]]$gc_fit 
+        with(gc_fit, { for(percentile in c(0.025, 0.975)) lines(
+            gcFractions, 
+            qnbinom(percentile, size = theta, mu = mu), 
+            lty = 3, lwd = 1.5, col = "grey30"
+        ) })
+        
+        # plot NR_wm vs. window index, i.e., pre-normalization input (color as final replication call)
+        par(mar = c(0.1, 4.1, 0.1, 0.1), cex = 1)
+        maxPlotNa <- max(cww$NA_, na.rm = TRUE) + 2
+        colNA <- if(isReplicating) round(cww$NAR * cell$ploidy / cww$HMM, 0) else rep(0, length(cww$HMM))
+        plotCellByWindow(cw_pre$NR_wms, "# Reads", 
+                         h = cw_pre$RPA * 0:round(maxPlotNa, 0), v = v, 
+                         ymax = max(cw_pre$RPA * maxPlotNa, quantile(cw_pre$NR_wms, 0.95, na.rm = TRUE)),
+                         col = getWindowColors(colNA + 1))
+
+        # plot CN vs. window index, i.e., post-normalization (color as final CN call)
+        par(mar = c(0.1, 4.1, 0.1, 0.1), cex = 1)
+        maxPlotNa <-  max(cww$HMM, 3, na.rm = TRUE) + 1
+        sampleName <- project$manifest[Sample_ID == cell$cell_id, Sample_Name]
+        cellHMM <- project$sampleProfiles[[sampleName]][[cell$windowPower + 1]]        
+        plotCellByWindow(cww$CN, "CN", h = 0:maxPlotNa, v = v, 
+                         col = getWindowColors(cww$HMM - cellHMM + cell$ploidy), yaxt = "n")
+        axis(2, at=0:maxPlotNa, labels=0:maxPlotNa) 
+
+        # segments <- cell$segments[[shapeKey]][[repKey]]$CN
+        # HMM <- unlist(sapply(1:nrow(segments), function(j){
+        #     x <- segments[j]
+        #     length <- x[, chromEndI - chromStartI + 1]
+        #     if(length < 10) return(rep(as.integer(NA), length))
+        #     w[chrom == x$chrom][x$chromStartI:x$chromEndI, cww$HMM[i]]
+        # }))
+        # lines(1:length(HMM), HMM, col = "red")
+        lines(1:length(cww$HMM), cww$HMM, col = "red")  
+    }
+}
+getCellCompositePlot <- function(project, cell, settings, getReplicating){
+    name <- if(cell$badCell) "bad" else {
+        shapeModel <- settings$get("Page_Options", "Shape_Model")
+        shapeKey <- tolower(shapeModel)
+        replicationModel <- settings$get("Page_Options", "Replication_Model")
+        isReplicating <- if(is.null(getReplicating)) cell$cellIsReplicating 
+                         else getReplicating(cell$badCell, cell$cellIsReplicating, cell$cell_id)            
+        forceSequential <- isReplicating && replicationModel == "Sequential"
+        repKey <- if(!isReplicating || forceSequential) "sequential" else "composite"
+        paste(shapeKey, repKey, isReplicating, sep = "_")
+    }
+    fileName <- paste(cell$cell_id, "qc", name, "png", sep = ".")
+    pngFile <- file.path(project$qcPlotsDir, fileName)
+
+    #####################
+    # unlink(file.path(project$qcPlotsDir, "*.png"))
+    force <- TRUE
+
+    if(force || !file.exists(pngFile)) {
+        png(
+            filename = pngFile,
+            width  = 1.5 * 6, 
+            height = 1.35, 
+            units = "in", 
+            pointsize = 7,
+            bg = "white",
+            res = 96, # i.e., optimized for on-screen display
+            type = "cairo"
+        )
+        layout(matrix(c(c(1,1), rep(c(2,3), 5)), nrow = 2, ncol = 6))
+        plotCellQC(project, cell, shapeKey, repKey, isReplicating)
+        dev.off()
+    }
+    tags$img(src = pngFileToBase64(pngFile), style = "vertical-align: top;")
+}
+getCellSummary <- function(project, cell, buttons){
+    colData <- project$colData[cell$cell_id]
+    desc <- project$manifest[as.character(Sample_ID) == cell$cell_id, Description]
+    tags$div(
+        style = "display: inline-block; padding: 5px; margin-left:5px;",
+        tags$div(tags$strong( paste("cell:", colData$cell_id, '(', desc, ')') )), 
+        tags$div(paste("windowPower: ", colData$windowPower, '(', commify(2 ** colData$windowPower * 20), 'kb )')),
+        if(cell$badCell) tags$div("bad cell, not processed") else tagList(
+            tags$div(paste("repGcRatio:", round(colData$repGcRatio, 2), '(', colData$modelType, ',', round(colData$fractionS, 2), ')')), 
+            tags$div(paste("cnsd:", round(colData$cnsd, 2), '(', if(colData$keep) "" else "not", "passed", ')')),
+            if(!is.null(buttons)) buttons(colData, cell) else "" 
+        ) 
+    )
+}
+plotOneCellUI <- function(project, cell, settings, buttons = NULL, getReplicating = NULL){
+    req(project)
+    tags$div(
+        style = paste("border: 1px solid grey; white-space: nowrap;"),
+        tagList(
+            getCellCompositePlot(project, cell, settings, getReplicating),
+            getCellSummary(project, cell, buttons)                
+        )
+    )
+}
