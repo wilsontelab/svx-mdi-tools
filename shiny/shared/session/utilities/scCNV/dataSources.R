@@ -13,6 +13,11 @@ normalizeDataReactive <- function(sourceId, ...){
         startSpinner(session, message = "loading sample data")
         x <- readRDS(normalizeFilePath)
         setkey(x$colData, "cell_id")  
+
+        goodCellI <- 1 # can delete this block once test data sets are rerun in pipeline
+        while(x$cells[[goodCellI]]$badCell) goodCellI <- goodCellI + 1
+        names(x$cnvs) <- names(x$cells[[goodCellI]]$segments)
+
         x$qcPlotsDir <- expandSourceFilePath(sourceId, "qc_plots")
         if(!dir.exists(x$qcPlotsDir)) dir.create(x$qcPlotsDir)
         stopSpinner(session)

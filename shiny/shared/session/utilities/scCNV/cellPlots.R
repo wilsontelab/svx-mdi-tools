@@ -50,16 +50,19 @@ getWindowColors <- function(x, pointOpacity = NULL){ # by CN (regardless of ploi
     col[is.na(col)] <- defaultPointColor
     col
 }
-plotCellByWindow <- function(y, ylab, h, v, col = NULL, yaxt = NULL, ymax = NULL){
+plotCellByWindow <- function(y, ylab, h, v, col = NULL, yaxt = NULL, ymax = NULL, cnvs = list()){
     if(is.null(col)) col <- rgb(0, 0, 0, pointOpacity(y))
     x <- 1:length(y)
     if(is.null(ymax)) ymax <- max(h)
     plot(NA, NA, bty = "n", xaxt = "n", yaxt = yaxt, xaxs = "i", , yaxs = "i",
          xlab = NULL, ylab = ylab, xlim = range(x), ylim = c(0, ymax))
+    for(cnv in cnvs){
+        rect(cnv$startI, 0, cnv$endI, ymax, col = getWindowColors(cnv$CN, 0.15), border = NA)
+    }
     abline(h = h, v = v, col = "grey")
     points(x, y, pch = 19, cex = 0.4, col = col)
 }
-plotCellQC <- function(project, cell, shapeModel, replicationModel){
+plotCellQC <- function(project, cell, shapeModel, replicationModel, settings){
     w <- project$windows[[cell$windowPower + 1]]
     v <- c(0, w[, max(i), by = "chrom"][[2]]) + 0.5
     if(cell$badCell){
@@ -81,12 +84,26 @@ plotCellQC <- function(project, cell, shapeModel, replicationModel){
     } else {
         cw_pre <- cell$windows$unshaped
         cw_post <- cell$windows[[shapeModel$key]]
-        # if(is.null(cw_post)) {
-        #     shapeKey <- "unshaped" # this sample was not analyzed with the requested shape correction, fall back
-        #     cw_post <- cw_pre
-        # } 
         cww <- cw_post[[replicationModel$key]]
         cww$NA_ <- cww$HMM + cww$NAR
+
+        minWindows <- settings$get("Page_Options", "Minimum_Windows_Per_CNV", 20)
+        cnvsRelativeTo <- settings$get("Page_Options", "CNVs_Relative_To", "Sample Median")
+        cnvs <- project$cnvs[[shapeModel$key]][cell_id == cell$cell_id & nWindows >= minWindows]
+        cnvs <- lapply(seq_len(nrow(cnvs)), function(j){
+            x <- cnvs[j]
+            w_i <- w[chrom == x$chrom & start ==x$start, i]
+            dprint(paste(x$cellCN , cell$ploidy))
+            list(
+                startI = w_i,
+                endI = w_i + x$nWindows - 1,
+                CN = switch(
+                    cnvsRelativeTo,
+                    "Sample Median" = if(x$cellCN > x$sampleCN)  3 else 1,
+                    "Cell Ploidy"   = if(x$cellCN > cell$ploidy) 3 else 1
+                )
+            )
+        })
 
         # plot selected model's NR_wms vs. gc_w (color as final replication call)
         par(mar = c(4.1, 4.1, 0.1, 1.1), cex = 1)
@@ -115,16 +132,17 @@ plotCellQC <- function(project, cell, shapeModel, replicationModel){
         plotCellByWindow(cw_pre$NR_wms, "# Reads", 
                          h = cw_pre$RPA * 0:round(maxPlotNa, 0), v = v, 
                          ymax = max(cw_pre$RPA * maxPlotNa, quantile(cw_pre$NR_wms, 0.95, na.rm = TRUE)),
-                         col = getWindowColors(colNA + 1))
+                         col = getWindowColors(colNA + 1), cnvs = cnvs)
 
         # plot CN vs. window index, i.e., post-normalization (color as final CN call)
         par(mar = c(0.1, 4.1, 0.1, 0.1), cex = 1)
         maxPlotNa <-  max(cww$HMM, 3, na.rm = TRUE) + 1
         sampleName <- project$manifest[Sample_ID == cell$cell_id, Sample_Name]
-        sampleHMM <- project$sampleProfiles[[sampleName]][[cell$windowPower + 1]]        
+        sampleHMM <- project$sampleProfiles[[sampleName]][[cell$windowPower + 1]]
         plotCellByWindow(cww$CN, "CN", h = 0:maxPlotNa, v = v, 
-                         col = getWindowColors(cww$HMM - sampleHMM + cell$ploidy), yaxt = "n")
-        axis(2, at=0:maxPlotNa, labels=0:maxPlotNa) 
+                         col = getWindowColors(cww$HMM - sampleHMM + cell$ploidy), 
+                         yaxt = "n", cnvs = cnvs)
+        axis(2, at = 0:maxPlotNa, labels = 0:maxPlotNa) 
 
         # add HMM traces to CN plot
         lines(1:length(sampleHMM), sampleHMM, col = "black")
@@ -137,13 +155,11 @@ plotCellQC <- function(project, cell, shapeModel, replicationModel){
             cell   <- cww$HMM[w_i][c_i]
             sample <- sampleHMM[w_i][c_i]
 
-            tooSmall <- length < 100 # TODO: expose as setting, then 1) vertical lines 2) save outcomes,etc. 
+            tooSmall <- length < minWindows # TODO:1) cnv areas 2) save outcomes,etc. 
 
             ifelse(cell == sample, cell, if(tooSmall) rep(as.integer(NA), length) else cell)
         }))
-        lines(1:length(maskedHMM), maskedHMM, col = "red")
-
-        # lines(1:length(cww$HMM), cww$HMM, col = "red")  
+        lines(1:length(maskedHMM), maskedHMM, col = "brown")
     }
 }
 getCellCompositePlot <- function(project, cell, settings, getReplicating){
@@ -171,7 +187,7 @@ getCellCompositePlot <- function(project, cell, settings, getReplicating){
             type = "cairo"
         )
         layout(matrix(c(c(1,1), rep(c(2,3), 5)), nrow = 2, ncol = 6))
-        plotCellQC(project, cell, shapeModel, replicationModel)
+        plotCellQC(project, cell, shapeModel, replicationModel, settings)
         dev.off()
     }
     tags$img(src = pngFileToBase64(pngFile), style = "vertical-align: top;")
@@ -184,7 +200,7 @@ getCellSummary <- function(project, cell, buttons){
     colData <- project$colData[cell$cell_id]
     desc <- project$manifest[as.character(Sample_ID) == cell$cell_id, Description]
     tags$div(
-        style = "display: inline-block; padding: 5px; margin-left:5px;",
+        style = "display: inline-block; padding: 5px; position: relative; z-index: 999; height: 130px; background: white;",
         tags$div(tags$strong( paste("cell:", colData$cell_id, '(', desc, ')') )), 
         tags$div(paste("windowPower: ", colData$windowPower, '(', commify(2 ** colData$windowPower * 20), 'kb )')),
         if(cell$badCell) tags$div("bad cell, not processed") else tagList(
@@ -198,10 +214,13 @@ getCellSummary <- function(project, cell, buttons){
 #----------------------------------------------------------------------
 # master function for plotting a single cell
 #----------------------------------------------------------------------
-plotOneCellUI <- function(project, cell, settings, buttons = NULL, getReplicating = NULL){
+plotOneCellUI <- function(project, cell, settings, buttons = NULL, getKeep = NULL, getReplicating = NULL){
     req(project)
+    col <- if(cell$badCell || is.null(getKeep)) "grey" 
+           else if(getKeep(cell$badCell, cell$keep, cell$cell_id)) "rgb(0,0,175)" 
+           else "rgb(150,0,0)"
     tags$div(
-        style = paste("border: 1px solid grey; white-space: nowrap;"),
+        style = paste("border: 1px solid", col, "; white-space: nowrap;"),
         tagList(
             getCellCompositePlot(project, cell, settings, getReplicating),
             getCellSummary(project, cell, buttons)                

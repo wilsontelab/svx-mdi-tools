@@ -65,6 +65,18 @@ settings:
                 - User Overrides            
                 - Pipeline Values
             value: User Overrides 
+        Minimum_Windows_Per_CNV:
+            type:   numericInput
+            value:  10
+            min:    0
+            max:    1000
+            step:   5    
+        CNVs_Relative_To:
+            type: selectInput
+            choices:
+                - Sample Median            
+                - Cell Ploidy
+            value: Sample Median  
 #         Track_Height_Pixels:
 #             type:   numericInput
 #             value:  300

@@ -167,10 +167,22 @@ output$cellPlots <- renderUI({
         if(i > cells$n) return(NULL)
         colData <- colData[i, ]
         cell <- project$cells[[colData$cell_id]]
-        plotOneCellUI(project, cell, settings, keepRejectButtons, getReplicating)
+        plotOneCellUI(project, cell, settings, keepRejectButtons, getKeep, getReplicating)
     })
     stopSpinner(session)
     x
+})
+cellPlotsWrapperInit <- observe({
+    session$sendCustomMessage("cellPlotsWrapperInit", list(
+        prefix = session$ns("")
+    ))
+    cellPlotsWrapperInit$destroy()
+})
+observeEvent(input$cellsPerPage, {
+    session$sendCustomMessage("cellPlotsWrapperUpdate", list(
+        prefix = session$ns(""),
+        cellsPerPage = input$cellsPerPage
+    ))
 })
 
 #----------------------------------------------------------------------
