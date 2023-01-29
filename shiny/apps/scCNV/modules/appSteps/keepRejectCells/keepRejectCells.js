@@ -1,3 +1,4 @@
+// enable buttons for user override of keep, replication, etc.
 var cellToggleOverride = function(prefix, cell_id, key, override){
     Shiny.setInputValue(
         prefix + 'cellToggleOverride',
@@ -5,20 +6,14 @@ var cellToggleOverride = function(prefix, cell_id, key, override){
         {priority: "event"}
     );
 };
-// var cellSetModalCN = function(prefix, cell_id, inputId){
-//     Shiny.setInputValue(
-//         prefix + 'cellSetModalCN',
-//         {cell_id: cell_id, value: $("#" + inputId).val()},
-//         {priority: "event"}
-//     );
-// };
-// initialize plot interactions
 
+// add a moving vertical reference line to cell plots and enable custom plot clicking
 Shiny.addCustomMessageHandler("cellPlotsWrapperInit", function(opt){
 
     // parse interactive targets 
-    const wrapperId = "#" + opt.prefix + "cellPlotsWrapper";
+    const wrapperId = "#" + opt.prefix + opt.divId;
     const mdiVertical = wrapperId + " .cellStackVertical";
+    const cellWindowsPlot = wrapperId + " .cellWindowsPlot";
 
     // convert document to widget coordinates
     const relCoord = function(event, element){return {
@@ -26,20 +21,36 @@ Shiny.addCustomMessageHandler("cellPlotsWrapperInit", function(opt){
         y: event.pageY - $(element).offset().top,
     }}
 
+    // activate plot clicks
+    let clickIsActivated = false;
+
     // handle all requested interactions, listed here if rough order of occurrence
     $(wrapperId).off("mouseenter").on("mouseenter", function() {
         $(mdiVertical).show();
+        if(!clickIsActivated){
+            $(cellWindowsPlot).off("click").on("click", function(event){
+                const data = {
+                    coord: relCoord(event, this),
+                    keys: {
+                        ctrl:  event.ctrlKey,
+                        alt:   event.altKey,
+                        shift: event.shiftKey
+                    },
+                    data: $(this).data()
+                };
+                Shiny.setInputValue(opt.prefix + 'cellWindowsPlotClick', data, { priority: "event" });        
+            })
+            clickIsActivated = true;
+        }
     });
     $(wrapperId).off("mousemove").on("mousemove", function(event) {
         const coord = relCoord(event, this);
-        $(mdiVertical).css({left: coord.x - 1});
+        $(mdiVertical).css({left: coord.x - 2});
     });
     $(wrapperId).off("mouseleave").on("mouseleave", function() {
         $(mdiVertical).hide();
     });
 });
 Shiny.addCustomMessageHandler("cellPlotsWrapperUpdate", function(opt){
-    const wrapperId = "#" + opt.prefix + "cellPlotsWrapper";
-    const mdiVertical = wrapperId + " .cellStackVertical";
-    $(mdiVertical).css({height: (1.35 * 96 + 1) * opt.cellsPerPage});
+    $(".cellStackVertical").css({height: (1.35 * 96 + 2) * opt.cellsPerPage});
 });

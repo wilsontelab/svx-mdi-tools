@@ -1,3 +1,4 @@
+/* format the upper row of page inputs for cell filtering */
 .cellPageInput {
     display: inline-block;
     vertical-align: top;
@@ -20,4 +21,34 @@
 .cellPageInput .checkbox {
     margin-top: 30px;
     margin-left: 10px;
+}
+
+/* format the panel of mutiple cell plots */
+.cellPlotsWrapper {
+    position: relative;
+    display: inline-block;
+    vertical-align: top;
+}
+.cellPlotWrapper {
+    white-space: nowrap;
+    height: 132px;
+}
+.cellSummaryPanel {
+    display: inline-block; 
+    padding: 5px; 
+    position: relative; 
+    z-index: 999; 
+    height: 130px; 
+    background: white;
+    width: 270px;
+    overflow: hidden;
+}
+.cellStackVertical {
+    position: absolute; 
+    z-index: 99; 
+    top: 0px;
+    width: 1px; 
+    height: 100px; 
+    background-color: #444; 
+    display: none;
 }

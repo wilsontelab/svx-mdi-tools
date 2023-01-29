@@ -87,13 +87,19 @@ keepRejectCellsUI <- function(id, options) {
 
         # stacked individual cell plots
         tags$div(
-            id = ns("cellPlotsWrapper"),
-            style = "position: relative;",
-            uiOutput(ns("cellPlots"), style = "position: absolute;"),
+            style = "white-space: nowrap;",
             tags$div(
-                class = "cellStackVertical",
-                style = "position: absolute; z-index: 99; width: 1px; height: 100px; background-color: #444; display: none;"
-            )
+                id = ns("genomePlotsWrapper"),
+                class = "cellPlotsWrapper",
+                uiOutput(ns("genomePlots")),
+                tags$div(class = "cellStackVertical")
+            ),
+            tags$div(
+                id = ns("chromPlotsWrapper"),
+                class = "cellPlotsWrapper",
+                uiOutput(ns("chromPlots")),
+                tags$div(class = "cellStackVertical")
+            )            
         )
     )
 }

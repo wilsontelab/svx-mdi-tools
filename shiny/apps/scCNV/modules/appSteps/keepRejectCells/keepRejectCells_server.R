@@ -10,7 +10,7 @@ keepRejectCellsServer <- function(id, options, bookmark, locks) {
 #----------------------------------------------------------------------
 
 #----------------------------------------------------------------------
-# initialize module
+# initialize module and outcomes
 #----------------------------------------------------------------------
 module <- 'keepRejectCells'   
 appStepDir <- getAppStepDir(module)
@@ -54,7 +54,7 @@ getReplicating <- function(bad, replicating, cell_id, sourceId = NULL, forceOver
 }
 
 #----------------------------------------------------------------------
-# source data
+# loade sample/cell source data
 #----------------------------------------------------------------------
 sourceId <- dataSourceTableServer(
     "source", 
@@ -62,11 +62,13 @@ sourceId <- dataSourceTableServer(
 )
 # projectName <- projectNameReactive(sourceId)
 project <- normalizeDataReactive(sourceId)
+sourceIsInitializing <- TRUE
 cells <- reactive({
     project <- project()
     req(project)  
     sourceId <- sourceId()
     projectCellIds <- projectCellIds()
+    sourceIsInitializing <<- TRUE
     i <- project$colData[, {
         switch(
             input$cellStatus,
@@ -89,7 +91,6 @@ cells <- reactive({
         maxPage = ceiling(n / input$cellsPerPage)
     )
 })
-
 slopes <- reactive({
     project <- project()
     req(project)    
@@ -106,6 +107,25 @@ slopes <- reactive({
         mu <- gc_fit$peak[i] / cw$RPA
         coef(lm(mu ~ gc))[2]
     })
+})
+
+#----------------------------------------------------------------------
+# pagination control
+#----------------------------------------------------------------------
+output$nCellsInType <- renderText({
+    cells <- cells()
+    req(cells)
+    paste0(cells$n, " cells (", cells$maxPage, " pages)")
+})
+observeEvent(input$prevPage, {
+    pageNumber <- as.integer(input$pageNumber)
+    if(pageNumber == 1) return()
+    updateTextInput(session, "pageNumber", value = pageNumber - 1)
+})
+observeEvent(input$nextPage, {
+    pageNumber <- as.integer(input$pageNumber)
+    if(pageNumber == cells()$maxPage) return()
+    updateTextInput(session, "pageNumber", value = pageNumber + 1)
 })
 
 #----------------------------------------------------------------------
@@ -135,55 +155,16 @@ observeEvent(sourceId(), {
     updateCellFilter()
 })
 observeEvent(input$sampleNameFilter, {
+    if(sourceIsInitializing) {
+        sourceIsInitializing <<- FALSE
+        return()
+    }
     updateCellFilter()
-})
+}, ignoreInit = TRUE)
 # observeEvent(cells(), {
 #     freezeReactiveValue(input, "pageNumber")
 #     updateTextInput(session, "pageNumber", value = 1)
 # })
-
-#----------------------------------------------------------------------
-# a stack of individual cell plots
-#----------------------------------------------------------------------
-output$cellPlots <- renderUI({ 
-    sourceId <- sourceId()     
-    cells <- cells()
-    req(cells)
-    if(cells$n == 0) return("no cells to plot")
-    startSpinner(session, message = "loading cell plots")
-    project <- project()
-    sortBy <- settings$get("Page_Options", "Sort_By")   
-    ascDesc <- if(settings$get("Page_Options", "Order") == "Ascending") 1 else -1
-    colData <- project$colData[cells$i][order(ascDesc * switch(
-        sortBy,
-        windowPower = project$colData[cells$i, windowPower + bad],
-        cnsd = project$colData[cells$i, cnsd],
-        fractionS = project$colData[cells$i, fractionS],
-        slope = slopes()[cells$i],
-        project$colData[cells$i, cell_id]
-    ))]
-    cellIndices <- 1:input$cellsPerPage + input$cellsPerPage * (as.integer(input$pageNumber) - 1)
-    x <- lapply(cellIndices, function(i){
-        if(i > cells$n) return(NULL)
-        colData <- colData[i, ]
-        cell <- project$cells[[colData$cell_id]]
-        plotOneCellUI(project, cell, settings, keepRejectButtons, getKeep, getReplicating)
-    })
-    stopSpinner(session)
-    x
-})
-cellPlotsWrapperInit <- observe({
-    session$sendCustomMessage("cellPlotsWrapperInit", list(
-        prefix = session$ns("")
-    ))
-    cellPlotsWrapperInit$destroy()
-})
-observeEvent(input$cellsPerPage, {
-    session$sendCustomMessage("cellPlotsWrapperUpdate", list(
-        prefix = session$ns(""),
-        cellsPerPage = input$cellsPerPage
-    ))
-})
 
 #----------------------------------------------------------------------
 # buttons for setting user cell overrides
@@ -219,23 +200,90 @@ observeEvent(input$cellToggleOverride, {
 })
 
 #----------------------------------------------------------------------
-# pagination control
+# a stack of individual cell plots
 #----------------------------------------------------------------------
-output$nCellsInType <- renderText({
+cellStack <- reactive({   
+    cells <- cells()
+    if(cells$n == 0) return(integer())
+    project <- project()
+    sortBy <- settings$get("Page_Options", "Sort_By")   
+    ascDesc <- if(settings$get("Page_Options", "Order") == "Ascending") 1 else -1
+    colData <- project$colData[cells$i][order(ascDesc * switch(
+        sortBy,
+        windowPower = project$colData[cells$i, windowPower + bad],
+        cnsd = project$colData[cells$i, cnsd],
+        fractionS = project$colData[cells$i, fractionS],
+        slope = slopes()[cells$i],
+        project$colData[cells$i, cell_id]
+    ))]
+    list(
+        colData = colData,
+        i = 1:input$cellsPerPage + input$cellsPerPage * (as.integer(input$pageNumber) - 1) 
+    )
+})
+output$genomePlots <- renderUI({ 
+    sourceId <- sourceId()     
     cells <- cells()
     req(cells)
-    paste0(cells$n, " cells (", cells$maxPage, " pages)")
+    if(cells$n == 0) return("no cells to plot")
+    startSpinner(session, message = "loading genome plots")
+    cellStack <- cellStack()
+    project <- project()
+    x <- lapply(cellStack$i, function(i){
+        if(i > cells$n) return(NULL)
+        colData <- cellStack$colData[i, ]
+        cell <- project$cells[[colData$cell_id]]
+        plotOneCellUI_genome(project, cell, settings, keepRejectButtons, getReplicating, getKeep)
+    })
+    isolate({ initGenomePlotClicks(initGenomePlotClicks() + 1) })
+    stopSpinner(session)
+    x
 })
-observeEvent(input$prevPage, {
-    pageNumber <- as.integer(input$pageNumber)
-    if(pageNumber == 1) return()
-    updateTextInput(session, "pageNumber", value = pageNumber - 1)
+observeEvent(input$cellsPerPage, {
+    session$sendCustomMessage("cellPlotsWrapperUpdate", list(
+        prefix = session$ns(""),
+        cellsPerPage = input$cellsPerPage
+    ))
 })
-observeEvent(input$nextPage, {
-    pageNumber <- as.integer(input$pageNumber)
-    if(pageNumber == cells()$maxPage) return()
-    updateTextInput(session, "pageNumber", value = pageNumber + 1)
+
+#----------------------------------------------------------------------
+# handle clicks into chromosome-level views
+#----------------------------------------------------------------------
+zoomChrom <- reactiveVal(NULL)
+initGenomePlotClicks <- reactiveVal(0)
+observeEvent(initGenomePlotClicks(), {
+    for(divId in c("genomePlotsWrapper", "chromPlotsWrapper")){
+        session$sendCustomMessage("cellPlotsWrapperInit", list(
+            prefix = session$ns(""),
+            divId = divId
+        ))
+    }
+}, ignoreInit = TRUE)
+observeEvent(input$cellWindowsPlotClick, {
+    handleCellPlotClick(project(), input$cellWindowsPlotClick, zoomChrom, zoomWindowI)
 })
+output$chromPlots <- renderUI({ 
+    req(zoomChrom())
+    startSpinner(session, message = "loading chrom plots")
+    cells <- cells()
+    project <- project()
+    cellStack <- cellStack()
+    x <- lapply(cellStack$i, function(i){
+        if(i > cells$n) return(NULL)
+        colData <- cellStack$colData[i, ]
+        cell <- project$cells[[colData$cell_id]]
+        plotOneCellUI_chrom(project, cell, settings, zoomChrom(), getReplicating, getKeep)
+    })
+    isolate({ initGenomePlotClicks(initGenomePlotClicks() + 1) })
+    stopSpinner(session)
+    x
+})
+
+#----------------------------------------------------------------------
+# handle clicks within chromosome-level views
+#----------------------------------------------------------------------
+zoomWindowI <- reactiveVal(NULL)
+observeEvent(zoomWindowI(), dprint(zoomWindowI()))
 
 #----------------------------------------------------------------------
 # define bookmarking actions
@@ -244,13 +292,10 @@ observe({
     bm <- getModuleBookmark(id, module, bookmark, locks)
     req(bm)
     bo <- bm$outcomes
-
-    # for(sourceId in names(bo$userOverrides)) userOverrides[[sourceId]] <- bo$userOverrides[[sourceId]]
-    # for(sourceId in names(bo$userModalCN))   userModalCN[[sourceId]]   <- bo$userModalCN[[sourceId]]
-
     settings$replace(bm$settings)
-    # updateTextInput(session, 'cellsPerPage', value = bm$input$cellsPerPage)
-    # updateTextInput(session, 'pageNumber',   value = bm$input$pageNumber)
+    for(sourceId in names(bo$overrides)) overrides[[sourceId]] <- bo$overrides[[sourceId]]
+    updateTextInput(session, 'cellsPerPage', value = bm$input$cellsPerPage)
+    updateTextInput(session, 'pageNumber',   value = bm$input$pageNumber)
     # xxx <- bm$outcomes$xxx
 })
 
@@ -259,12 +304,11 @@ observe({
 #----------------------------------------------------------------------
 list(
     input = input,
-    settings = settings$all_,    
+    settings = settings$all_,  
+    outcomes = list(
+        overrides = overrides
+    ),      
     NULL
-    # outcomes = list(
-    #     userOverrides = userOverrides,
-    #     userModalCN   = userModalCN
-    # ),
     # # isReady = reactive({ getStepReadiness(options$source, ...) }),
     # getSampleFilePrefix = function(sourceId, keep = NULL, colData = NULL){
     #     if(is.null(keep)){
