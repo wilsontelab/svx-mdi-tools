@@ -26,7 +26,6 @@ settings <- activateMdiHeaderLinks( # uncomment as needed
     settings = id, # for step-level settings
     # immediate = TRUE # plus any other arguments passed to settingsServer()
 )
-outcomes <- reactiveValues() # outcomes[[sourceId]][i] <- TRUE if library i failed
 
 #----------------------------------------------------------------------
 # cascade from selected dataSource to its QC data
@@ -36,6 +35,28 @@ sourceId <- dataSourceTableServer(
     selection = "single"
 )
 project <- normalizeDataReactive(sourceId) # one Project has one or more Samples, each with one or more Cells
+
+#----------------------------------------------------------------------
+# high-level count summaries
+#----------------------------------------------------------------------
+output$sourceSummary <- renderUI({
+    project <- project()
+    req(project)
+    x <- list(
+        "sample(s)"         = list(project$manifest[, length(unique(Sample_Name))], "black"),
+        "total cells"       = list(project$colData[, .N], "black"),
+        "kept cells"        = list(project$colData[bad == FALSE & keep == TRUE, .N], "green"),
+        "rejected cells"    = list(project$colData[bad == FALSE & keep == FALSE, .N], "orange"),
+        "bad cells"         = list(project$colData[bad == TRUE, .N], "red"),
+        "replicating cells" = list(project$colData[bad == FALSE & replicating == TRUE, .N], "blue") 
+    )
+    cols <- CONSTANTS$plotlyColors
+    lapply(names(x), function(label){
+        col <- paste("border-left: 6px solid", x[[label]][[2]], ";")
+        style <- paste(col, "display: inline-block; height: 25px; line-height: 25px; font-size: 1.25em; padding: 0 10px; margin-right: 10px;")
+        tags$div(paste(x[[label]][[1]], label), style = style)
+    })
+})
 
 #----------------------------------------------------------------------
 # make the QC plots
@@ -199,67 +220,25 @@ cellToPlot <- reactiveVal(NULL)
 output$cellPlot <- renderUI({
     cell <- cellToPlot()
     req(cell)
-    plotOneCellUI(project(), cell, settings)
+    plotOneCellUI_genome(sourceId(), project(), cell, settings)
 })
-
-# #----------------------------------------------------------------------
-# # cascade to determine which sample are marked as failed, with initial defaults
-# #----------------------------------------------------------------------
-# failedStatus <- reactive({
-#     libraryMetrics <- libraryMetrics()
-#     req(libraryMetrics)  
-#     sourceId <- sampleSet$input$dataSource
-#     if(is.null(outcomes[[sourceId]])) outcomes[[sourceId]] <- rep(FALSE, nrow(libraryMetrics))
-#     names(outcomes[[sourceId]]) <- libraryMetrics$Sample_ID
-#     outcomes[[sourceId]]
-# })
-# output$nFailedLibraries <- renderText({
-#     failed <- failedStatus()
-#     req(!is.null(failed) && length(failed) > 0)
-#     paste(sum(failed),    'of', 
-#           length(failed), 'libraries marked as failed')
-# })
-
-# #----------------------------------------------------------------------
-# # systematically set and clear failure outcomes over many samples
-# #----------------------------------------------------------------------
-# observeEvent(input$applyFailedFilters, { # enforce filter settings _on top of_ existing failure marks
-#     libraryMetrics <- libraryMetrics()
-#     req(libraryMetrics) 
-#     sourceId <- sampleSet$input$dataSource
-#     failed <- failedStatus()
-#     qct <- settings$QC_Thresholds()
-#     failedReadCount <- libraryMetrics[, grouped   < qct$Minimum_Unique_Reads_M$value * 1e6]
-#     failedAlignRate <- libraryMetrics[, alignRate < qct$Minimum_Alignment_Rate$value]
-#     failedDupRate   <- libraryMetrics[, dupRate   > qct$Maximum_Duplication_Rate$value]
-#     outcomes[[sourceId]] <- failed | failedReadCount | failedAlignRate | failedDupRate
-#     names(outcomes[[sourceId]]) <- names(failed)
-#     invalidateTable( invalidateTable() + 1 )
-# })
-# observeEvent(input$clearFailedMarks, { # clear _all_ failure marks, whether from settings or user click
-#     libraryMetrics <- libraryMetrics()
-#     req(libraryMetrics) 
-#     sourceId <- sampleSet$input$dataSource
-#     outcomes[[sourceId]] <- rep(FALSE, nrow(libraryMetrics))
-#     invalidateTable( invalidateTable() + 1 )
-# })
 
 #----------------------------------------------------------------------
 # define bookmarking actions
 #----------------------------------------------------------------------
-# observe({
-#     bm <- getModuleBookmark(id, module, bookmark, locks)
-#     req(bm)
-#     settings$replace(bm$settings)
-#     if(!is.null(bm$outcomes)) outcomes <<- listToReactiveValues(bm$outcomes)
-# })
+observe({
+    bm <- getModuleBookmark(id, module, bookmark, locks)
+    req(bm)
+    settings$replace(bm$settings)
+    # if(!is.null(bm$outcomes)) outcomes <<- listToReactiveValues(bm$outcomes)
+})
 
 #----------------------------------------------------------------------
 # set return values as reactives that will be assigned to app$data[[stepName]]
 #----------------------------------------------------------------------
 list(
     input = input,
-    # settings = settings$all_,
+    settings = settings$all_,
     # outcomes = reactive({ reactiveValuesToList(outcomes) }),
     # isReady  = reactive({ getStepReadiness(options$source, outcomes) }),
     NULL

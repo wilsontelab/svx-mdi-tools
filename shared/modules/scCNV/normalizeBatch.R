@@ -161,7 +161,7 @@ normalizeBatch <- function(sampleName, cells){
 #=====================================================================================
 
 #=====================================================================================
-# regardless of whether cells were batch corrected, calculate the median HMM
+# regardless of whether cells were batch corrected, calculate the median HMM and sex
 #-------------------------------------------------------------------------------------
 getSampleProfile <- function(cells){
 
@@ -178,5 +178,52 @@ getSampleProfile <- function(cells){
     mclapply(windowPowers, function(windowPower){
         round(collapseBatchValue(expandedHMM$median, windowPower, 0, windows[[1]]), 0)
     }, mc.cores = env$N_CPU)
+}
+collateChromosomes <- function(windows, cnProfile){
+
+    # find the median HMM per chromosome, take it as the chromosome's copy number
+    CN <- windows[, 
+        .(
+            observed = round(median(cnProfile[.I], na.rm = TRUE), 0),
+            expected = env$PLOIDY
+        ), 
+        by = "chrom"
+    ]
+
+    # is this a typical mammalian genome with XY sex chromosomes?
+    setkey(CN, chrom)
+    sexChroms <- c("chrX", "chrY") 
+    if(CN[, sum(chrom %in% sexChroms) != 2]) return(list(CN = CN, sex = as.character(NA)))
+
+    # if so, determine the apparent sex as XX, XY, XO, XYY, etc.
+    CN_X <- CN["chrX"]$observed
+    CN_Y <- CN["chrY"]$observed
+    X <- paste0(rep("X", CN_X), collapse = "")
+    Y <- paste0(rep("Y", CN_Y), collapse = "")
+    if(env$PLOIDY == 2){
+        if(CN_X == 0) X <- "O" 
+        if(CN_X < 2 && CN_Y == 0) Y <- "O"
+        if(CN_X < 2){ # expect male
+            expectedX <- 1
+            expectedY <- 1
+        } else { # expect female
+            expectedX <- 2
+            expectedY <- 0
+        }
+    } else {
+        if(CN_X > 0 && CN_Y == 0){ # expect X sperm
+            expectedX <- 1
+            expectedY <- 0
+        } else if(CN_X == 0 && CN_Y > 0){ # expect Y sperm
+            expectedX <- 0
+            expectedY <- 1
+        } else { # for XY sperm (or other haploid) impossible to set a single expectation
+            expectedX <- 0
+            expectedY <- 0
+        }
+    }
+    CN[chrom == "chrX", expected := expectedX] 
+    CN[chrom == "chrY", expected := expectedY] 
+    return(list(CN = CN, sex = paste0(X, Y)))
 }
 #=====================================================================================

@@ -28,8 +28,8 @@ settings <- activateMdiHeaderLinks( # uncomment as needed
 outcomes <- reactiveValues() # outcomes[[sourceId]][i] <- TRUE if library i failed
 overrides <- reactiveValues()
 keptCnvs <- reactiveValues()
-showFiltersAsOverrides <- reactive({
-    x <- settings$get("Page_Options", "Show_Filters_As")
+applyFiltersAsOverrides <- reactive({
+    x <- settings$get("Page_Options", "Apply_Filters_As")
     if(isTruthy(x)) x == "User Overrides" else TRUE
 })
 isUserOverride <- Vectorize(function(cell_id, key, sourceId, forceOverrides = TRUE) {
@@ -73,6 +73,9 @@ sourceId <- dataSourceTableServer(
     "source", 
     selection = "single"
 )
+observeEvent(sourceId(), {
+    sourceIsInitializing <<- TRUE
+})
 # projectName <- projectNameReactive(sourceId)
 project <- normalizeDataReactive(sourceId)
 sourceIsInitializing <- TRUE
@@ -81,7 +84,6 @@ cells <- reactive({
     req(project)  
     sourceId <- sourceId()
     projectCellIds <- projectCellIds()
-    sourceIsInitializing <<- TRUE
     i <- project$colData[, {
         switch(
             input$cellStatus,
@@ -234,10 +236,12 @@ cellStack <- reactive({
         i = 1:input$cellsPerPage + input$cellsPerPage * (as.integer(input$pageNumber) - 1) 
     )
 })
+invalidateGenomePlots <- reactiveVal(0)
 output$genomePlots <- renderUI({     
     cells <- cells()
     req(cells)
     if(cells$n == 0) return("no cells to plot")
+    invalidateGenomePlots()
     startSpinner(session, message = "loading genome plots")
     cellStack <- cellStack()
     project <- project()
@@ -344,6 +348,49 @@ observeEvent(zoomTargetWindow(), {
 })
 
 #----------------------------------------------------------------------
+# special clear and reset actions
+#----------------------------------------------------------------------
+observeEvent(input$clearImageCache, {
+    project <- project()
+    req(project)
+    showUserDialog(
+        "Clear Image Cache", 
+        tags$p("Clear all images in this source's cache (to save file space)?"),
+        tags$p("This cannot be undone, but images can always be regenerated."), 
+        callback = function(...) {
+            unlink(file.path(project$qcPlotsDir, "*.png"))
+        },
+        size = "s", 
+        type = 'okCancel', 
+        footer = NULL, 
+        easyClose = TRUE, 
+        fade = NULL
+    )
+})
+observeEvent(input$resetEverything, {
+    project <- project()
+    req(project)
+    showUserDialog(
+        "Reset Everything", 
+        tags$p("Revert all cell markings back to their pipeline state?"),
+        tags$p("This actions clears all keep/reject/replicating overrides and unmarks all CNV selections."),
+        tags$p("This cannot be undone."), 
+        callback = function(...) {
+            overrides <<- reactiveValues()
+            keptCnvs <<- reactiveValues()
+            unlink(file.path(project$qcPlotsDir, "*.chr*.png"))
+            zoomChrom(NULL)
+            invalidateGenomePlots( invalidateGenomePlots() + 1 )
+        },
+        size = "s", 
+        type = 'okCancel', 
+        footer = NULL, 
+        easyClose = TRUE, 
+        fade = NULL
+    )
+})
+
+#----------------------------------------------------------------------
 # define bookmarking actions
 #----------------------------------------------------------------------
 observe({
@@ -352,6 +399,7 @@ observe({
     bo <- bm$outcomes
     settings$replace(bm$settings)
     for(sourceId in names(bo$overrides)) overrides[[sourceId]] <- bo$overrides[[sourceId]]
+    for(key in names(bo$keptCnvs)) keptCnvs[[key]] <- bo$keptCnvs[[key]]
     updateTextInput(session, 'cellsPerPage', value = bm$input$cellsPerPage)
     updateTextInput(session, 'pageNumber',   value = bm$input$pageNumber)
     # xxx <- bm$outcomes$xxx
@@ -364,7 +412,8 @@ list(
     input = input,
     settings = settings$all_,  
     outcomes = list(
-        overrides = overrides
+        overrides = overrides,
+        keptCnvs = keptCnvs
     ),      
     NULL
     # # isReady = reactive({ getStepReadiness(options$source, ...) }),

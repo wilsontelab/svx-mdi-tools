@@ -29,17 +29,15 @@ libraryQCUI <- function(id, options) {
         dataSourceTableUI(
             ns("source"), 
             "Sample", 
-            width = 12, 
+            width = 6, 
             collapsible = TRUE
         ),
 
-        # fluidRow( box(
-        #     width = 12,
-        #     column(
-        #         width = 12,
-        #         textOutput(ns('nFailedLibraries'), inline = TRUE)           
-        #     )
-        # ) ),
+        # high-level count summaries
+        fluidRow( box(
+            width = 12,
+            uiOutput(ns("sourceSummary"))
+        ) ),
 
         # box with plots to explore QC metric relationships and click to reject cells
         fluidRow( box(

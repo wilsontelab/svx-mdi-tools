@@ -59,24 +59,24 @@ settings:
                 - Sequential
                 - Composite
             value: Sequential 
-        Show_Filters_As:
+        CNVs_Relative_To:
             type: selectInput
             choices:
-                - User Overrides            
-                - Pipeline Values
-            value: User Overrides 
+                - Cell Ploidy
+                - Sample Median
+            value: Cell Ploidy  
         Minimum_Windows_Per_CNV:
             type:   numericInput
             value:  10
             min:    0
             max:    1000
             step:   5    
-        CNVs_Relative_To:
+        Apply_Filters_As:
             type: selectInput
             choices:
-                - Sample Median            
-                - Cell Ploidy
-            value: Sample Median  
+                - User Overrides            
+                - Pipeline Values
+            value: User Overrides 
 #         Track_Height_Pixels:
 #             type:   numericInput
 #             value:  300

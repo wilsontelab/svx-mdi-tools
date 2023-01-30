@@ -23,14 +23,14 @@ sourceTypes:
 settings:
     Page_Options:
         Shape_Model:
-            type: radioButtons
+            type: selectInput
             choices:
+                - Batched  
+                - Shaped                          
                 - Unshaped            
-                - Shaped
-                - Batched
             value: Batched   
         Replication_Model:
-            type: radioButtons
+            type: selectInput
             choices:
                 - Sequential
                 - Composite

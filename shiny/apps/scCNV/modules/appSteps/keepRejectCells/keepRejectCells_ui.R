@@ -80,8 +80,10 @@ keepRejectCellsUI <- function(id, options) {
                 actionButton(ns('nextPage'), ">")
             ),
             tags$div(
-                style = "margin-left: 15px; margin-top: 30px; display: inline-block;",
-                textOutput(ns("nCellsInType"))
+                style = "margin-left: 15px; margin-top: 30px; display: inline-block; white-space: nowrap;",
+                textOutput(ns("nCellsInType"),inline = TRUE),
+                actionLink(ns("clearImageCache"), "clear image cache", style = "margin-left: 10px;"),
+                actionLink(ns("resetEverything"), "reset everything", style = "margin-left: 10px;")
             )
         ),
 

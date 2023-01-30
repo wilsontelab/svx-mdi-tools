@@ -220,11 +220,6 @@ if(env$SHAPE_CORRECTION %in% c('sample', 'both')){ # normalize windows for batch
     shapeKey <- "batched"
     updateColData()
 }
-sampleProfiles <- lapply(sampleNames, function(sampleNames){ # determine each sample's reference CN, i.e., the most common cell values
-    cell_ids <- manifest[Sample_Name == sampleNames, Sample_ID]
-    getSampleProfile(cells[cell_ids])
-})
-names(sampleProfiles) <- sampleNames
 #=====================================================================================
 
 # stop("XXXXXXXXXXXXXXXXX")
@@ -234,10 +229,41 @@ save.image(R_DATA_FILE)
 # load(R_DATA_FILE)
 
 #=====================================================================================
-# perform cross-comparisons of CNV segments between all cells in all samples
+# parse the chromosomes of each cell and sample, including sex chromosome assignments
+#-------------------------------------------------------------------------------------
+sampleProfiles <- mclapply(sampleNames, function(sampleName){ # determine each sample's reference CN, i.e., the most common cell values per window
+    cell_ids <- manifest[Sample_Name == sampleName, Sample_ID]
+    getSampleProfile(cells[cell_ids])
+}, mc.cores = env$N_CPU)
+names(sampleProfiles) <- sampleNames
+
+sampleChromosomes <- mclapply(sampleNames, function(sampleName){ # condense per-window values to per-chromosome values and sex assignements
+    collateChromosomes(windows[[1]], sampleProfiles[[sampleName]][[1]])
+}, mc.cores = env$N_CPU)
+names(sampleChromosomes) <- sampleNames
+
+setkey(colData, cell_id)
+cellChromosomes <- mclapply(colData$cell_id, function(cell_id){
+    cell <- cells[[cell_id]]
+    if(cell$badCell) return(NA)
+    collateChromosomes(windows[[cell$windowPower + 1]], cell$windows[[shapeKey]]$sequential$HMM)
+}, mc.cores = env$N_CPU)
+names(cellChromosomes) <- colData$cell_id
+
+colData[, ':='(
+    sex = if(bad) as.character(NA) else cellChromosomes[[cell_id]]$sex,
+    expectedSex = {
+        sampleName <- manifest[Sample_ID == cell_id, Sample_Name]
+        sampleChromosomes[[sampleName]]$sex
+    }
+), by = cell_id]   
+#=====================================================================================
+
+#=====================================================================================
+# assemble a table of CNVs across all cells in all samples
 # this is not sample-specific, to allow for shared CNVs across similar samples (e.g., a mouse strain)
 #-------------------------------------------------------------------------------------
-cnvs <- collateCNVs(cells)
+cnvs <- collateCNVs()
 # stop("XXXXXXXXXXXXXXXXX")
 #=====================================================================================
 
@@ -259,6 +285,8 @@ saveRDS(list(
         nonReplicating = nonReplicatingStates
     ),
     sampleProfiles = sampleProfiles,
+    sampleChromosomes = sampleChromosomes,
+    cellChromosomes = cellChromosomes,
     cnvs = cnvs
 ), file  = env$OUTPUT_FILE)
 write.table(

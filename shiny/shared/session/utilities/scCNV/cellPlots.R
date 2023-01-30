@@ -67,7 +67,7 @@ adjustColorAlpha <- function(col, minAlpha) {
 plotCellByWindow <- function(y, ylab, h, v, isKeptCnv, col = NULL, yaxt = NULL, ymax = NULL, 
                              cnvs = list(), sampleHMM = NULL, maskedHMM = NULL, chromI = NULL){
     if(is.null(ymax)) ymax <- max(h)
-    yInset <- 0 # ymax * 0.01 
+    yInset <- ymax * 0.025
     isZoomed <- !is.null(chromI)
     I <- if(isZoomed) chromI else TRUE
     x <- 1:length(y) 
@@ -84,7 +84,7 @@ plotCellByWindow <- function(y, ylab, h, v, isKeptCnv, col = NULL, yaxt = NULL, 
         isKeptCnv_ <- !isZoomed || isKeptCnv(key = cnv$key)
         cnvCol <- if(isKeptCnv_) getWindowColors(cnv$CN, 0.15) else getWindowColors(0, 0.15)
         rect(
-            cnv$startI - 0.5, yInset, cnv$endI + 0.5, ymax - yInset, 
+            cnv$startI, yInset, cnv$endI, ymax - yInset, 
             col = cnvCol, 
             border = if(isZoomed && isKeptCnv_) getWindowColors(cnv$CN, 0.8) else NA,
             lwd = 2
@@ -331,7 +331,9 @@ getCellSummary <- function(project, cell, buttons){
         tags$div(paste("windowPower: ", colData$windowPower, '(', commify(2 ** colData$windowPower * 20), 'kb )')),
         if(cell$badCell) tags$div("bad cell, not processed") else tagList(
             tags$div(paste("repGcRatio:", round(colData$repGcRatio, 2), '(', colData$modelType, ',', round(colData$fractionS, 2), ')')), 
-            tags$div(paste("cnsd:", round(colData$cnsd, 2), '(', if(colData$keep) "" else "not", "passed", ')')),
+            tags$div(paste("cnsd:", round(colData$cnsd, 2), 
+                           '(', if(colData$keep) "" else "not", "passed", ')',
+                           '(', colData$sex, ', expect', colData$expectedSex, ')')),
             if(!is.null(buttons)) buttons(colData, cell) else "" 
         ) 
     )
@@ -382,7 +384,6 @@ createZoomLabelRow <- function(session, zoomChrom){
 plotOneCellUI_genome <- function(sourceId, project, cell, settings, buttons = NULL, 
                                  getReplicating = NULL, getKeep = NULL){
     req(project)
-    # unlink(file.path(project$qcPlotsDir, "*.png"))
     setCellCompositeData(sourceId, project, cell, settings, "genome", getReplicating, getKeep, force = FALSE)
     tags$div(
         style = paste("border: 1px solid", cellCompositeData[[cell$cell_id]]$col, ";"),

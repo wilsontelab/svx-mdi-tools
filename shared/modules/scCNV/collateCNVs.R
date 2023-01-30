@@ -1,17 +1,18 @@
 #=====================================================================================
-# main target function that compares CNVs across all cells in a project
+# compare CNVs across all cells in a project
 #-------------------------------------------------------------------------------------
 getCellCnvs <- function(shapeKey, cell){
     if(cell$badCell) return(NULL)
     sampleName <- manifest[Sample_ID == cell$cell_id, Sample_Name]
     x <- copy(windows[[cell$windowPower + 1]])
+    cellPloidy <- sampleChromosomes[[sampleName]]$CN[x$chrom, expected]
     x[, ":="(
         windowPower = cell$windowPower,
         keep = cell$keep,
         cellCN = cell$windows[[shapeKey]]$sequential$HMM,        
         sampleMedian = sampleProfiles[[sampleName]][[cell$windowPower + 1]],
-        cellPloidy = cell$ploidy
-    )]    
+        cellPloidy = cellPloidy
+    )] 
     do.call(rbind, lapply(c("sampleMedian", "cellPloidy"), function(type){
         x[, .(
             type = type,
@@ -31,7 +32,7 @@ getCellCnvs <- function(shapeKey, cell){
         ]
     }))
 }
-collateCNVs <- function(cells){ # creates the unshaped and shaped, i.e., cell-specific, fits
+collateCNVs <- function(){ # creates the unshaped and shaped, i.e., cell-specific, fits
     workingStep <<- "collateCNVs"
     shapeKeys <- c("unshaped", "shaped", "batched")
     goodCellI <- 1
