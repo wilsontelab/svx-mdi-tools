@@ -27,6 +27,7 @@ settings <- activateMdiHeaderLinks( # uncomment as needed
 )
 outcomes <- reactiveValues() # outcomes[[sourceId]][i] <- TRUE if library i failed
 overrides <- reactiveValues()
+keptCnvs <- reactiveValues()
 showFiltersAsOverrides <- reactive({
     x <- settings$get("Page_Options", "Show_Filters_As")
     if(isTruthy(x)) x == "User Overrides" else TRUE
@@ -51,6 +52,18 @@ getReplicating <- function(bad, replicating, cell_id, sourceId = NULL, forceOver
     if(is.null(sourceId)) sourceId <- sourceId()
     overridden <- isUserOverride(cell_id, "replicating", sourceId, forceOverrides)
     !bad & replicating & !overridden
+}
+toggleKeptCnv <- function(cnv, sourceId = NULL){
+    if(is.null(sourceId)) sourceId <- sourceId()
+    key <- getCnvKey(cnv, sourceId)
+    keptCnvs[[key]] <- if(is.null(keptCnvs[[key]])) TRUE else NULL
+}
+isKeptCnv <- function(key = NULL, cnv = NULL, sourceId = NULL){
+    if(is.null(key)) {
+        if(is.null(sourceId)) sourceId <- sourceId()
+        key <- getCnvKey(cnv, sourceId)
+    }
+    !is.null(keptCnvs[[key]]) && keptCnvs[[key]]
 }
 
 #----------------------------------------------------------------------
@@ -221,23 +234,27 @@ cellStack <- reactive({
         i = 1:input$cellsPerPage + input$cellsPerPage * (as.integer(input$pageNumber) - 1) 
     )
 })
-output$genomePlots <- renderUI({ 
-    sourceId <- sourceId()     
+output$genomePlots <- renderUI({     
     cells <- cells()
     req(cells)
     if(cells$n == 0) return("no cells to plot")
     startSpinner(session, message = "loading genome plots")
     cellStack <- cellStack()
     project <- project()
-    x <- lapply(cellStack$i, function(i){
+    labelRow <- {
+        colData <- cellStack$colData[cellStack$i[1], ]
+        cell <- project$cells[[colData$cell_id]]
+        createGenomeLabelRow(project, cell)
+    }
+    cells <- lapply(cellStack$i, function(i){
         if(i > cells$n) return(NULL)
         colData <- cellStack$colData[i, ]
         cell <- project$cells[[colData$cell_id]]
-        plotOneCellUI_genome(project, cell, settings, keepRejectButtons, getReplicating, getKeep)
+        plotOneCellUI_genome(sourceId(), project, cell, settings, keepRejectButtons, getReplicating, getKeep)
     })
     isolate({ initGenomePlotClicks(initGenomePlotClicks() + 1) })
     stopSpinner(session)
-    x
+    tagList(labelRow, cells)
 })
 observeEvent(input$cellsPerPage, {
     session$sendCustomMessage("cellPlotsWrapperUpdate", list(
@@ -250,6 +267,8 @@ observeEvent(input$cellsPerPage, {
 # handle clicks into chromosome-level views
 #----------------------------------------------------------------------
 zoomChrom <- reactiveVal(NULL)
+invalidateZoomPlots <- reactiveVal(0)
+invalidateZoomedCell <- NULL
 initGenomePlotClicks <- reactiveVal(0)
 observeEvent(initGenomePlotClicks(), {
     for(divId in c("genomePlotsWrapper", "chromPlotsWrapper")){
@@ -260,30 +279,69 @@ observeEvent(initGenomePlotClicks(), {
     }
 }, ignoreInit = TRUE)
 observeEvent(input$cellWindowsPlotClick, {
-    handleCellPlotClick(project(), input$cellWindowsPlotClick, zoomChrom, zoomWindowI)
+    handleCellPlotClick(project(), input$cellWindowsPlotClick, zoomChrom, zoomTargetWindow)
 })
 output$chromPlots <- renderUI({ 
     req(zoomChrom())
+    invalidateZoomPlots()
     startSpinner(session, message = "loading chrom plots")
     cells <- cells()
     project <- project()
     cellStack <- cellStack()
-    x <- lapply(cellStack$i, function(i){
+    labelRow <- createZoomLabelRow(session, zoomChrom())
+    cells <- lapply(cellStack$i, function(i){
         if(i > cells$n) return(NULL)
         colData <- cellStack$colData[i, ]
         cell <- project$cells[[colData$cell_id]]
-        plotOneCellUI_chrom(project, cell, settings, zoomChrom(), getReplicating, getKeep)
+        plotOneCellUI_chrom(sourceId(), project, cell, settings, zoomChrom(), invalidateZoomedCell, 
+                            getReplicating, getKeep, isKeptCnv)
     })
     isolate({ initGenomePlotClicks(initGenomePlotClicks() + 1) })
+    invalidateZoomedCell <<- NULL    
     stopSpinner(session)
-    x
+    tagList(labelRow, cells)
 })
+prevNextZoomChrom <- function(inc){
+    cellStack <- cellStack()
+    project <- project()
+    zoomChrom <- zoomChrom()
+    colData <- cellStack$colData[cellStack$i[1], ]
+    cell <- project$cells[[colData$cell_id]]
+    chroms <- project$windows[[cell$windowPower + 1]][, unique(chrom)]
+    i <- which(chroms == zoomChrom) + inc
+    if(i < 1 || i > length(chroms)) return(NULL)
+    zoomChrom(chroms[i])
+}
+observeEvent(input$prevZoomChrom, { prevNextZoomChrom(-1) })
+observeEvent(input$nextZoomChrom, { prevNextZoomChrom( 1) })
+observeEvent(input$closeZoomPanel, { zoomChrom(NULL) })
 
 #----------------------------------------------------------------------
 # handle clicks within chromosome-level views
 #----------------------------------------------------------------------
-zoomWindowI <- reactiveVal(NULL)
-observeEvent(zoomWindowI(), dprint(zoomWindowI()))
+zoomTargetWindow <- reactiveVal(NULL)
+observeEvent(zoomTargetWindow(), {
+    x <- zoomTargetWindow()
+    project <- project()
+    sampleName_ <- project$manifest[Sample_ID == x$cell_id, Sample_Name]
+    cell <- project$cells[[x$cell_id]]
+    shapeModel <- getShapeModel(settings, cell)
+    cnvs <- project$cnvs[[shapeModel$key]]
+    if(is.null(cnvs) || nrow(cnvs) == 0) return(NULL)
+    w <- x$targetWindow
+    cnv <- cnvs[
+        type == getCnvsType(settings) & 
+        sampleName == sampleName_ & 
+        cell_id == x$cell_id &
+        chrom == w$chrom & 
+        start <= w$start & 
+        end >= w$end
+    ]
+    if(nrow(cnv) != 1) return(NULL)
+    toggleKeptCnv(cnv, sourceId = NULL)
+    invalidateZoomedCell <<- x$cell_id
+    invalidateZoomPlots( invalidateZoomPlots() + 1)
+})
 
 #----------------------------------------------------------------------
 # define bookmarking actions

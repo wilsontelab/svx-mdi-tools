@@ -52,3 +52,26 @@
     background-color: #444; 
     display: none;
 }
+
+/* format the labels that ride on top of the cell stack */
+.cellPlotsLabelWrapper {
+    position: relative;
+    display: flex;
+    height: 25px;
+    line-height: 15px;
+    width: 100%;
+    padding-left: 463px;
+}
+.zoomPlotsLabelWrapper {
+    padding: 0;
+}
+.chromLabelDiv {
+    display: inline-block;
+    text-align: center;
+}
+.chromLabelDiv:nth-child( odd ) {
+    margin-top: 8px;   
+}
+.zoomLabelDiv {
+    margin-top: 5px !important;   
+}

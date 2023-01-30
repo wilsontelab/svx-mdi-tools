@@ -32,6 +32,9 @@ getCnvsType <- function(settings){
     cnvsType <- settings$get("Page_Options", "CNVs_Relative_To", "Sample Median")
     if(cnvsType == "Sample Median") "sampleMedian" else "cellPloidy" 
 }
+getCnvKey <- function(cnv, sourceId){ # a single row of a cnvs data.table
+    cnv[, paste(type, sourceId, cell_id, chrom, start)]
+}
 
 #----------------------------------------------------------------------
 # window point colors
@@ -61,7 +64,7 @@ adjustColorAlpha <- function(col, minAlpha) {
 #----------------------------------------------------------------------
 # make a composite plot of a single cell (on a single chromosome)
 #----------------------------------------------------------------------
-plotCellByWindow <- function(y, ylab, h, v, col = NULL, yaxt = NULL, ymax = NULL, 
+plotCellByWindow <- function(y, ylab, h, v, isKeptCnv, col = NULL, yaxt = NULL, ymax = NULL, 
                              cnvs = list(), sampleHMM = NULL, maskedHMM = NULL, chromI = NULL){
     if(is.null(ymax)) ymax <- max(h)
     yInset <- 0 # ymax * 0.01 
@@ -78,10 +81,13 @@ plotCellByWindow <- function(y, ylab, h, v, col = NULL, yaxt = NULL, ymax = NULL
     plot(NA, NA, bty = "n", xaxt = "n", yaxt = if(isZoomed) "n" else yaxt, xaxs = "i", , yaxs = "i",
         xlab = NULL, ylab = ylab, xlim = range(x), ylim = c(0, ymax))
     for(cnv in cnvs){
+        isKeptCnv_ <- !isZoomed || isKeptCnv(key = cnv$key)
+        cnvCol <- if(isKeptCnv_) getWindowColors(cnv$CN, 0.15) else getWindowColors(0, 0.15)
         rect(
             cnv$startI - 0.5, yInset, cnv$endI + 0.5, ymax - yInset, 
-            col = getWindowColors(cnv$CN, 0.15), 
-            border = NA
+            col = cnvCol, 
+            border = if(isZoomed && isKeptCnv_) getWindowColors(cnv$CN, 0.8) else NA,
+            lwd = 2
         )
     }
     abline(h = h, v = v, col = "grey")
@@ -90,7 +96,7 @@ plotCellByWindow <- function(y, ylab, h, v, col = NULL, yaxt = NULL, ymax = NULL
     if(!is.null(maskedHMM)) lines(x, maskedHMM[I], col = "brown")
     if(!isZoomed && !is.null(yaxt)) axis(2, at = 0:ymax, labels = 0:ymax) 
 }
-plotCellQC <- function(cell, d, zoomChrom){
+plotCellQC <- function(cell, d, zoomChrom, isKeptCnv){
     isZoomed <- !is.null(zoomChrom)
     zc_i <- if(isZoomed) d$w[chrom == zoomChrom, i] else NULL
     if(cell$badCell){
@@ -99,7 +105,7 @@ plotCellQC <- function(cell, d, zoomChrom){
             xlab = "Fraction GC", xlim = c(0.3, 0.6), 
             ylab = "# of Reads", 
             pch = 19, cex = 0.4)
-        plotCellByWindow(d$d$cw$NR_wms, "# Reads", h = max(d$d$cw$NR_wms, na.rm = TRUE), v = d$v, chromI = zc_i)
+        plotCellByWindow(d$d$cw$NR_wms, "# Reads", h = max(d$d$cw$NR_wms, na.rm = TRUE), v = d$v, isKeptCnv = isKeptCnv, chromI = zc_i)
     } else {
 
         # plot selected model's NR_wms vs. gc_w (color as final replication call)
@@ -120,11 +126,11 @@ plotCellQC <- function(cell, d, zoomChrom){
         }        
 
         # plot NR_wm vs. window index, i.e., pre-normalization input (color as final replication call) 
-        plotCellByWindow(d$d$cw_pre$NR_wms, "# Reads", h = d$d$h_NR, v = d$v, ymax = d$d$ymax_NR,
+        plotCellByWindow(d$d$cw_pre$NR_wms, "# Reads", h = d$d$h_NR, v = d$v, isKeptCnv = isKeptCnv, ymax = d$d$ymax_NR,
                          col = d$d$colNA_NR, cnvs = d$d$cnvs, chromI = zc_i)
 
         # plot CN vs. window index, i.e., post-normalization (color as final CN call)
-        plotCellByWindow(d$d$cww$CN, "CN", h = d$d$h_CN, v = d$v, yaxt = "n", 
+        plotCellByWindow(d$d$cww$CN, "CN", h = d$d$h_CN, v = d$v, isKeptCnv = isKeptCnv, yaxt = "n", 
                          col = d$d$colNA_CN, cnvs = d$d$cnvs, chromI = zc_i, 
                          sampleHMM = d$d$sampleHMM, maskedHMM = d$d$maskedHMM)
     }
@@ -144,7 +150,7 @@ getCellPngFile <- function(project, cell, level, d){
     file.path(project$qcPlotsDir, fileName)
 }
 getCellPlotPanel <- function(project, cell, settings, level, 
-                             widthChunks, layoutMatrix, zoomChrom = NULL, force = TRUE){
+                             widthChunks, layoutMatrix, zoomChrom = NULL, isKeptCnv = NULL, force = FALSE){
     d <- cellCompositeData[[cell$cell_id]]
     pngFile <- getCellPngFile(project, cell, level, d)
     mustCreate <- force || !file.exists(pngFile)
@@ -160,7 +166,7 @@ getCellPlotPanel <- function(project, cell, settings, level,
             type = "cairo"
         )
         layout(layoutMatrix)
-        plotCellQC(cell, d, zoomChrom)
+        plotCellQC(cell, d, zoomChrom, isKeptCnv)
         dev.off()
     }
     tags$img(
@@ -172,29 +178,26 @@ getCellPlotPanel <- function(project, cell, settings, level,
     )
 }
 getCellCompositePlot <- function(project, cell, settings){
-
-    #####################
-    force <- FALSE    
-
     getCellPlotPanel(
         project, cell, settings, "genome", 
         widthChunks = 6,
         layoutMatrix = matrix(c(c(1,1), rep(c(2,3), 5)), nrow = 2, ncol = 6),
-        force = force
+        force = FALSE
     )  
 }
-getZoomChromPlot <- function(project, cell, settings, zoomChrom){
+getZoomChromPlot <- function(project, cell, settings, zoomChrom, isKeptCnv, force = FALSE){
     if(is.null(zoomChrom)) return("")
     getCellPlotPanel(
         project, cell, settings, zoomChrom, 
         widthChunks = 3,
         layoutMatrix = matrix(rep(c(1,2), 3), nrow = 2, ncol = 3),
         zoomChrom = zoomChrom,
-        force = FALSE
+        isKeptCnv = isKeptCnv,
+        force = force
     )  
 }
-setCellCompositeData <- function(project, cell, settings, level,
-                                 getReplicating = NULL, getKeep = NULL){
+setCellCompositeData <- function(sourceId, project, cell, settings, level,
+                                 getReplicating = NULL, getKeep = NULL, force = FALSE){
     key <- if(cell$badCell){
         shapeModel <- NULL
         replicationModel <- NULL
@@ -215,7 +218,7 @@ setCellCompositeData <- function(project, cell, settings, level,
     keyIsLoaded <- !is.null(cellCompositeData[[cell$cell_id]]) &&
                    cellCompositeData[[cell$cell_id]]$key == key
     dataIsLoaded <- keyIsLoaded && !is.null(cellCompositeData[[cell$cell_id]]$d)
-    if(imageFileExists){
+    if(!force && imageFileExists){
         if(!keyIsLoaded) cellCompositeData[[cell$cell_id]] <<- list(
             key = key,
             shapeModel = shapeModel,
@@ -259,6 +262,7 @@ setCellCompositeData <- function(project, cell, settings, level,
             x <- cnvs[j]
             w_i <- w[chrom == x$chrom & start ==x$start, i]
             list(
+                key = getCnvKey(x, sourceId),
                 startI = w_i,
                 endI = w_i + x$nWindows - 1,
                 CN = if(x$cellCN > x$referenceCN) 3 else 1
@@ -337,11 +341,49 @@ getCellSummary <- function(project, cell, buttons){
 # master function for plotting a single cell
 #----------------------------------------------------------------------
 cellCompositeData <- list()
-plotOneCellUI_genome <- function(project, cell, settings, buttons = NULL, 
+createGenomeLabelRow <- function(project, cell){ # NOTE: don't make this dynamic to zoom, it forces an update of the entire genome panel
+    chroms <- project$windows[[cell$windowPower]][, .N, by = "chrom"]    
+    chroms[, ":="(
+        chrom = gsub("chr", "", chrom),
+        pixelWidth = genomeXWidth * N / sum(N)
+    )]
+    tags$div(
+        style = paste("border: 1px solid grey;"),
+        class = "cellPlotsLabelWrapper",
+        tagList(
+            lapply(1:nrow(chroms), function(i) {
+                chrom <- chroms[i, chrom]
+                W <- chroms[i, pixelWidth]
+                tags$div(
+                    tags$strong(chrom), 
+                    class = "chromLabelDiv", 
+                    style = paste0("width: ", W, "px;", " max-width: ", W, "px;")
+                )
+            })
+        )
+    )
+}
+createZoomLabelRow <- function(session, zoomChrom){
+    tags$div(
+        style = paste("border: 1px solid grey;"),
+        class = "cellPlotsLabelWrapper zoomPlotsLabelWrapper",
+        tagList(
+            tags$div(
+                actionLink(session$ns("prevZoomChrom"), "previous", style = "float: left; margin-left: 10px;"),
+                tags$strong(zoomChrom), 
+                actionLink(session$ns("closeZoomPanel"), "close", style = "margin-left: 10px;"),                
+                actionLink(session$ns("nextZoomChrom"), "next", style = "float: right; margin-right: 10px;"),
+                class = "chromLabelDiv zoomLabelDiv", 
+                style = paste0("width: 100%;")
+            )
+        )
+    )
+}
+plotOneCellUI_genome <- function(sourceId, project, cell, settings, buttons = NULL, 
                                  getReplicating = NULL, getKeep = NULL){
     req(project)
-    unlink(file.path(project$qcPlotsDir, "*.png"))
-    setCellCompositeData(project, cell, settings, "genome", getReplicating, getKeep)
+    # unlink(file.path(project$qcPlotsDir, "*.png"))
+    setCellCompositeData(sourceId, project, cell, settings, "genome", getReplicating, getKeep, force = FALSE)
     tags$div(
         style = paste("border: 1px solid", cellCompositeData[[cell$cell_id]]$col, ";"),
         class = "cellPlotWrapper",
@@ -351,14 +393,16 @@ plotOneCellUI_genome <- function(project, cell, settings, buttons = NULL,
         )
     )
 }
-plotOneCellUI_chrom <- function(project, cell, settings, zoomChrom,
-                                 getReplicating = NULL, getKeep = NULL){
+plotOneCellUI_chrom <- function(sourceId, project, cell, settings, zoomChrom, invalidateZoomedCell,
+                                 getReplicating = NULL, getKeep = NULL, isKeptCnv = NULL){
     req(project)
-    setCellCompositeData(project, cell, settings, zoomChrom, getReplicating, getKeep)
+    force <- !is.null(invalidateZoomedCell) && cell$cell_id == invalidateZoomedCell
+    setCellCompositeData(sourceId, project, cell, settings, zoomChrom, 
+                         getReplicating, getKeep, force = force)
     tags$div(
         style = paste("border: 1px solid", cellCompositeData[[cell$cell_id]]$col, ";"),
         class = "cellPlotWrapper",
-        getZoomChromPlot(project, cell, settings, zoomChrom)
+        getZoomChromPlot(project, cell, settings, zoomChrom, isKeptCnv, force = force)
     )
 }
 
@@ -369,7 +413,7 @@ genomeXOffset <- (1.5 + 0.5) * 96
 genomeXWidth <- (1.5 * 5 - 0.5) * 96
 chromXOffset <- 0
 chromXWidth <- (1.5 * 3 - 0) * 96
-handleCellPlotClick <- function(project, click, zoomChrom, zoomWindowI){
+handleCellPlotClick <- function(project, click, zoomChrom, zoomTargetWindow){
     expandClick <- function(offest, width){
         x <- click$coord$x - offest
         cell_id <- as.character(click$data$cell_id) # gets sent to us as an integer by Shiny.setInputValue
@@ -377,7 +421,8 @@ handleCellPlotClick <- function(project, click, zoomChrom, zoomWindowI){
         w <- project$windows[[cell$windowPower + 1]] 
         list(
             x = x,
-            w = w
+            w = w,
+            cell_id = cell_id
         )       
     }
     switch(
@@ -393,7 +438,10 @@ handleCellPlotClick <- function(project, click, zoomChrom, zoomWindowI){
             n_w <- nrow(w_c)
             I <- round(click$x / chromXWidth * n_w, 0)
             I <- pmin(n_w, pmax(1, I))
-            zoomWindowI(w_c[I, i])
+            zoomTargetWindow(list(
+                targetWindow = w_c[I, ], 
+                cell_id = click$cell_id
+            ))
         }
     )
 }

@@ -52,5 +52,5 @@ Shiny.addCustomMessageHandler("cellPlotsWrapperInit", function(opt){
     });
 });
 Shiny.addCustomMessageHandler("cellPlotsWrapperUpdate", function(opt){
-    $(".cellStackVertical").css({height: (1.35 * 96 + 2) * opt.cellsPerPage});
+    $(".cellStackVertical").css({height: (1.35 * 96 + 2) * opt.cellsPerPage + 25});
 });
