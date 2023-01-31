@@ -25,7 +25,6 @@ settings <- activateMdiHeaderLinks( # uncomment as needed
     # immediate = TRUE # plus any other arguments passed to settingsServer()
     size = "m"
 )
-outcomes <- reactiveValues() # outcomes[[sourceId]][i] <- TRUE if library i failed
 overrides <- reactiveValues()
 keptCnvs <- reactiveValues()
 applyFiltersAsOverrides <- reactive({
@@ -33,7 +32,7 @@ applyFiltersAsOverrides <- reactive({
     if(isTruthy(x)) x == "User Overrides" else TRUE
 })
 isUserOverride <- Vectorize(function(cell_id, key, sourceId, forceOverrides = TRUE) {
-    if(!forceOverrides && !showFiltersAsOverrides()) FALSE 
+    if(!forceOverrides && !applyFiltersAsOverrides()) FALSE 
     else !is.null(overrides[[sourceId]][[cell_id]][[key]]) && overrides[[sourceId]][[cell_id]][[key]]
 })
 getKeep <- function(bad, keep, cell_id, sourceId = NULL, forceOverrides = TRUE) {
@@ -65,9 +64,14 @@ isKeptCnv <- function(key = NULL, cnv = NULL, sourceId = NULL){
     }
     !is.null(keptCnvs[[key]]) && keptCnvs[[key]]
 }
+getKeptCnvKeys <- reactive({
+    keys <- names(keptCnvs)
+    if(length(keys) == 0) return(character())
+    unlist(sapply(keys, function(key) if(isKeptCnv(key)) key else character()))
+})
 
 #----------------------------------------------------------------------
-# loade sample/cell source data
+# load sample/cell source data
 #----------------------------------------------------------------------
 sourceId <- dataSourceTableServer(
     "source", 
@@ -76,8 +80,7 @@ sourceId <- dataSourceTableServer(
 observeEvent(sourceId(), {
     sourceIsInitializing <<- TRUE
 })
-# projectName <- projectNameReactive(sourceId)
-project <- normalizeDataReactive(sourceId)
+project <- scCnvProjectReactive(sourceId)
 sourceIsInitializing <- TRUE
 cells <- reactive({
     project <- project()
@@ -376,8 +379,13 @@ observeEvent(input$resetEverything, {
         tags$p("This actions clears all keep/reject/replicating overrides and unmarks all CNV selections."),
         tags$p("This cannot be undone."), 
         callback = function(...) {
-            overrides <<- reactiveValues()
-            keptCnvs <<- reactiveValues()
+            # overrides <<- reactiveValues()
+            # keptCnvs <<- reactiveValues()
+
+            for(sourceId in names(overrides)) overrides[[sourceId]] <- NULL
+            for(key in names(keptCnvs)) keptCnvs[[key]] <- NULL
+
+
             unlink(file.path(project$qcPlotsDir, "*.chr*.png"))
             zoomChrom(NULL)
             invalidateGenomePlots( invalidateGenomePlots() + 1 )
@@ -414,9 +422,12 @@ list(
     outcomes = list(
         overrides = overrides,
         keptCnvs = keptCnvs
-    ),      
+    ), 
+    overrides = overrides,
+    getKeptCnvKeys = getKeptCnvKeys,
+    isReady = reactive({ getStepReadiness(options$source, fn = function(...) length(getKeptCnvKeys()) > 0) }),         
     NULL
-    # # isReady = reactive({ getStepReadiness(options$source, ...) }),
+
     # getSampleFilePrefix = function(sourceId, keep = NULL, colData = NULL){
     #     if(is.null(keep)){
     #         if(is.null(colData)) colData <- {

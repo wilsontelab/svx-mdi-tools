@@ -41,17 +41,13 @@ uploadTypes:
 appSteps:
     upload: # nearly always the 1st step of every app
         module: sourceFileUpload
-    libraryQC:
+    libraryQC: # summarize cells and quality; for visualization only
         module: libraryQC  
-    keepReject:
+    keepReject: # view cells one at a time; keep or reject cells; mark CNVs to keep
         module: keepRejectCells
-    # annotate:
-    #     module: annotateCells
-    # adjust:
-    #     module: adjustCells        
-    # normalize:
-    #     module: normalizeBatch 
-    # # summary:
-    # #     module: sampleSummary 
-    browser:
-        module: genomex-mdi-tools//trackBrowser
+    collateCNVs: # views kept CNVs in kept cells; match CNVs between cells
+        module: collateCNVs
+    analyzeReplication: # visualize and characterize the replication profile from one or more samples
+        module: analyzeReplication        
+    # browser:
+    #     module: genomex-mdi-tools//trackBrowser

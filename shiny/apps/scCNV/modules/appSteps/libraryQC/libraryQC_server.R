@@ -34,7 +34,7 @@ sourceId <- dataSourceTableServer(
     "source", 
     selection = "single"
 )
-project <- normalizeDataReactive(sourceId) # one Project has one or more Samples, each with one or more Cells
+project <- scCnvProjectReactive(sourceId) # one Project has one or more Samples, each with one or more Cells
 
 #----------------------------------------------------------------------
 # high-level count summaries

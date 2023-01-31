@@ -6,7 +6,12 @@ shapeModels <- c( # in priority order
     "Shaped",
     "Unshaped"
 )
-getShapeModel <- function(settings, cell){
+getShapeModel <- function(settings, cell = NULL, cells = NULL){
+    if(is.null(cell)){
+        goodCellI <- 1
+        while(cells[[goodCellI]]$badCell) goodCellI <- goodCellI + 1    
+        cell <- cells[[goodCellI]]    
+    }
     model <- settings$get("Page_Options", "Shape_Model")
     while(!(tolower(model) %in% names(cell$windows))) 
         model <- shapeModels[which(shapeModels == model) + 1]
@@ -15,6 +20,7 @@ getShapeModel <- function(settings, cell){
         key = tolower(model)
     )
 }
+
 getReplicationModel <- function(settings, cell, getReplicating){
     model <- settings$get("Page_Options", "Replication_Model")
     isReplicating <- if(is.null(getReplicating)) cell$cellIsReplicating 
@@ -308,6 +314,7 @@ setCellCompositeData <- function(sourceId, project, cell, settings, level,
             maskedHMM = maskedHMM
         )
     }
+
     cellCompositeData[[cell$cell_id]] <<- list(
         key = key,
         shapeModel = shapeModel,
@@ -344,7 +351,7 @@ getCellSummary <- function(project, cell, buttons){
 #----------------------------------------------------------------------
 cellCompositeData <- list()
 createGenomeLabelRow <- function(project, cell){ # NOTE: don't make this dynamic to zoom, it forces an update of the entire genome panel
-    chroms <- project$windows[[cell$windowPower]][, .N, by = "chrom"]    
+    chroms <- project$windows[[cell$windowPower + 1]][, .N, by = "chrom"]   
     chroms[, ":="(
         chrom = gsub("chr", "", chrom),
         pixelWidth = genomeXWidth * N / sum(N)

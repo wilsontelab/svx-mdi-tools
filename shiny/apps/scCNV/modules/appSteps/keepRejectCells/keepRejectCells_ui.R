@@ -32,7 +32,7 @@ keepRejectCellsUI <- function(id, options) {
         dataSourceTableUI(
             ns("source"), 
             "Project Source", 
-            width = 12, 
+            width = 6, 
             collapsible = TRUE
         ),
 
