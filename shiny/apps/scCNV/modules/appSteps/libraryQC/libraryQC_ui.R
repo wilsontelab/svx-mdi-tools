@@ -15,7 +15,13 @@ libraryQCUI <- function(id, options) {
     standardSequentialTabItem(
         # HTML(paste( options$longLabel, settingsUI(ns('settings')) )),
         HTML(options$longLabel),
-        leaderText,
+        collapsibleDivUI(
+            ns("leaderText"), 
+            "Select a sample source to show a series of plots that summarize the distributions of various",
+            "QC metrics for all cells in the project. One dot corresponds to one cell.",
+            "Click on a cell's dot to show its genome-wide QC plots.",
+            "Colored bars next to the cell counts in the top row are the same as used in the plots."                               
+        ),
 
         # page header links
         id = id,
@@ -28,8 +34,8 @@ libraryQCUI <- function(id, options) {
         # box for selecting sample source
         dataSourceTableUI(
             ns("source"), 
-            "Sample", 
-            width = 6, 
+            "Project Source", 
+            width = 8, 
             collapsible = TRUE
         ),
 

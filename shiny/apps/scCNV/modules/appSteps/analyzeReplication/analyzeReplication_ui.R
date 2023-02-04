@@ -16,7 +16,10 @@ analyzeReplicationUI <- function(id, options) {
 
         # page header text
         options$longLabel,
-        options$leaderText,
+        collapsibleDivUI(
+            ns("leaderText"), 
+            "Select one or more project sources expected to represent cells with a common replication timing."                                
+        ),
 
         # page header links, uncomment as needed
         id = id,
@@ -24,9 +27,26 @@ analyzeReplicationUI <- function(id, options) {
         # terminal = TRUE,
         console = serverEnv$IS_DEVELOPER,
         code = serverEnv$IS_DEVELOPER,
-        # settings = TRUE,
+        settings = TRUE,
 
-        # appStep UI elements, populate as needed
-        "module contents pending"
+        # box for selecting data source
+        dataSourceTableUI(
+            ns("source"), 
+            "Project Source", 
+            width = 8, 
+            collapsible = TRUE
+        ),
+
+        # stacked individual cell plots
+        tags$div(
+            style = "white-space: nowrap;",
+            tags$div(
+                id = ns("chromPlotsWrapper"),
+                class = "cellPlotsWrapper",
+                uiOutput(ns("chromPlots")),
+                tags$div(class = "cellStackVertical")
+            )            
+        ),
+        NULL    
     )
 }

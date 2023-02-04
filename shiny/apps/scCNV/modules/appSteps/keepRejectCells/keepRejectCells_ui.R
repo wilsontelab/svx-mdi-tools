@@ -18,7 +18,15 @@ keepRejectCellsUI <- function(id, options) {
 
         # page header text
         options$longLabel,
-        options$leaderText,
+        collapsibleDivUI(
+            ns("leaderText"), 
+            "Working with one selected sample source at time, scroll through the pages of cells to assess individual cell and CNV qualities.",
+            "Use the top-level settings and filters in the top row to change which cells and CNVs you are seeing.",
+            "Click 'Keep, 'Reject', and '(Not) Replicating' to change a cell's filterable states. ",
+            "Click on a chromosome in the genome view to expand its view.",
+            "Click on a CNV in the expanded view to keep that CNV.",
+            "Only actively kept CNVs will be tabulated in downstream assessments - you must click each one."                                  
+        ),
 
         # page header links
         id = id,
@@ -32,7 +40,7 @@ keepRejectCellsUI <- function(id, options) {
         dataSourceTableUI(
             ns("source"), 
             "Project Source", 
-            width = 6, 
+            width = 8, 
             collapsible = TRUE
         ),
 

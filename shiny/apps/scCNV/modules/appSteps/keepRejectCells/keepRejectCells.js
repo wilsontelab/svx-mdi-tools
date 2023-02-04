@@ -52,5 +52,9 @@ Shiny.addCustomMessageHandler("cellPlotsWrapperInit", function(opt){
     });
 });
 Shiny.addCustomMessageHandler("cellPlotsWrapperUpdate", function(opt){
-    $(".cellStackVertical").css({height: (1.35 * 96 + 2) * opt.cellsPerPage + 25});
+    let h = (1.35 * 96 + 2) * opt.cellsPerPage + 25;
+    if(opt.short === true) h = h / 2 + 10;
+    const wrapperId = "#" + opt.prefix + opt.divId;
+    const mdiVertical = wrapperId + " .cellStackVertical";
+    $(mdiVertical).css({height: h});
 });

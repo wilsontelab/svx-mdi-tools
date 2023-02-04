@@ -1,9 +1,9 @@
 #----------------------------------------------------------------------
 # ui
 #----------------------------------------------------------------------
-shortLabel:       "collateCNVs" # shown on dashboard menu 
-shortDescription: "collateCNVs." # shown on Overview page
-longLabel:        "collateCNVs" # shown at top of appStep page 
+shortLabel:       "Match CNVs" # shown on dashboard menu 
+shortDescription: "Match CNVs between cells and/or samples." # shown on Overview page
+longLabel:        "Match CNVs between cells and/or samples" # shown at top of appStep page 
 
 #----------------------------------------------------------------------
 # server
@@ -37,7 +37,13 @@ settings:
                 - Batched  
                 - Shaped                          
                 - Unshaped            
-            value: Batched 
+            value: Batched   
+        Replication_Model:
+            type: selectInput
+            choices:
+                - Sequential
+                - Composite
+            value: Sequential 
         CNVs_Relative_To:
             type: selectInput
             choices:

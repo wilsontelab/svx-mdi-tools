@@ -1,17 +1,16 @@
 #----------------------------------------------------------------------
 # ui
 #----------------------------------------------------------------------
-shortLabel:       "Keep & Reject" # shown on dashboard menu 
-shortDescription: "Examine individual cells and CNVs to keep or reject them for downstream analysis." # shown on Overview page
-longLabel:        "Keep & reject cells and CNVs" # shown at top of appStep page 
+shortLabel:       "Final CNV Tables" # shown on dashboard menu 
+shortDescription: "Download tables of final kept and grouped CNVs." # shown on Overview page
+longLabel:        "Download final CNV tables" # shown at top of appStep page 
 
 #----------------------------------------------------------------------
 # server
 #----------------------------------------------------------------------
 types: # names of the type(s) of this module ...
-    - keepReject
-sourceTypes: 
-    - upload # ... and of the module(s) on which it depends
+    - cnvTables
+sourceTypes: keepReject # ... and of the module(s) on which it depends
 
 #----------------------------------------------------------------------
 # dependencies
@@ -32,20 +31,6 @@ packages: # required R packages
 #----------------------------------------------------------------------
 settings:
     Page_Options:
-        Sort_By:
-            type: selectInput
-            choices:
-                - windowPower
-                - cnsd
-                - fractionS
-                - slope
-            value: windowPower
-        Order:
-            type: selectInput
-            choices:
-                - Ascending
-                - Descending
-            value: Ascending 
         Shape_Model:
             type: selectInput
             choices:
@@ -64,37 +49,7 @@ settings:
             choices:
                 - Cell Ploidy
                 - Sample Median
-            value: Cell Ploidy  
-        Minimum_Windows_Per_CNV:
-            type:   numericInput
-            value:  10
-            min:    0
-            max:    1000
-            step:   5    
-        Apply_Filters_As:
-            type: selectInput
-            choices:
-                - User Overrides            
-                - Pipeline Values
-            value: User Overrides 
-#         Track_Height_Pixels:
-#             type:   numericInput
-#             value:  300
-#             min:    100
-#             max:    400
-#             step:   25 
-#         Maximum_Copy_Number:
-#             type:   numericInput
-#             value:  4
-#             min:    2
-#             max:    10
-#             step:   1 
-#         Point_Size:
-#             type:   numericInput
-#             value:  0.4
-#             min:    0.25
-#             max:    2
-#             step:   0.05
+            value: Cell Ploidy 
 #     <settingsTabName>:
 #         <settingName>:
 #             type:   textInput

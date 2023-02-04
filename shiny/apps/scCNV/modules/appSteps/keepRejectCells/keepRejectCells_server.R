@@ -264,10 +264,13 @@ output$genomePlots <- renderUI({
     tagList(labelRow, cells)
 })
 observeEvent(input$cellsPerPage, {
-    session$sendCustomMessage("cellPlotsWrapperUpdate", list(
-        prefix = session$ns(""),
-        cellsPerPage = input$cellsPerPage
-    ))
+    for(divId in c("genomePlotsWrapper", "chromPlotsWrapper")){
+        session$sendCustomMessage("cellPlotsWrapperUpdate", list(
+            prefix = session$ns(""),
+            divId = divId,
+            cellsPerPage = input$cellsPerPage
+        ))
+    }
 })
 
 #----------------------------------------------------------------------
@@ -286,7 +289,7 @@ observeEvent(initGenomePlotClicks(), {
     }
 }, ignoreInit = TRUE)
 observeEvent(input$cellWindowsPlotClick, {
-    handleCellPlotClick(project(), input$cellWindowsPlotClick, zoomChrom, zoomTargetWindow)
+    handleCellPlotClick(input$cellWindowsPlotClick, zoomChrom, zoomTargetWindow)
 })
 output$chromPlots <- renderUI({ 
     req(zoomChrom())
@@ -295,7 +298,7 @@ output$chromPlots <- renderUI({
     cells <- cells()
     project <- project()
     cellStack <- cellStack()
-    labelRow <- createZoomLabelRow(session, zoomChrom())
+    labelRow <- createZoomLabelRow(session, zoomChrom(), close = TRUE)
     cells <- lapply(cellStack$i, function(i){
         if(i > cells$n) return(NULL)
         colData <- cellStack$colData[i, ]
@@ -328,25 +331,25 @@ observeEvent(input$closeZoomPanel, { zoomChrom(NULL) })
 #----------------------------------------------------------------------
 zoomTargetWindow <- reactiveVal(NULL)
 observeEvent(zoomTargetWindow(), {
-    x <- zoomTargetWindow()
+    click <- zoomTargetWindow()
     project <- project()
-    sampleName_ <- project$manifest[Sample_ID == x$cell_id, Sample_Name]
-    cell <- project$cells[[x$cell_id]]
+    sampleName_ <- project$manifest[Sample_ID == click$cell_id, Sample_Name]
+    cell <- project$cells[[click$cell_id]]
     shapeModel <- getShapeModel(settings, cell)
     cnvs <- project$cnvs[[shapeModel$key]]
     if(is.null(cnvs) || nrow(cnvs) == 0) return(NULL)
-    w <- x$targetWindow
+    w <- click$targetWindow
     cnv <- cnvs[
         type == getCnvsType(settings) & 
         sampleName == sampleName_ & 
-        cell_id == x$cell_id &
+        cell_id == click$cell_id &
         chrom == w$chrom & 
         start <= w$start & 
         end >= w$end
     ]
     if(nrow(cnv) != 1) return(NULL)
     toggleKeptCnv(cnv, sourceId = NULL)
-    invalidateZoomedCell <<- x$cell_id
+    invalidateZoomedCell <<- click$cell_id
     invalidateZoomPlots( invalidateZoomPlots() + 1)
 })
 
@@ -425,47 +428,19 @@ list(
     ), 
     overrides = overrides,
     getKeptCnvKeys = getKeptCnvKeys,
+    getReplicatingCells = function(sourceIds){
+        do.call(rbind, lapply(sourceIds, function(sourceId){
+            project <- getScCnvProjectData(sourceId)
+            project$colData[, .(
+                sourceId = sourceId,
+                cell_id = cell_id,
+                replicating = getReplicating(bad, replicating, cell_id, sourceId), 
+                fractionS = fractionS
+            )]
+        }))[replicating == TRUE][order(fractionS)]
+    },
     isReady = reactive({ getStepReadiness(options$source, fn = function(...) length(getKeptCnvKeys()) > 0) }),         
     NULL
-
-    # getSampleFilePrefix = function(sourceId, keep = NULL, colData = NULL){
-    #     if(is.null(keep)){
-    #         if(is.null(colData)) colData <- {
-    #             dataFilePath <- getSourceFilePath(sourceId, "normalizeFile")
-    #             readRDS(dataFilePath)$colData
-    #         }
-    #         keep <- getKeep(colData$rejected, colData$cell_id, sourceId)            
-    #     }
-    #     key <- digest(keep)
-    #     expandSourceFilePath(sourceId, key)
-    # },
-    # sampleSummaryColumns = reactive({
-    #     sources <- getStepReturnValueByType('upload', 'outcomes')$sources()
-    #     startSpinner(session, message = "get sample summaries") 
-    #     x <- do.call(rbind, lapply(names(sources), function(sourceId){
-    #         normalizeFilePath <- getSourceFilePath(sourceId, "normalizeFile")
-    #         colData <- readRDS(normalizeFilePath)$colData
-    #         keep <- getKeep(colData$rejected, colData$cell_id, sourceId)
-    #         batchFilePath <- paste(app$adjust$getSampleFilePrefix(sourceId, keep), "batchNormalized.rds", sep = ".")
-    #         batchFileExists <- file.exists(batchFilePath)
-    #         colData[, .(    
-    #             sourceId = sourceId,
-    #             normalizeFilePath = normalizeFilePath,
-    #             batchFilePath = batchFilePath,
-    #             batchFileExists = batchFileExists,
-    #             cell_id = list(colData$cell_id[keep]),
-    #             cells = .N,
-    #             keep     = sum(keep),
-    #             reject   = sum(getRejected(rejected, cell_id, sourceId)),
-    #             override = sum(isUserOverride(cell_id, sourceId)),
-    #             status = if(batchFileExists) 
-    #                 '<b style="margin-left: 10px;"><i class="fa-solid fa-check fa-lg" style="color: #0a0;"></i><b>' 
-    #                 else "pending"
-    #         )]   
-    #     }))
-    #     stopSpinner(session)
-    #     x
-    # })
 )
 
 #----------------------------------------------------------------------

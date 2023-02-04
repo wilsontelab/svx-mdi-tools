@@ -47,6 +47,8 @@ appSteps:
         module: keepRejectCells
     collateCNVs: # views kept CNVs in kept cells; match CNVs between cells
         module: collateCNVs
+    cnvTables: # views kept CNVs in kept cells; match CNVs between cells
+        module: cnvTables  
     analyzeReplication: # visualize and characterize the replication profile from one or more samples
         module: analyzeReplication        
     # browser:

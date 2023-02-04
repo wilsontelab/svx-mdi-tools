@@ -1,16 +1,16 @@
 #----------------------------------------------------------------------
 # ui
 #----------------------------------------------------------------------
-shortLabel:       "analyzeReplication" # shown on dashboard menu 
-shortDescription: "analyzeReplication." # shown on Overview page
-longLabel:        "analyzeReplication" # shown at top of appStep page 
+shortLabel:       "Analyze Replication" # shown on dashboard menu 
+shortDescription: "Analyze the genome-wide replication timing pattern in replicating cells." # shown on Overview page
+longLabel:        "Analyze genome replication timing" # shown at top of appStep page 
 
 #----------------------------------------------------------------------
 # server
 #----------------------------------------------------------------------
 types: # names of the type(s) of this module ...
     - analyzeReplication
-sourceTypes: null # ... and of the module(s) on which it depends
+sourceTypes: upload # ... and of the module(s) on which it depends
 
 #----------------------------------------------------------------------
 # dependencies
@@ -29,7 +29,21 @@ packages: # required R packages
 #----------------------------------------------------------------------
 # module-level settings
 #----------------------------------------------------------------------
-# settings:
+settings:
+    Page_Options:
+        Shape_Model:
+            type: selectInput
+            choices:
+                - Batched  
+                - Shaped                          
+                - Unshaped            
+            value: Batched   
+        Replication_Model:
+            type: selectInput
+            choices:
+                - Sequential
+                - Composite
+            value: Sequential 
 #     <settingsTabName>:
 #         <settingName>:
 #             type:   textInput

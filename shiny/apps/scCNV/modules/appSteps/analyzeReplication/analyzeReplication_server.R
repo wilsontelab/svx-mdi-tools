@@ -21,13 +21,73 @@ settings <- activateMdiHeaderLinks( # uncomment as needed
     # dir = appStepDir, # for terminal emulator
     envir = environment(), # for R console
     baseDirs = appStepDir, # for code viewer/editor
-    # settings = id, # for step-level settings
+    settings = id, # for step-level settings
     # immediate = TRUE # plus any other arguments passed to settingsServer()
 )
 
 #----------------------------------------------------------------------
-# add server code sections as needed
+# load sample/cell source data
 #----------------------------------------------------------------------
+sourceIds <- dataSourceTableServer(
+    "source", 
+    selection = "multiple"
+)
+cellsByFractionS <- reactive({
+    sourceIds <- sourceIds()
+    req(sourceIds) 
+    app$keepReject$getReplicatingCells(sourceIds)  
+})
+
+#----------------------------------------------------------------------
+# stacked FAR plots for all replicating cells
+#----------------------------------------------------------------------
+zoomChrom <- reactiveVal("chr1")
+output$chromPlots <- renderUI({
+    cellsByFractionS <- cellsByFractionS()
+    req(cellsByFractionS)
+    zoomChrom <- zoomChrom()
+    req(zoomChrom)
+    # invalidateZoomPlots()
+    startSpinner(session, message = "loading chrom plots")
+    labelRow <- createZoomLabelRow(session, zoomChrom, close = FALSE, commit = FALSE)
+    cells <- lapply(1:nrow(cellsByFractionS), function(j){
+        sourceId <- cellsByFractionS[j, sourceId]
+        cell_id  <- cellsByFractionS[j, cell_id]
+        project <- getScCnvProjectData(sourceId)
+        cell <- project$cells[[cell_id]]
+        plotOneCellUI_FAR(sourceId, project, cell, settings, zoomChrom)        
+    })
+    isolate({ initGenomePlotClicks(initGenomePlotClicks() + 1) })  
+    stopSpinner(session)
+    tagList(labelRow, cells)
+})
+initGenomePlotClicks <- reactiveVal(0)
+observeEvent(initGenomePlotClicks(), {
+    session$sendCustomMessage("cellPlotsWrapperInit", list(
+        prefix = session$ns(""),
+        divId = "chromPlotsWrapper"
+    ))
+    session$sendCustomMessage("cellPlotsWrapperUpdate", list(
+        prefix = session$ns(""),
+        divId = "chromPlotsWrapper",
+        cellsPerPage = nrow(cellsByFractionS()),
+        short = TRUE
+    ))
+}, ignoreInit = TRUE)
+
+#----------------------------------------------------------------------
+# handle actions to navigate through chromosomes
+#----------------------------------------------------------------------
+prevNextZoomChrom <- function(inc){
+    project <- getScCnvProjectData(sourceIds()[1])
+    chroms <- project$windows[[1]][, unique(chrom)]
+    i <- which(chroms == zoomChrom()) + inc
+    if(length(i) == 0) i <- 1
+    if(i < 1 || i > length(chroms)) return(NULL)
+    zoomChrom(chroms[i])
+}
+observeEvent(input$prevZoomChrom, { prevNextZoomChrom(-1) })
+observeEvent(input$nextZoomChrom, { prevNextZoomChrom( 1) })
 
 #----------------------------------------------------------------------
 # define bookmarking actions
