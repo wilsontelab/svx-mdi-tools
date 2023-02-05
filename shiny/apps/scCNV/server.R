@@ -68,7 +68,6 @@ getScCnvCellMatrix <- function(sourceId, settings, minCellWindowPower = NULL, co
     )
     persistentCache[[filePath]]$data
 }
-# allSourceCnvs <- list()
 getAllSourceCnvs <- function(sourceId, settings){ # get all CNVs called by the pipeline for a specific data source
     project <- getScCnvProjectData(sourceId)
     shapeModel <- getShapeModel(settings, cells = project$cells) 

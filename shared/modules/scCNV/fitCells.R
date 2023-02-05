@@ -76,7 +76,7 @@ defaultPointColor <- rgb(0, 0, 0, pointOpacity)
 plotsDir <- file.path(env$PLOTS_DIR, 'scCNV')
 if(!dir.exists(plotsDir)) dir.create(plotsDir)
 ####################
-# plotsDir <- "/nfs/turbo/path-wilsonte-turbo/mdi/wilsontelab/greatlakes/mdi/suites/definitive/svx-mdi-tools/shared/modules/scCNV/plots"
+# plotsDir <- file.path(env$MDI_DIR, "suites/definitive/svx-mdi-tools/shared/modules/scCNV/plots")
 saveCellPlot <- function(cell, name, fn, width = 2, height = 2, increment = TRUE){ # save a plot for future assembly and app
     if(!env$VERBOSE_PLOTS) return(NULL)
     plotDir <- file.path(plotsDir, cell$cell_id)

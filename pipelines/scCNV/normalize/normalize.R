@@ -84,9 +84,7 @@ sourceScripts(scCnvSharedDir, c(
 # characterize the cells
 #-------------------------------------------------------------------------------------
 message('characterizing individual cells')
-# cell_ids <- as.character(c(53,126,145,317,298,316,79,141,144,16))
-# cell_ids <- as.character(c(3, 70, 37, 8, 90, 81, 78))
-# cell_ids <- "95"
+# cell_ids <- as.character(c(1, 2, 3))
 # cells <- lapply(cell_ids, fitCell_1)
 cells <- mclapply(cell_ids, fitCell_1, mc.cores = env$N_CPU)
 names(cells) <- cell_ids
@@ -94,7 +92,7 @@ names(cells) <- cell_ids
 # stop("XXXXXXXXXXXXXXXXX")
 DIR <- env$TASK_ACTION_DIR
 RDS_FILE <- file.path(DIR, "TEST.rds")
-saveRDS(cells, file = RDS_FILE)
+# saveRDS(cells, file = RDS_FILE)
 # cells <- readRDS(RDS_FILE)
 # stop("XXXXXXXXXXXXXXXXX")
 
@@ -224,9 +222,10 @@ if(env$SHAPE_CORRECTION %in% c('sample', 'both')){ # normalize windows for batch
 
 # stop("XXXXXXXXXXXXXXXXX")
 DIR <- env$TASK_ACTION_DIR
-R_DATA_FILE <- file.path(DIR, "TEST2.RData")
-save.image(R_DATA_FILE)
+R_DATA_FILE <- file.path(DIR, "TEST.RData")
+# save.image(R_DATA_FILE)
 # load(R_DATA_FILE)
+# stop("XXXXXXXXXXXXXXXXX")
 
 #=====================================================================================
 # parse the chromosomes of each cell and sample, including sex chromosome assignments
@@ -264,7 +263,6 @@ colData[, ':='(
 # this is not sample-specific, to allow for shared CNVs across similar samples (e.g., a mouse strain)
 #-------------------------------------------------------------------------------------
 cnvs <- collateCNVs()
-# stop("XXXXXXXXXXXXXXXXX")
 #=====================================================================================
 
 #=====================================================================================

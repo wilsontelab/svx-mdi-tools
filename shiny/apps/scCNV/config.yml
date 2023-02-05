@@ -7,7 +7,7 @@
 #----------------------------------------------------------------------
 name: scCNV
 description: "Analyze single-cell whole-genome sequencing data for copy number variants and replication"
-# version: v0.0.0 # OPTIONAL
+version: v0.0.1 # OPTIONAL
 # suiteVersions:
 #     suiteName: v0.0.0
 
@@ -23,8 +23,6 @@ uploadTypes:
                 required: true
             normalizeFile:
                 required: true
-            # plotsArchive:
-            #     required: true
 
 #----------------------------------------------------------------------
 # labels and definitions for all sequential analysis steps shown in sidebar
@@ -41,13 +39,13 @@ uploadTypes:
 appSteps:
     upload: # nearly always the 1st step of every app
         module: sourceFileUpload
-    libraryQC: # summarize cells and quality; for visualization only
+    libraryQC: # summarize cells and quality; for high-level visualization only
         module: libraryQC  
     keepReject: # view cells one at a time; keep or reject cells; mark CNVs to keep
         module: keepRejectCells
-    collateCNVs: # views kept CNVs in kept cells; match CNVs between cells
+    collateCNVs: # views kept CNVs; match CNVs between cells
         module: collateCNVs
-    cnvTables: # views kept CNVs in kept cells; match CNVs between cells
+    cnvTables: # view and download summary tables of kept and matched CNVs
         module: cnvTables  
     analyzeReplication: # visualize and characterize the replication profile from one or more samples
         module: analyzeReplication        

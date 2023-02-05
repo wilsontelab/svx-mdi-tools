@@ -1,8 +1,8 @@
 ---
 pipeline:
     name: scCNV
-    description: "Analyze single-cell whole-genome sequencing data for copy number variants"
-    version: v0.0.0
+    description: "Analyze single-cell whole-genome sequencing data for copy number variants and replication"
+    version: v0.0.1
 suiteVersions:
     genomex-mdi-tools: main
 actions: 
@@ -20,6 +20,7 @@ actions:
         order: 1
         thread: do
         optionFamilies:
+            - align
             - fastq
         resources:
             required:
@@ -72,7 +73,16 @@ condaFamilies:
             - bioconductor-rhdf5=2.38.1         
             - r-mass=7.3_58.1
             # - r-wavelets # =0.3_0.2
-optionFamilies:     
+optionFamilies:   
+    align:
+        options:
+            force-alignment:
+                order: 1
+                short: A
+                type: boolean
+                required: false
+                default: false
+                description: "set --force-alignment to realign reads even if the bam file already exists"  
     fastq:
         options:
             fastq-dir:
@@ -220,10 +230,7 @@ package:
                 file: $DATA_FILE_PREFIX.$PIPELINE_NAME.manifest.csv
             normalizeFile:
                 type: rds
-                file: $DATA_FILE_PREFIX.$PIPELINE_NAME.normalize.rds
-            # plotsArchive:
-            #     type: archive
-            #     file: $DATA_FILE_PREFIX.$PIPELINE_NAME.plots.tar.gz        
+                file: $DATA_FILE_PREFIX.$PIPELINE_NAME.normalize.rds      
 # container:
 #     supported: false    
 #     registry:  ghcr.io  # domain name of your OCI-compatible, oras-accessible, container registry [ghcr.io]

@@ -4,7 +4,7 @@
 echo "aligning reads to genome by cell"
 for CELL_ID in $CELL_IDS; do 
     echo $CELL_ID
-    if [ "INPUT_MODE" = "directory" ]; then
+    if [ "$INPUT_MODE" = "directory" ]; then
         export FASTQ_FILE1=./${CELL_ID}/*_R1_*.fastq.gz
         export FASTQ_FILE2=./${CELL_ID}/*_R2_*.fastq.gz
     else

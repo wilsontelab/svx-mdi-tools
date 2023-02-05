@@ -1,6 +1,9 @@
 #------------------------------------------------------------------
 # set the product bam/cram file; abort silently if exists and not forced
 #------------------------------------------------------------------
+if [ "$FORCE_ALIGNMENT" = "1" ]; then
+    rm -f $NAME_BAM_FILE
+fi
 if [ -e $NAME_BAM_FILE ]; then
     echo "bam/cram file already exists"
 
