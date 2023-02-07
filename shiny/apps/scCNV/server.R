@@ -13,7 +13,7 @@ getScCnvProjectData <- function(sourceId){ # sourceId is a string key
     filePath <- loadPersistentFile(
         sourceId = sourceId, 
         contentFileType = "normalizeFile", 
-        ttl = 24 * 60 * 60,
+        ttl = 10 * 60,
         postProcess = function(x){
             setkey(x$colData, "cell_id")  
             x$qcPlotsDir <- expandSourceFilePath(sourceId, "qc_plots")
@@ -43,7 +43,7 @@ getScCnvCellMatrix <- function(sourceId, settings, minCellWindowPower = NULL, co
     filePath <- loadPersistentFile(
         file = expandSourceFilePath(sourceId, matrixFile),
         force = FALSE,
-        ttl = 24 * 60 * 60,
+        ttl = 60 * 60,
         create = function(file){
             I <- !project$colData$bad
             cell_ids <- project$colData[I, cell_id]
@@ -75,7 +75,7 @@ getAllSourceCnvs <- function(sourceId, settings){ # get all CNVs called by the p
     filePath <- loadPersistentFile(
         file = expandSourceFilePath(sourceId, cnvsFile),
         force = FALSE,
-        ttl = 24 * 60 * 60,
+        ttl = 60 * 60,
         create = function(file){
             cnvs <- project$cnvs[[shapeModel$key]]
             N <- if(is.null(cnvs)) 0 else nrow(cnvs)
