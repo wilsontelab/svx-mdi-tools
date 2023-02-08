@@ -65,6 +65,7 @@ collapseBatchValue <- function(x, windowPower, minPower, expandedWindows, force 
 }
 getBatchWindows <- function(cell){
     repKey <- if(cell$cellIsReplicating) "composite" else "sequential"
+    shapeKey <- getShapeKey(cell)
     cell$windows[[shapeKey]][[repKey]] 
 }
 getExpandedHMM <- function(cells, minPower, expandedWindows, maskExtremes = TRUE){

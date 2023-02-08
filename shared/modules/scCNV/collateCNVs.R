@@ -2,7 +2,7 @@
 # compare CNVs across all cells in a project
 #-------------------------------------------------------------------------------------
 getCellCnvs <- function(shapeKey, cell){
-    if(cell$badCell) return(NULL)
+    if(cell$badCell || is.null(cell$segments[[shapeKey]])) return(NULL)
     sampleName <- manifest[Sample_ID == cell$cell_id, Sample_Name]
     x <- copy(windows[[cell$windowPower + 1]])
     cellPloidy <- sampleChromosomes[[sampleName]]$CN[x$chrom, expected]
@@ -35,9 +35,6 @@ getCellCnvs <- function(shapeKey, cell){
 collateCNVs <- function(){ # creates the unshaped and shaped, i.e., cell-specific, fits
     workingStep <<- "collateCNVs"
     shapeKeys <- c("unshaped", "shaped", "batched")
-    goodCellI <- 1
-    while(cells[[goodCellI]]$badCell) goodCellI <- goodCellI + 1
-    shapeKeys <- shapeKeys[shapeKeys %in% names(cells[[goodCellI]]$segments)]
     cnvs <- lapply(shapeKeys, function(shapeKey){
         do.call(rbind, mclapply(cells, function(cell) {
             getCellCnvs(shapeKey, cell)

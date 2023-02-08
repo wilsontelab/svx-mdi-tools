@@ -99,17 +99,30 @@ RDS_FILE <- file.path(DIR, "TEST.rds")
 # assemble and organize the per-cell data
 message('recording cell metadata')
 shapeKey <- if(env$SHAPE_CORRECTION %in% c('cell', 'both')) "shaped" else "unshaped"
+shapeKeys <- c( # in priority order
+    "batched",
+    "shaped",
+    "unshaped"
+)
+getShapeKey <- function(cell){
+    workingShape <- shapeKey
+    while(!(workingShape %in% names(cell$windows))) 
+        workingShape <- shapeKeys[which(shapeKeys == workingShape) + 1]
+    workingShape
+}
 getCellValue <- function(cell_id, key){
     x <- cells[[cell_id]][[key]]
     if(is.null(x)) NA else x 
 }
 getWindowsMetadata <- function(cell_id, key){
     if(cells[[cell_id]]$badCell) return(NA)
+    shapeKey <- getShapeKey(cells[[cell_id]])
     x <- cells[[cell_id]]$windows[[shapeKey]][[key]]
     if(is.null(x)) NA else x
 }
 getReplicationMetadata <- function(cell_id, key) {
     if(cells[[cell_id]]$badCell) return(NA)
+    shapeKey <- getShapeKey(cells[[cell_id]])
     x <- cells[[cell_id]]$replicationModel[[shapeKey]][[key]]
     if(is.null(x)) NA else x
 }
@@ -215,7 +228,8 @@ if(env$SHAPE_CORRECTION %in% c('sample', 'both')){ # normalize windows for batch
 
     message('applying multi-cell batch correction to individual cells')
     cells <- mclapply(cells, fitCell_2, mc.cores = env$N_CPU) 
-    shapeKey <- "batched"
+    shapeKey <- "batched" # the highest possible level; some samples with too few cells may not have been batch-corrected, however
+    message('updating cell metadata')
     updateColData()
 }
 #=====================================================================================
@@ -230,25 +244,30 @@ R_DATA_FILE <- file.path(DIR, "TEST.RData")
 #=====================================================================================
 # parse the chromosomes of each cell and sample, including sex chromosome assignments
 #-------------------------------------------------------------------------------------
+message('determining sample CN profiles')
 sampleProfiles <- mclapply(sampleNames, function(sampleName){ # determine each sample's reference CN, i.e., the most common cell values per window
     cell_ids <- manifest[Sample_Name == sampleName, Sample_ID]
     getSampleProfile(cells[cell_ids])
 }, mc.cores = env$N_CPU)
 names(sampleProfiles) <- sampleNames
 
+message('collating chromosomes by sample')
 sampleChromosomes <- mclapply(sampleNames, function(sampleName){ # condense per-window values to per-chromosome values and sex assignements
     collateChromosomes(windows[[1]], sampleProfiles[[sampleName]][[1]])
 }, mc.cores = env$N_CPU)
 names(sampleChromosomes) <- sampleNames
 
+message('collating chromosomes by cell')
 setkey(colData, cell_id)
 cellChromosomes <- mclapply(colData$cell_id, function(cell_id){
     cell <- cells[[cell_id]]
     if(cell$badCell) return(NA)
+    shapeKey <- getShapeKey(cell)
     collateChromosomes(windows[[cell$windowPower + 1]], cell$windows[[shapeKey]]$sequential$HMM)
 }, mc.cores = env$N_CPU)
 names(cellChromosomes) <- colData$cell_id
 
+message('determined apparent cell sexes')
 colData[, ':='(
     sex = if(bad) as.character(NA) else cellChromosomes[[cell_id]]$sex,
     expectedSex = {
@@ -262,6 +281,7 @@ colData[, ':='(
 # assemble a table of CNVs across all cells in all samples
 # this is not sample-specific, to allow for shared CNVs across similar samples (e.g., a mouse strain)
 #-------------------------------------------------------------------------------------
+message('collating CNVs')
 cnvs <- collateCNVs()
 #=====================================================================================
 
