@@ -85,11 +85,11 @@ sourceScripts(scCnvSharedDir, c(
 #-------------------------------------------------------------------------------------
 message('characterizing individual cells')
 # cell_ids <- as.character(c(1, 2, 3))
+# cell_ids <- c("26", "27")
 # cells <- lapply(cell_ids, fitCell_1)
 cells <- mclapply(cell_ids, fitCell_1, mc.cores = env$N_CPU)
 names(cells) <- cell_ids
 
-# stop("XXXXXXXXXXXXXXXXX")
 DIR <- env$TASK_ACTION_DIR
 RDS_FILE <- file.path(DIR, "TEST.rds")
 # saveRDS(cells, file = RDS_FILE)
@@ -239,6 +239,7 @@ DIR <- env$TASK_ACTION_DIR
 R_DATA_FILE <- file.path(DIR, "TEST.RData")
 # save.image(R_DATA_FILE)
 # load(R_DATA_FILE)
+# sourceScripts(scCnvSharedDir, c('fitCells', 'normalizeBatch', 'collateCNVs'))
 # stop("XXXXXXXXXXXXXXXXX")
 
 #=====================================================================================
@@ -253,6 +254,7 @@ names(sampleProfiles) <- sampleNames
 
 message('collating chromosomes by sample')
 sampleChromosomes <- mclapply(sampleNames, function(sampleName){ # condense per-window values to per-chromosome values and sex assignements
+    if(!is.list(sampleProfiles[[sampleName]])) return(NA)
     collateChromosomes(windows[[1]], sampleProfiles[[sampleName]][[1]])
 }, mc.cores = env$N_CPU)
 names(sampleChromosomes) <- sampleNames
@@ -267,12 +269,13 @@ cellChromosomes <- mclapply(colData$cell_id, function(cell_id){
 }, mc.cores = env$N_CPU)
 names(cellChromosomes) <- colData$cell_id
 
-message('determined apparent cell sexes')
+message('determining apparent cell sexes')
 colData[, ':='(
     sex = if(bad) as.character(NA) else cellChromosomes[[cell_id]]$sex,
     expectedSex = {
         sampleName <- manifest[Sample_ID == cell_id, Sample_Name]
-        sampleChromosomes[[sampleName]]$sex
+        if(!is.list(sampleChromosomes[[sampleName]])) as.character(NA) 
+        else sampleChromosomes[[sampleName]]$sex
     }
 ), by = cell_id]   
 #=====================================================================================
@@ -283,6 +286,7 @@ colData[, ':='(
 #-------------------------------------------------------------------------------------
 message('collating CNVs')
 cnvs <- collateCNVs()
+# stop("xxxxxxxxxxxxxxx")
 #=====================================================================================
 
 #=====================================================================================

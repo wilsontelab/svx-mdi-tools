@@ -465,7 +465,7 @@ fitCellWindows <- function(windowPower, windows, NR_wm, shape = 1){
     bestFit$density <- density
     bestFit
 }
-getCellWindows <- function(cell){ # parse a cell's windows at a given windowPower
+getCellNR_wm <- function(cell){
     windowSize <- 2 ** cell$windowPower
     windows <- windows[[cell$windowPower + 1]]
     mappability <- windows[, ifelse(mappability < env$MIN_MAPPABILITY, NA, mappability)]
@@ -475,21 +475,48 @@ getCellWindows <- function(cell){ # parse a cell's windows at a given windowPowe
             windowSize
         ) / mappability[windows$chrom == chrom]
     })))
-    fitCellWindows(cell$windowPower, windows, NR_wm)
+}
+getCellWindows <- function(cell){ # parse a cell's windows at a given windowPower
+    windows <- windows[[cell$windowPower + 1]]
+    fitCellWindows(cell$windowPower, windows, getCellNR_wm(cell))
 }
 plotCellWindows <- function(cell) {
     plotCountDensity(cell)
     plotWindows_counts(cell, paste0("windowPower", cell$windowPower), 
                        cell$windows$unshaped$NR_wms, increment = FALSE, col = "useGcColor") 
 }
+checkForMinimalData <- function(cell){ # ensure that a cell has SOME minimal # of reads!
+    minNWindows <- nrow(windows[[length(windows)]])
+    sum(raw_counts[[cell$cell_id]]) > minNWindows * 5
+}
 setCellWindows <- function(cell){ # establish the optimal window power for a cell
     workingStep <<- "setCellWindows"
+    if(!checkForMinimalData(cell)) {
+        cell$windowPower <- env$MAX_WINDOW_POWER
+        cell$badCell <- TRUE # unusable data, abort cell with no further analysis
+        cell$windows <- list(
+            unshaped = list(
+                ER_modal_NA   = 1,
+                theta         = 1,
+                peakFraction  = 1,            
+                nrModelType   = "singlePeak",
+                ER_ploidy     = 1,
+                RPA           = 1, # later we may learn RPA is 2-fold off for replicating cells
+                rmsd          = 1,
+                NA95          = 1,
+                allow         = FALSE,
+                NR_wms        = getCellNR_wm(cell)
+            )
+        )
+        plotWindows_counts(cell, "input", cell$windows$unshaped$NR_wms, col = "badCell")
+        return(cell)        
+    }
     cell$windowPower <- cell$minWindowPower
     cell$windows <- list()
     cell$windows$unshaped <- getCellWindows(cell)
     plotCellWindows(cell)
     while(!cell$windows$unshaped$allow && # stop when we get a nice, appropriately tight distribution
-          cell$windowPower < env$MAX_WINDOW_POWER){
+        cell$windowPower < env$MAX_WINDOW_POWER){
         cell$windowPower <- cell$windowPower + 1
         cell$windows$unshaped <- getCellWindows(cell)
         plotCellWindows(cell)

@@ -37,6 +37,16 @@ weighted.median <- function(x, w) { # adapted from spatstat
     approx(Fx, x, xout = 0.5, ties = "ordered", 
            rule = 2, method = "constant", f = 1/2)$y
 }
+find_mode <- function(x) { # https://www.statology.org/mode-in-r/
+  u <- unique(x) # x may contain NA, or be all NA
+  tab <- tabulate(match(x, u))
+  u[tab == max(tab)] # may return multiple modes, not just one
+}
+find_HMM_mode <- function(x){
+    mode <- find_mode(x)
+    if(length(mode) == 1) mode # if two modes, use the one closest to ploidy
+    else mode[which.min(abs(env$PLOIDY - mode))]
+}
 expandBatchValue <- function(x, windowPower, minPower, expandedWindows, force = FALSE){
     if(windowPower > minPower || force) {
         expandBy <- 2 ** (windowPower - minPower) # only expand to minPower, not necessarily individual bins
@@ -73,7 +83,7 @@ getExpandedHMM <- function(cells, minPower, expandedWindows, maskExtremes = TRUE
         cellWindows <- getBatchWindows(cell)
         expandBatchValue(cellWindows$HMM, cell$windowPower, minPower, expandedWindows)
     }, mc.cores = env$N_CPU))
-    windowMedians <- round(apply(byCell, 1, median, na.rm = TRUE), 0)
+    windowMedians <- apply(byCell, 1, find_HMM_mode) # obviuosly a mode, not a median, did not rename throughout code
     if(maskExtremes) windowMedians <- ifelse(windowMedians > 0 & windowMedians < 4, windowMedians, NA)
     list(
         byCell = byCell,
@@ -169,8 +179,8 @@ getSampleProfile <- function(cells){
     # get and check for sufficient working cells
     cell_ids <- sapply(cells, function(cell) cell$cell_id)
     cell_ids_working <- colData[cell_id %in% cell_ids & !bad & keep, cell_id]
-    if(length(cell_ids_working) == 0) return(NA)    
-    workingCells <- cells[cell_ids_working]
+    if(length(cell_ids_working) == 0) return(NA) # more permissive that normalizeBatch
+    workingCells <- cells[cell_ids_working]      # unbatched samples can still be profiled but will be erratic with too few cells
 
     # determine the median HMM call per expanded window; take as the sample's reference, baseline CN
     expandedHMM <- getExpandedHMM(workingCells, 0, windows[[1]], maskExtremes = FALSE)
@@ -185,7 +195,7 @@ collateChromosomes <- function(windows, cnProfile){
     # find the median HMM per chromosome, take it as the chromosome's copy number
     CN <- windows[, 
         .(
-            observed = round(median(cnProfile[.I], na.rm = TRUE), 0),
+            observed = find_HMM_mode(cnProfile[.I]),
             expected = env$PLOIDY
         ), 
         by = "chrom"

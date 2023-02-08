@@ -5,12 +5,15 @@ getCellCnvs <- function(shapeKey, cell){
     if(cell$badCell || is.null(cell$segments[[shapeKey]])) return(NULL)
     sampleName <- manifest[Sample_ID == cell$cell_id, Sample_Name]
     x <- copy(windows[[cell$windowPower + 1]])
-    cellPloidy <- sampleChromosomes[[sampleName]]$CN[x$chrom, expected]
+    sampleMedian <- if(!is.list(sampleProfiles[[sampleName]])) cell$ploidy 
+                    else sampleProfiles[[sampleName]][[cell$windowPower + 1]]
+    cellPloidy   <- if(!is.list(sampleChromosomes[[sampleName]])) cell$ploidy 
+                    else sampleChromosomes[[sampleName]]$CN[x$chrom, expected]
     x[, ":="(
         windowPower = cell$windowPower,
         keep = cell$keep,
-        cellCN = cell$windows[[shapeKey]]$sequential$HMM,        
-        sampleMedian = sampleProfiles[[sampleName]][[cell$windowPower + 1]],
+        cellCN = cell$windows[[shapeKey]]$sequential$HMM,  
+        sampleMedian = sampleMedian,
         cellPloidy = cellPloidy
     )] 
     do.call(rbind, lapply(c("sampleMedian", "cellPloidy"), function(type){
