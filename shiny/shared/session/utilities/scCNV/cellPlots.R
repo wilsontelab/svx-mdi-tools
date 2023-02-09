@@ -121,7 +121,7 @@ plotCellQC <- function(cell, d, zoomChrom, isKeptCnv, isMatchedCnv, cnvs, short)
         if(!isZoomed) plot(d$w$gc_fraction[d$d$I_d], d$d$cw$NR_wms[d$d$I_d], 
             xlab = "Fraction GC", xlim = c(0.3, 0.6), 
             ylab = "# of Reads", 
-            pch = 19, cex = 0.4)
+            pclickch = 19, cex = 0.4)
         plotCellByWindow(d$d$cw$NR_wms, "# Reads", h = max(d$d$cw$NR_wms, na.rm = TRUE), v = d$v, 
                          isKeptCnv = isKeptCnv, isMatchedCnv = isMatchedCnv, chromI = zc_i)
     } else {
@@ -550,7 +550,7 @@ handleCellPlotClick <- function(click, zoomChrom, zoomTargetWindow){
         keepReject = {
             zoomTargetWindow(list(
                 targetWindow = getTargetWindow(zoomChromXOffset, zoomChromXWidth), 
-                cell_id = click$data$cell_id,
+                cell_id = as.character(click$data$cell_id),
                 entropy = sample(1e8, 1) # ensure click happens even if mouse doesn't move
             ))
         },
