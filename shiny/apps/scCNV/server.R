@@ -132,6 +132,54 @@ getCnvsTableData <- function(sourceIds, settings){ # a table of CNVs that were k
     }))[order(chromI, -aneuploid, start, end, cellCN - referenceCN)] # by chromosome, aneuploid first in chrom group
 }
 
+# shared support for certain appStep modules UI
+ALL <- "__ALL__"
+scCnvDataSourceTableUI <- function(ns){
+    dataSourceTableUI(
+        ns("source"), 
+        "Project Source", 
+        width = 8, 
+        collapsible = TRUE
+    ) 
+}
+sampleSelectorDivUI <- function(ns){
+    tags$div(
+        style = "margin-top: 0; margin-bottom: 10px; white-space: nowrap;",
+        tags$div(
+            class = "cellPageInput",
+            style = "width: 400px; margin-right: 10px;", 
+            selectInput(ns('sampleNameFilter'), "Sample", choices = c(All = "__ALL__"), width = "100%")
+        )
+    )
+}
+updateSampleSelector <- function(session, input, sourceIds){
+    x <- unique(do.call(rbind, lapply(sourceIds, function(sourceId){
+        project <- getScCnvProjectData(sourceId)
+        data.table(
+            sourceId = sourceId, 
+            Project = project$manifest$Project,
+            Sample_Name = project$manifest$Sample_Name
+        )
+    })))
+    choices <- x[, paste(sourceId, Sample_Name, sep = "::")]
+    names(choices) <- x[, if(length(sourceIds) == 1) Sample_Name else paste(Project, Sample_Name, sep = " / ")]
+    freezeReactiveValue(input, "sampleNameFilter")
+    updateSelectInput(session, "sampleNameFilter", choices = c(All = ALL, choices), selected = ALL)    
+}
+getFilteredCnvData <- function(input, sourceIds, settings){
+    req(input$sampleNameFilter)
+    cnvs <- getCnvsTableData(sourceIds(), settings)
+    cnvs[if(input$sampleNameFilter == ALL) TRUE else paste(sourceId, sampleName, sep = "::") == input$sampleNameFilter]
+}
+getSampleLabels <- function(input, sourceIds, projects, sampleNames){
+    isSingleSource <- length(sourceIds()) == 1 || input$sampleNameFilter != ALL  
+    if(isSingleSource) sampleNames else ifelse(
+        projects == sampleNames,
+        sampleNames,
+        paste(projects, sampleNames, sep = "/") 
+    ) 
+}
+
 # appServer function called after all modules are instantiated
 appServer <- function(){
 

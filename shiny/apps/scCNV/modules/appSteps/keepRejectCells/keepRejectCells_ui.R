@@ -36,13 +36,8 @@ keepRejectCellsUI <- function(id, options) {
         code = serverEnv$IS_DEVELOPER,
         settings = TRUE,
 
-        # box for selecting data source
-        dataSourceTableUI(
-            ns("source"), 
-            "Project Source", 
-            width = 8, 
-            collapsible = TRUE
-        ),
+        # box for selecting sample source
+        scCnvDataSourceTableUI(ns),
 
         # pagination controls
         includeCSS(file.path(appStepDir, "keepRejectCells.css")),

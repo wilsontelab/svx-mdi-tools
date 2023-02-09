@@ -32,29 +32,27 @@ cnvTablesUI <- function(id, options) {
         code = serverEnv$IS_DEVELOPER,
         settings = TRUE,
 
-        # box for selecting data source
-        dataSourceTableUI(
-            ns("source"), 
-            "Project Source", 
-            width = 8, 
-            collapsible = TRUE
-        ),
+        # box for selecting sample source
+        scCnvDataSourceTableUI(ns),
+
+        # sample selector
+        sampleSelectorDivUI(ns),
 
         fluidRow(
             bufferedTableUI(
                 ns("cnvsTable"), 
-                title = "CNVs Table (one cell per row)", 
+                title = "CNVs Table (one CNV+cell per row)", 
                 downloadable = TRUE,
                 width = 12,
                 collapsible = TRUE,
-                collapsed = FALSE
+                collapsed = TRUE
             )
         ),
 
         fluidRow(
             bufferedTableUI(
                 ns("groupsTable"), 
-                title = "CNV Groups Table (multiple cells per row)", 
+                title = "CNV Groups Table (aggregate cells per row)", 
                 downloadable = TRUE,
                 width = 12,
                 collapsible = TRUE,

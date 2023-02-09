@@ -37,14 +37,18 @@ cnvGroupAssignments <- reactiveVal({ # this module's outcomes, assignment of CNV
 })
 
 #----------------------------------------------------------------------
-# load sample/cell source data
+# load source data
 #----------------------------------------------------------------------
 sourceIds <- dataSourceTableServer(
     "source", 
     selection = "multiple"
 )
+observeEvent(sourceIds(), {
+    updateSampleSelector(session, input, sourceIds())
+})
+nSelectedSources <- reactive({ getNSelectedSources(input, sourceIds) })
 cnvsTableData <- reactive({ # a table of CNVs that were kept from the selected sources
-    getCnvsTableData(sourceIds(), settings)
+    getFilteredCnvData(input, sourceIds, settings)
 })
 cnvTableWithGroups <- reactive({ # combine cnvs and group assignments into one working table
     cnvs <- cnvsTableData()
@@ -57,7 +61,6 @@ cnvTableWithGroups <- reactive({ # combine cnvs and group assignments into one w
 #----------------------------------------------------------------------
 cnvsTableDataPretty <- reactive({
     cnvs <- cnvsTableData()[, .SD, .SDcols = c(
-        # "overlapGroup",
         "project",
         "sampleName",
         "cell_id",
@@ -71,9 +74,6 @@ cnvsTableDataPretty <- reactive({
         "referenceCN",
         "nWindows",
         "windowPower"
-        # ,
-        # "groupKey",
-        # "pendingKey"
     )]
 })
 cnvsTable <- bufferedTableServer(
@@ -81,9 +81,7 @@ cnvsTable <- bufferedTableServer(
     id,
     input,
     tableData = cnvsTableDataPretty,
-    # editBoxes = list(),
     selection = 'single',
-    # selectionFn = function(selectedRows) NULL,
     options = list()
 )
 observeEvent(cnvsTable$rows_selected(), {

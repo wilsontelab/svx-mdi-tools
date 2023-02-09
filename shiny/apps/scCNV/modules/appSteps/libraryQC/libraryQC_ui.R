@@ -32,12 +32,7 @@ libraryQCUI <- function(id, options) {
         settings = TRUE,
 
         # box for selecting sample source
-        dataSourceTableUI(
-            ns("source"), 
-            "Project Source", 
-            width = 8, 
-            collapsible = TRUE
-        ),
+        scCnvDataSourceTableUI(ns),
 
         # high-level count summaries
         fluidRow( box(

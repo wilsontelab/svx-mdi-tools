@@ -26,14 +26,17 @@ settings <- activateMdiHeaderLinks( # uncomment as needed
 )
 
 #----------------------------------------------------------------------
-# load sample/cell source data
+# load source data
 #----------------------------------------------------------------------
 sourceIds <- dataSourceTableServer(
     "source", 
     selection = "multiple"
 )
+observeEvent(sourceIds(), {
+    updateSampleSelector(session, input, sourceIds())
+})
 cnvsTableData <- reactive({ # a table of CNVs that were kept from the selected sources
-    getCnvsTableData(sourceIds(), settings)
+    getFilteredCnvData(input, sourceIds, settings)
 })
 cnvTableWithGroups <- reactive({ # combine cnvs and group assignments into one working table
     cnvs <- cnvsTableData()
@@ -118,7 +121,7 @@ cnvsTable <- bufferedTableServer(
 cnvsTableData_byGroup <- reactive({
     cnvsTableData_byCnv()[, {
         i <- which.min(windowPower) # use the highest resolution cell as the reference (in case the user did not)
-        samples <- paste(project, sampleName)
+        samples <- getSampleLabels(input, sourceIds, project, sampleName)
         .(
             nSamples = length(unique(samples)),        
             nCells = .N,
@@ -155,9 +158,10 @@ cnvsTable <- bufferedTableServer(
 cnvsTableData_pivot <- reactive({
     groups <- cnvsTableData_byCnv()[, {
         i <- which.min(windowPower) # use the highest resolution cell as the reference (in case the user did not)
+        samples <- getSampleLabels(input, sourceIds, project, sampleName)
         .(       
             nCells = .N,
-            sample = paste(project, sampleName, sep = "/"),
+            sample = samples,
             chrom = chrom[i],
             start = start[i],
             end = end[i],
@@ -170,7 +174,7 @@ cnvsTableData_pivot <- reactive({
     }, by = c("group")]
     dcast(
         groups, 
-        group + chrom + start + end + aneuploid + telomeric + cellCN + referenceCN ~ sample, 
+        chrom + start + end + aneuploid + telomeric + cellCN + referenceCN ~ sample, 
         value.var = "nCells"
     )
 })
