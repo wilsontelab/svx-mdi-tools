@@ -49,6 +49,7 @@ cnvTableWithGroups <- reactive({ # combine cnvs and group assignments into one w
 
     # merge CNVs grouped within one cell into a single event row
     outputCnvs <- cnvs[order(chromI, start, end), .( 
+        sourceId = sourceId[1],
         project = project[1],
         sampleName = sampleName[1],
         cell_id = cell_id[1],
@@ -82,33 +83,37 @@ cnvTableWithGroups <- reactive({ # combine cnvs and group assignments into one w
 #----------------------------------------------------------------------
 # create a display table of all kept CNVs across all selected data sources, one row per fused CNV
 #----------------------------------------------------------------------
+displayCols <- c(
+    "group",        
+    "project",
+    "sampleName",
+    "cell_id",
+    "chrom",
+    "start",
+    "end",
+    "size",
+    'aneuploid',
+    'telomeric',
+    "cellCN",
+    "referenceCN",
+    "nWindows",
+    "windowPower",
+    "regions",
+    "matchedTo",
+    "fused",
+    "grouped"
+)
 cnvsTableData_byCnv <- reactive({
     cnvs <- cnvTableWithGroups()[order(chromI, -aneuploid, start, end, cellCN - referenceCN), .SD, .SDcols = c(
-        "group",        
-        "project",
-        "sampleName",
-        "cell_id",
-        "chrom",
-        "start",
-        "end",
-        "size",
-        'aneuploid',
-        'telomeric',
-        "cellCN",
-        "referenceCN",
-        "nWindows",
-        "windowPower",
-        "regions",
-        "matchedTo",
-        "fused",
-        "grouped"
+        "sourceId",
+        displayCols
     )]
 })
 cnvsTable <- bufferedTableServer(
     "cnvsTable",
     id,
     input,
-    tableData = cnvsTableData_byCnv,
+    tableData = function() cnvsTableData_byCnv()[, .SD, .SDcols = displayCols],
     # editBoxes = list(),
     selection = 'none',
     # selectionFn = function(selectedRows) NULL,
@@ -155,13 +160,16 @@ cnvsTable <- bufferedTableServer(
 #----------------------------------------------------------------------
 # create a pivot table of all kept CNVs across all selected data sources, one row per grouped CNV, one column per sample, nCells in cells
 #----------------------------------------------------------------------
+nKeptCells <- reactive({
+    app$keepReject$getNKeptCells(settings)   
+})
 cnvsTableData_pivot <- reactive({
-    groups <- cnvsTableData_byCnv()[, {
+    cnvsTableData_byCnv <- cnvsTableData_byCnv()
+    req(cnvsTableData_byCnv)
+    nKeptCells <- nKeptCells()
+    groups <- cnvsTableData_byCnv[, {
         i <- which.min(windowPower) # use the highest resolution cell as the reference (in case the user did not)
-        samples <- getSampleLabels(input, sourceIds, project, sampleName)
         .(       
-            nCells = .N,
-            sample = samples,
             chrom = chrom[i],
             start = start[i],
             end = end[i],
@@ -169,14 +177,28 @@ cnvsTableData_pivot <- reactive({
             aneuploid = any(aneuploid),
             telomeric = any(telomeric),
             cellCN = cellCN[i],
-            referenceCN = referenceCN[i]
+            referenceCN = referenceCN[i],
+            sampleLabel = getSampleLabels(input, sourceIds, project, sampleName),
+            nCells = .N,
+            nKeptCells = nKeptCells[paste(sourceId, sampleName, sep = "::"), N]
         )
     }, by = c("group")]
-    dcast(
+    nCells <- dcast(
         groups, 
-        chrom + start + end + aneuploid + telomeric + cellCN + referenceCN ~ sample, 
-        value.var = "nCells"
+        chrom + start + end + size + aneuploid + telomeric + cellCN + referenceCN ~ sampleLabel, 
+        value.var = "nCells",
+        fun.aggregate = length
     )
+    nKeptCells <- dcast(
+        groups, 
+        chrom + start + end + size + aneuploid + telomeric + cellCN + referenceCN ~ sampleLabel, 
+        value.var = "nKeptCells",
+        fun.aggregate = first
+    )
+    for(j in 9:ncol(nCells)) nCells[[j]] <- ifelse(nCells[[j]] == 0, "", paste(nCells[[j]], nKeptCells[[j]], sep = " / "))
+    chromIs <- 1:100
+    names(chromIs) <- paste0("chr", c(as.character(1:98), "X", "Y"))
+    nCells[order(chromIs[chrom], start, end)]
 })
 cnvsTable <- bufferedTableServer(
     "groupsPivotTable",

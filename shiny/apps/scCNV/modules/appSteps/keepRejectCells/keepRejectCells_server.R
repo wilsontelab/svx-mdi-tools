@@ -419,6 +419,21 @@ observe({
 #----------------------------------------------------------------------
 # set return values as reactives that will be assigned to app$data[[stepName]]
 #----------------------------------------------------------------------
+getKeptCells <- function(settings){
+    do.call(rbind, lapply(names(app$upload$outcomes$sources()), function(sourceId){
+        project <- getScCnvProjectData(sourceId)
+        cells <- cbind(merge(
+            project$colData[,  .SD, .SDcols = c("cell_id", "bad", "keep")], 
+            project$manifest[, .SD, .SDcols = c("Sample_ID", "Sample_Name")],
+            by.x = "cell_id", by.y = "Sample_ID"
+        ), sourceId = sourceId)
+        isKeptCell <- cells[, getKeep(bad, keep, cell_id, sourceId)]
+        cellPrefixes <- cells[, paste(getCnvsType(settings), sourceId, cell_id)]
+        keptCnvKeys <- getKeptCnvKeys()
+        cellHasKeptCnvs <- sapply(cellPrefixes, function(x) any(startsWith(keptCnvKeys, x)))
+        cells[isKeptCell | cellHasKeptCnvs]
+    }))
+}
 list(
     input = input,
     settings = settings$all_,  
@@ -438,6 +453,14 @@ list(
                 fractionS = fractionS
             )]
         }))[replicating == TRUE][order(fractionS)]
+    },
+    getKeptCells = getKeptCells,
+    getNKeptCells = function(settings){
+        x <- getKeptCells(settings)
+        x[, sampleKey := paste(sourceId, Sample_Name, sep = "::")]        
+        x <- x[, .N, by = c("sampleKey")]
+        setkey(x, sampleKey)
+        x
     },
     isReady = reactive({ getStepReadiness(options$source, fn = function(...) length(getKeptCnvKeys()) > 0) }),         
     NULL
