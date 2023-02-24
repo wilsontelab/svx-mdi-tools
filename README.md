@@ -18,7 +18,7 @@ Pipelines and apps in stable release are:
 
 Pipelines and apps in beta are:
 - **svWGS** = find SVs in whole-genome sequencing data (without capture)
-- **scCNV** = find SVs in single-cell whole-genome amplification sequencing
+- **scCNV** = find CNVs in single-cell whole-genome amplification sequencing
 - **svAmplicon** = find SVs in targeted amplicon sequences
 
 Please see the [svx-mdi-tools documentation site](https://wilsontelab.github.io/svx-mdi-tools)
@@ -27,7 +27,9 @@ for detailed information on the usage of specific pipeline and apps.
 ---
 ## Quick Start Method 1: multi-suite installation (recommended)
 
-You can install MDI tool suites in one of two ways: as a **multi-suite installation** that carries one or more distinct tool suites (recommended), or as a more contained **single-suite installation** dedicated to just the svx-mdi-tools suite.
+You can install MDI tool suites in one of two ways: as a **multi-suite installation** that 
+carries one or more distinct tool suites (recommended), or as a contained 
+**single-suite installation** dedicated to just the svx-mdi-tools suite.
 
 In the recommended multi-suite mode, you will:
 - clone and install the MDI framework
@@ -38,7 +40,7 @@ In the recommended multi-suite mode, you will:
 
 Please read the _install.sh_ menu options and the 
 [MDI installer instructions](https://github.com/MiDataInt/mdi.git) to decide
-which installation option is best for you. Briefly, choose option 1
+which installation option is best for you. Choose option 1
 if you will only run Stage 1 HPC pipelines from your installation.
 
 ```bash
@@ -84,8 +86,6 @@ suites:
 ```sh
 ./install.sh # re-install to add the new tool suite
 ```
-
-
 
 ### Execute a Stage 1 pipeline from the command line
 

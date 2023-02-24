@@ -25,10 +25,12 @@ Pipelines and apps in beta are:
 
 ## Installation
 
-Please see the [svx-mdi-tools GitHub site](https://wilsontelab.github.io/svx-mdi-tools) for detailed information on how to install the svx-mdi-tools suite
+Please see the [svx-mdi-tools GitHub site](https://wilsontelab.github.io/svx-mdi-tools) 
+for detailed information on how to install the svx-mdi-tools suite
 on your HPC server to run Stage 1 pipelines.
 
-Please see the [MDI Desktop App](https://midataint.github.io/mdi-desktop-app) for detailed information on how to install and access the web server for running
+Please see the [MDI Desktop App](https://midataint.github.io/mdi-desktop-app) for detailed 
+information on how to install and access the web server for running
 interactive Stage 2 apps for data visualization.
 
 {% include mdi-project-documentation.md %}

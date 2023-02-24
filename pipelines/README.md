@@ -2,7 +2,7 @@
 title: Stage 1 Pipelines
 has_children: true
 nav_order: 1
-published: true # set to false to remove this tab from your suite's doc site
+published: false # set to false to remove this tab from your suite's doc site
 ---
 
 ## Stage 1 Pipelines
