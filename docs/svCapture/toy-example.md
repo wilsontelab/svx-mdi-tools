@@ -2,64 +2,68 @@
 title: Example data and code
 parent: svCapture
 has_children: false
-nav_order: 10
+nav_order: 30
 published: true
 ---
 
 ## {{page.title}}
 
-We provide a complete working example
-of a pipeline configuration file and associated data set
-for testing your installation.
+We provide a complete working example of a job configuration file and 
+associated data set for testing your svCapture installation. 
+Instructions below lead you through all steps to get running.
 
-This section assumes you have successfully installed
-the svx-mdi-tools script repository into your MDI installation
-as described here:
-- <>
+### Create a working directory for the svCapture demo
 
-### Obtain the data
+Working from whatever folder you'd like:
 
-Example data can be downloaded from Mendeley Data:
-- <>
+```sh
+mkdir svCapture-demo
+cd svCapture-demo
+```
 
-Reads in these fastq files were obtained from 
+The entire demo will take place in this directory so you can easily delete it later.
+
+### Install everything first
+
+Follow the [installation instructions](https://wilsontelab.github.io/svx-mdi-tools/docs/installation/code.html)
+to create:
+- a multi-suite MDI installation
+- an alias to the MDI utility called _mdi_
+
+If you choose a different type of installation, please adjust all commands as needed.
+
+Then, [build the required conda runtime environments](https://wilsontelab.github.io/svx-mdi-tools/docs/installation/runtime.html)
+and [download the hg38 reference genome](https://wilsontelab.github.io/svx-mdi-tools/docs/installation/genome.html)
+into the demo directory.  If you install the genome into a different directory, you will need 
+to edit the job file, below.
+
+### Obtain the demo data, scripts, and support files
+
+Example data, which are too big for the svx-mdi-tools git repository,
+can be downloaded from Mendeley Data using the following command:
+
+```sh
+wget PENDING
+```
+
+Reads in the FASTQ files were obtained from cell line HCT116 from
 a tagmentation svCapture library in which the central
-250 kb of the WWOX gene on human chr16 were subjected to probe capture.
+400 kb of the WWOX gene on human chr16 was subjected to probe capture.
 Reads were filtered to include only chr16 and downsampled
-to keep things small and fast for demonstration purposes.
+to 1M read pairs to keep the demo small and fast.
 
-### Create and examine the job configuration file
+The total file size is ~XXX MB.
 
-The svCapture pipeline can be executed directly from the command line
-or by constructing a YAML-format job configuration file, which is recommended.
-
-Copy and paste these lines to create your own demo job file.
-
-```yml
-# demo.yml
-
-```
-
-Notice that all pipeline options are specific in YAML format in sections
-whose name matches the corresponding pipeline action. The last section
-labeled 'execute' names the specific actions that will be executed 
-when the pipeline is submitted.
-
-You will need to edit the file to include appropriate paths to
-the genome reference fasta file and data output paths.
-
-The following command will print a template you can use to construct a job file.
+### Examine the svCapture job configuration file
 
 ```sh
-mdi svCapture template
+cat svCapture-demo.yml
 ```
 
-Complete details of constructing job files are described here:
-- <>
-
-As noted, you can also call the pipeline directly from the command line
-in a command such as:
-
-```sh
-mdi svCapture --xxxx
-```
+Pipeline options are specified in an extended YAML format 
+that support variables and option declarations
+common to multiple pipeline actions. See the file comments for details.
+ 
+The demo job file is configured to work entirely
+from your working demo directory - you would change paths when doing real work,
+or if you installed the hg38 genome into a different location, above.

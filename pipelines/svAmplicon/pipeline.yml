@@ -4,77 +4,89 @@ pipeline:
     description: "Analyze targeted amplicon sequences for evidence of deletions and other SVs"
     version: v0.0.0
 suiteVersions:
-    genomex-mdi-tools: main
-actions: 
-    _global:  
-        environment: svAmplicon  
-        condaFamilies:
-            - genomex-mdi-tools//base
-            # - genomex-mdi-tools//genome
-            # - genomex-mdi-tools//bwa
-            # - r-4.1
-            - CRISPResso2
-        # optionFamilies:
-        #     - genomex-mdi-tools//genome
-    CRISPResso:
+    genomex-mdi-tools: main 
+actions:
+    # _global:  
+    #     environment: svAmplicon  
+    #     condaFamilies:
+    #         - genomex-mdi-tools//base
+    #         # - genomex-mdi-tools//genome
+    #         # - genomex-mdi-tools//bwa
+    #         # - r-4.1
+    #         - CRISPResso2
+    #     # optionFamilies:
+    #     #     - genomex-mdi-tools//genome
+    align:
         order: 1
-        thread: single-amplicon
-        optionFamilies:
-            - fastq-files
-            - amplicon
+        module: genomex-mdi-tools//align/dna-paired-end  
+    collate:
+        order: 2
+        thread: do
+        # optionFamilies:
+        #     - bam
+        #     - quality
         resources:
             required:
-                total-ram: 8G
+                total-ram: 16G
+                ram-per-cpu: 4G
             recommended: 
-                n-cpu: 4
-                ram-per-cpu: 2G
+                n-cpu: 8
+                ram-per-cpu: 4G
         job-manager:
             recommended:
-                time-limit: 24:00:00
-        description: "Run CRISPResso in single amplicon mode with single or paired end reads"                 
-condaFamilies:
-    CRISPResso2:
-        dependencies:       
-            - crispresso2=2.2.12
-optionFamilies:   
-    fastq-files:
-        options:
-            fastq-r1:
-                order: 1
-                short: 1
-                type: string
-                required: true
-                default: null
-                description: "read 1 fastq file, passed to CRISPResso"  
-            fastq-r2:
-                order: 2
-                short: 2
-                type: string
-                required: true
-                default: null
-                description: "read 2 fastq file, passed to CRISPResso"  
-    amplicon:
-        options:
-            amplicon-seq:
-                order: 1
-                short: a
-                type: string
-                required: true
-                default: null
-                description: "reference amplicon base sequence, passed to CRISPResso"  
+                time-limit: 4:00:00
+        description: "Group molecules by sequence identity and identify the input amplicon(s)" 
+    # extract:
+    #     order: 2
+    #     module: extract
+    # find:
+    #     order: 3
+    #     module: find2
+# optionFamilies:   
+#     fastq-files:
+#         options:
+#             fastq-r1:
+#                 order: 1
+#                 short: 1
+#                 type: string
+#                 required: true
+#                 default: null
+#                 description: "read 1 fastq file, passed to CRISPResso"  
+#             fastq-r2:
+#                 order: 2
+#                 short: 2
+#                 type: string
+#                 required: true
+#                 default: null
+#                 description: "read 2 fastq file, passed to CRISPResso"  
 # package:
-#     normalize: # the pipeline action after which a data package should assembled
-#         uploadType: scCNV # a signal to the Stage 2 framework regarding the package contents
+#     find: # the pipeline action after which a data package should assembled
+#         uploadType: svWGS # a signal to the Stage 2 framework regarding the package contents
 #         files:
+#             metadata:
+#                 type: yml
+#                 file: $FIND_PREFIX.metadata.yml
+#             structuralVariants:
+#                 type: rds-file
+#                 file: $FIND_PREFIX.structural_variants.rds
+#             junctionMolecules:
+#                 type: rds-file
+#                 file: $FIND_PREFIX.junction_molecules.rds
 #             manifestFile:
 #                 type: comma-delimited
 #                 manifestType: simple
-#                 file: $DATA_FILE_PREFIX.$PIPELINE_NAME.manifest.csv
-#             normalizeFile:
-#                 type: rds
-#                 file: $DATA_FILE_PREFIX.$PIPELINE_NAME.normalize.rds      
+#                 file: $MANIFEST_PREFIX.sample_manifest.csv
+#             distributionsZip:
+#                 type: zip-file
+#                 file: $MANIFEST_PREFIX.distribution_plots.zip
+#             coverageFile:
+#                 type: rds-file
+#                 file: $COVERAGE_PREFIX.rds
 # container:
-#     supported: false    
+#     supported: false    # set to true if you maintain a container registry for this pipeline [false]
 #     registry:  ghcr.io  # domain name of your OCI-compatible, oras-accessible, container registry [ghcr.io]
-#     owner:     xxxxxxxx # REQUIRED: the name of the owner, e.g., user or organization, at 'registry'
+#     owner:     wilsontelab # REQUIRED: the name of the owner, e.g., user or organization, at 'registry'
 #     installer: apt-get  # the installer program used by the container OS, typically apt-get or yum [apt-get]
+
+
+
