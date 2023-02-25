@@ -94,7 +94,4 @@ perl $ACTION_DIR/find/group_junctions.pl |
 Rscript $ACTION_DIR/find/call_svs.R
 checkPipe
 
-# clean up
-rm -fr $SHM_DIR_WRK
-
 echo "done"
