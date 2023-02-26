@@ -9,4 +9,4 @@ published: true
 
 The following steps will install the svx-mdi-tools suite
 and its data resources and program dependencies. These steps
-are required to use all pipelines in the suite.
+are required to use any pipeline in the suite.

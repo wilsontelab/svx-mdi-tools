@@ -13,13 +13,17 @@ source(file.path(rUtilDir, 'workflow.R'))
 checkEnvVars(list(
     string = c(
         'DISCOVERY_FILE',
-        'ALLOWED_FILE'        
+        'ALLOWED_FILE',
+        'AMPLICONS_FILE'   
     ),
     integer = c(
         'N_CPU',
         'MATCH_KEEP_DISTANCE',
         'MATCH_REJECT_DISTANCE',
-        'MAX_AMPLICONS'
+        'MAX_AMPLICONS',
+        'MAX_INSERT_SIZE',
+        'MIN_MERGE_OVERLAP',
+        'READ_LEN'
     ),
     double = c(
         'MIN_FRACTION_ADD_INDEX'
@@ -29,7 +33,7 @@ checkEnvVars(list(
 # set some options
 setDTthreads(env$N_CPU)
 options(scipen = 999) # prevent 1+e6 in printed, which leads to read.table error when integer expected
-options(warn = 2) ########################
+options(warn = 2) 
 #=====================================================================================
 
 #=====================================================================================
@@ -71,9 +75,36 @@ while(nodePairs[1, count >= firstAmplicon$count * env$MIN_FRACTION_ADD_INDEX] &&
     keptNodePairs <- rbind(keptNodePairs, nodePairs[keptI])
     nodePairs <- nodePairs[-which(matchingI)]
 }
+#=====================================================================================
+
+#=====================================================================================
 write.table(
     keptNodePairs, 
     file = env$ALLOWED_FILE, 
+    quote = FALSE, 
+    sep = "\t",
+    row.names = FALSE,
+    col.names = FALSE
+)
+#=====================================================================================
+
+#=====================================================================================
+amplicons <- keptNodePairs[index == 1]
+amplicons[, proper := ifelse(
+    chrom1 != chrom2 | 
+    side1 == side2 | 
+    side1 == "L" |
+    pos2 - pos1 > env$MAX_INSERT_SIZE, 
+    "notPossible",
+    ifelse(
+        pos2 - pos1 < 2 * env$READ_LEN - env$MIN_MERGE_OVERLAP,
+        "expectOverlap",
+        "expectGaps"
+    )
+)]
+write.table(
+    amplicons, 
+    file = env$AMPLICONS_FILE, 
     quote = FALSE, 
     sep = "\t",
     row.names = FALSE,

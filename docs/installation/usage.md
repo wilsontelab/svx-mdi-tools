@@ -26,20 +26,20 @@ for information about the ways you can execute an MDI pipeline on your server. B
 you can run a pipeline action as a program from the command line, e.g.:
 
 ```sh
-mdi <pipeline> <align> [options] # e.g., mdi svCapture align
+mdi <pipeline> <action> [options] # e.g., mdi svCapture align
 ```
 
 However, rather than specifying options at the command line, 
 we recommend creating a job configuration file and then either calling it directly:
 
 ```sh
-mdi <pipeline> <job.yml> # e.g., mdi svCapture myJob.yml
+mdi <pipeline> <data.yml> # e.g., mdi svCapture mydata.yml
 ```
 
 or, better yet, submitting it to the job scheduler on your HPC cluster:
 
 ```sh
-mdi submit <job.yml> # e.g., mdi submit myJob.yml
+mdi submit <data.yml> # e.g., mdi submit mydata.yml
 ```
 
 ### Help for assembling job configuration files
@@ -53,8 +53,8 @@ quickly construct a new job file from scratch.
 
 ```sh
 mdi <pipeline> template --help
-mdi <pipeline> template > myJob.yml # e.g., mdi svCapture template
-nano myJob.yml
+mdi <pipeline> template > mydata.yml # e.g., mdi svCapture template
+nano mydata.yml
 ```
 
 Finally, the following commands will give you help screen for a pipeline

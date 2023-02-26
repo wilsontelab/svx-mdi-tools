@@ -7,6 +7,7 @@
 # input:
 #     $NAME_BAM_FILE (possibly overridden by $BAM_FILE)
 # outputs:
+#     $COLLATE_PREFIX.amplicons.txt
 #     $COLLATE_PREFIX.fastq.gz, for subsequent realignment to genome
 
 # log file feedback
@@ -18,6 +19,7 @@ echo "input bam: $NAME_BAM_FILE"
 INTERIM_FILE=$DATA_FILE_PREFIX.interim.txt.gz
 export DISCOVERY_FILE=$DATA_FILE_PREFIX.discovery.txt
 export ALLOWED_FILE=$DATA_FILE_PREFIX.allowed.txt
+export AMPLICONS_FILE=$COLLATE_PREFIX.amplicons.txt
 FASTQ_FILE=$COLLATE_PREFIX.fastq.gz
 SORT_RAM=$(( $MAX_SORT_RAM_INT / 2 )) 
 SORT_RAM=$SORT_RAM"b"
@@ -54,6 +56,7 @@ checkPipe
 echo "discovering amplicon outer endpoint index nodes"
 Rscript $ACTION_DIR/group/discover-amplicons.R
 checkPipe
+cat $AMPLICONS_FILE
 
 # reject molecules with too-large a position difference from and index and too low a count to become a new index
 echo "counting and saving unique DNA sequences from kept amplicon molecules"

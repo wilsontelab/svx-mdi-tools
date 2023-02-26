@@ -50,6 +50,7 @@ to edit the job file.
 
 ```sh
 cat svCapture-demo.yml
+mdi inspect svCapture-demo.yml # check syntax, directories, and report all options
 ```
 
 Pipeline options are specified in an extended YAML format 
@@ -65,18 +66,21 @@ or if you installed the hg38 genome into a different location, above.
 To execute the demo in the command shell, use:
 
 ```sh
+mdi svCapture svCapture-demo.yml --dry-run
 mdi svCapture svCapture-demo.yml
 ```
 
 To submit the demo to your cluster job scheduler, use:
 
 ```sh
+mdi submit --dry-run svCapture-demo.yml
 mdi submit svCapture-demo.yml
 ```
 
 Depending on your HPC server, you might need to specify additional options,
 which you can edit into the job file or add at the command line. For 
-example, the following would specify a user account:
+example, the following would specify a user account that takes precedence 
+over any value found in the job file.
 
 ```sh
 mdi submit svCapture-demo.yml --account <userAcount>

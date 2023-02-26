@@ -12,7 +12,7 @@ You can install MDI tool suites, including svx-mdi-tools, in one of two ways:
 - as a **multi-suite installation** that carries one or more distinct tool suites (recommended), 
 - as a dedicated **single-suite installation**.
 
-Choose one of the methods to install the MDI and svx-mdi-tools code,
+Choose one of the methods to install the code,
 then continue on to build your runtime environments and obtain your required genome(s).
 
 ---

@@ -12,7 +12,7 @@ from the
 [Thomas Wilson laboratory](https://wilsonte-umich.github.io)
 at the University of Michigan.
 
-## Available tools
+### Available tools
 
 Pipelines and apps in stable release are:
 - **svCapture** = find SVs in whole-genome capture sequencing

@@ -35,13 +35,7 @@ actions:
         job-manager:
             recommended:
                 time-limit: 12:00:00
-        description: "Group molecules by sequence identity and discover the input amplicon(s)"
-    # extract:
-    #     order: 2
-    #     module: extract
-    # find:
-    #     order: 3
-    #     module: find2
+        description: "group molecules by sequence identity, discover and characterize amplicon(s)"
 optionFamilies:   
     amplicon-discovery:
         options:
@@ -73,8 +67,13 @@ optionFamilies:
                 required: false
                 default: 0.05
                 description: "additional amplicon index positions must exceed this fraction coverage of the first index"
-
-
+            max-insert-size:
+                order: 5
+                short: z
+                type: integer
+                required: false
+                default: 1000
+                description: "largest DNA insert size that can be sequenced by the paired-end method in use"
 # package:
 #     find: # the pipeline action after which a data package should assembled
 #         uploadType: svWGS # a signal to the Stage 2 framework regarding the package contents

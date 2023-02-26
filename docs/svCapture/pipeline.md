@@ -8,14 +8,14 @@ published: true
 
 ## {{page.title}}
 
-svCapture data analysis first entails execution of a pipeline with steps:
+svCapture data analysis first entails execution of a pipeline with actions:
 - **align** = align input fastq files to the reference genome
 - **collate** = assemble read groups, make consensuses, and re-align to genome
 - **extract** = scan name-sorted reads for molecules with alignment discontinuities
 - **find** = scan anomalous molecules from one or more samples to make SV junction calls
 
 This stepwise implementation:
-- allows users to perform alignment steps outside of the svCapture pipeline
+- allows users to perform alignment outside of the svCapture pipeline
 - supports simultaneous SV finding across multiple related samples
 - permits code-sharing with other pipelines in the svx-mdi-tools code suite
 
@@ -32,15 +32,15 @@ you need the following:
 
 Most users will provide two FASTQ format read files obtained
 from a paired-end, short-read sequencing platform. The path to these
-read files are specific using options `input-dir` and `input-name`.
+read files are specified using options `input-dir` and `input-name`.
 
-Alternatively, you can skip the `align` step and provide pre-aligned
-reads as a name-sorted bam file.
+Alternatively, you can skip the `align` action and provide pre-aligned
+reads as a name-sorted bam file using option `--bam-file`.
 
 ### Your capture target regions
 
-svCapture requires that you provide a BED-format file that list
-all of the individual genome spans that were targetet, typically captured,
+svCapture requires that you provide a BED-format file via option `--targets-bed`
+that lists all genome spans that were targeted - typically captured - 
 for sequencing. These are used to categorize SV types, calculate coverage, etc.
 
 ### Unique molecular identifiers
@@ -51,15 +51,15 @@ list and describe them using options `umi-file` and `umi-skip-bases`.
 ### Parallel SV analysis across multiple samples
 
 Actions `align`, `collate` and `extract` are executed per sample.
-The `find` action can also be execute per sample, but often it is 
+The `find` action can also be executed per sample, but often it is 
 helpful to merge extracted anomalous reads so that SVs can be
 discovered in a manner that combines information from more than one sample.
 
 The two modes of SV finding are communicated by how you set options
-`output-dir` and `data-name`. If the target file output directory
+`output-dir` and `data-name`. If the output directory already
 contains extracted data files, a single-sample find is executed.
 If the directory contains a set of sub-folders, each with extracted read files,
-that a merged-sample find is executed.
+a merged-sample find is executed.
 
 ## Pipeline outputs
 
@@ -67,15 +67,15 @@ The svCapture pipeline performs extensive grouping and consensus
 making to yield sets of output molecules that are deemed likely to correspond
 to single, independent source DNA molecules.
 
-
-The most important pipeline outputs are the lists of characterized SV junction calls.
-
-In addition
+The most important pipeline outputs are the lists of characterized SV junction calls, which are available in:
+- an R-compatible RDS file included in a date
+package for use in the svCapture app
+- a VCF format file
+- a gzipped flat file.
 
 ## Additional pipeline options
 
-There are a number of other options for the different pipeline actions
-that can be listed as follows:
+Other options for the different pipeline actions can be listed as follows:
 
 ```sh
 mdi svCapture <action> --help

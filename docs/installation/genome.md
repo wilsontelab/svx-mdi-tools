@@ -51,7 +51,7 @@ export URL=http://igenomes.illumina.com.s3-website-us-east-1.amazonaws.com/Homo_
 mdi download iGenomes --urls ${URL} --output-dir ${PWD}/iGenomes --data-name hg38
 ```
 
-If you do not have Singularity on your server, the above command will fail
+If you do not have Singularity on your server, the command above will fail
 until you build the required conda runtime environment:
 
 ```sh
