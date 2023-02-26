@@ -6,59 +6,75 @@ pipeline:
 suiteVersions:
     genomex-mdi-tools: main 
 actions:
-    # _global:  
-    #     environment: svAmplicon  
-    #     condaFamilies:
-    #         - genomex-mdi-tools//base
-    #         # - genomex-mdi-tools//genome
-    #         # - genomex-mdi-tools//bwa
-    #         # - r-4.1
-    #         - CRISPResso2
-    #     # optionFamilies:
-    #     #     - genomex-mdi-tools//genome
+    _global:  
+        environment: svAmplicon  
+        condaFamilies:
+            - genomex-mdi-tools//base
+            - genomex-mdi-tools//genome
+            - r-4.2
+        optionFamilies:
+            - genomex-mdi-tools//genome
     align:
         order: 1
-        module: genomex-mdi-tools//align/dna-paired-end  
+        module: genomex-mdi-tools//align/dna-paired-end 
     collate:
         order: 2
-        thread: do
-        # optionFamilies:
-        #     - bam
-        #     - quality
+        condaFamilies:
+            - genomex-mdi-tools//bwa
+        optionFamilies: # these options apply to all actions
+            - genomex-mdi-tools//bam-format
+            - genomex-mdi-tools//read-filtering
+            - genomex-mdi-tools//read-merging
+            - amplicon-discovery
         resources:
             required:
-                total-ram: 16G
-                ram-per-cpu: 4G
+                total-ram: 32G
             recommended: 
-                n-cpu: 8
-                ram-per-cpu: 4G
+                n-cpu: 16
+                ram-per-cpu: 2G
         job-manager:
             recommended:
-                time-limit: 4:00:00
-        description: "Group molecules by sequence identity and identify the input amplicon(s)" 
+                time-limit: 12:00:00
+        description: "Group molecules by sequence identity and discover the input amplicon(s)"
     # extract:
     #     order: 2
     #     module: extract
     # find:
     #     order: 3
     #     module: find2
-# optionFamilies:   
-#     fastq-files:
-#         options:
-#             fastq-r1:
-#                 order: 1
-#                 short: 1
-#                 type: string
-#                 required: true
-#                 default: null
-#                 description: "read 1 fastq file, passed to CRISPResso"  
-#             fastq-r2:
-#                 order: 2
-#                 short: 2
-#                 type: string
-#                 required: true
-#                 default: null
-#                 description: "read 2 fastq file, passed to CRISPResso"  
+optionFamilies:   
+    amplicon-discovery:
+        options:
+            match-keep-distance:
+                order: 1
+                short: k
+                type: integer
+                required: false
+                default: 5
+                description: "keep molecules with outer endpoints <=k bp from an amplicon index position"  
+            match-reject-distance:
+                order: 2
+                short: K
+                type: integer
+                required: false
+                default: 50
+                description: "reject molecules with outer endpoints >k and <=K bp from an amplicon index position" 
+            max-amplicons:
+                order: 3
+                short: A
+                type: integer
+                required: false
+                default: 1
+                description: "allow at most -A amplicons to be discovered, in order of abundance"
+            min-fraction-add-index:
+                order: 4
+                short: a
+                type: double
+                required: false
+                default: 0.05
+                description: "additional amplicon index positions must exceed this fraction coverage of the first index"
+
+
 # package:
 #     find: # the pipeline action after which a data package should assembled
 #         uploadType: svWGS # a signal to the Stage 2 framework regarding the package contents

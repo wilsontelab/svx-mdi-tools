@@ -1,5 +1,5 @@
 ---
-title: Install the code
+title: Install code
 parent: Installation and usage
 has_children: false
 nav_order: 10
@@ -10,10 +10,10 @@ published: true
 
 You can install MDI tool suites, including svx-mdi-tools, in one of two ways: 
 - as a **multi-suite installation** that carries one or more distinct tool suites (recommended), 
-- as a contained **single-suite installation** dedicated to just the svx-mdi-tools suite.
+- as a dedicated **single-suite installation**.
 
-Choose one of the methods below to install the MDI and svx-mdi-tools code,
-then continue on to build your runtime environments and obtain any required genome(s).
+Choose one of the methods to install the MDI and svx-mdi-tools code,
+then continue on to build your runtime environments and obtain your required genome(s).
 
 ---
 ## Installation Method 1: multi-suite installation (recommended)
@@ -45,11 +45,10 @@ target script in your new installation.
 ./mdi alias --help
 ./mdi alias --alias mdi # change the alias name if you'd like 
 `./mdi alias --alias mdi --get` # activate the alias in the current shell (or log out and back in)
-mdi
 ```
 
 Alternatively, you can add the MDI installation directory to your PATH variable,
-or always change into the directory prior to calling _./mdi_.
+or change into the directory prior to calling _./mdi_.
 
 ### Add the svx-mdi-tools suite to your MDI installation
 
@@ -115,7 +114,7 @@ perl alias.pl svx # you can use a different alias name if you'd like
 ```
 
 Alternatively, you can add the installation directory to your PATH variable,
-or always change into the directory prior to calling _./run_.
+or change into the directory prior to calling _./run_.
 
 ### Execute a Stage 1 pipeline from the command line
 

@@ -14,4 +14,7 @@ use warnings;
 
 # all task environment variables may be accessed here
 
+# force paired-end reads to be aligned as two interleaved single reads
+$ENV{SUPPRESS_SMART_PAIRING} = 1; 
+
 1;

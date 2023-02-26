@@ -18,7 +18,7 @@ Specifically, when called as follows:
 mdi <pipeline> <action> --genomes-dir /path/to/genomes --genome hg38
 ```
 
-pipelines in the svx-mdi-tools suite expect to find the folder structure:
+pipelines in the svx-mdi-tools suite expect to find folder structure:
 
 ```sh
 tree -L 4 /path/to/genomes/iGenomes/Homo_sapiens/
@@ -51,22 +51,20 @@ export URL=http://igenomes.illumina.com.s3-website-us-east-1.amazonaws.com/Homo_
 mdi download iGenomes --urls ${URL} --output-dir ${PWD}/iGenomes --data-name hg38
 ```
 
-If you do not have Singularity available on your server, the above command will fail
+If you do not have Singularity on your server, the above command will fail
 until you build the required conda runtime environment:
 
 ```sh
 mdi download conda --create
 ```
 
-See:
+For more information, see:
 
 ```sh
 mdi download --help
 mdi download iGenomes --help
 mdi download conda --help
 ```
-
-for more information.
 
 If you already have an appropriately formatted reference genome installation you can use it,
 but it must conform to the iGenomes folder specifications.

@@ -6,6 +6,7 @@
 #     source $MODULES_DIR/files/set_svx_paths.sh
 
 # collate
+export COLLATE_PREFIX=$DATA_GENOME_PREFIX.collate
 export CONSENSUS_PREFIX=$DATA_GENOME_PREFIX.consensus
 
 # extract

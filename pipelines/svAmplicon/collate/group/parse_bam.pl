@@ -16,16 +16,11 @@ map { require "$perlUtilDir/sequence/$_.pl" } qw(general IUPAC smith_waterman);
 resetCountFile();
 
 # environment variables
-fillEnvVar(\my $IS_USER_BAM,  'IS_USER_BAM');
 fillEnvVar(\my $N_CPU,        'N_CPU');
 fillEnvVar(\my $MIN_MAPQ,     'MIN_MAPQ');
-fillEnvVar(\my $LIBRARY_TYPE, 'LIBRARY_TYPE');
-fillEnvVar(\my $MIN_CLIP,     'MIN_CLIP');
+# fillEnvVar(\my $MIN_CLIP,     'MIN_CLIP');
 fillEnvVar(\my $MIN_MERGE_OVERLAP, 'MIN_MERGE_OVERLAP');
 fillEnvVar(\my $MIN_MERGE_DENSITY, 'MIN_MERGE_DENSITY');
-
-# working variables
-my $collapseStrands = ($LIBRARY_TYPE eq 'TruSeq'); # otherwise, Nextera, where same signatures on opposite strands are unique source molecules
 
 # constants
 use constant {
@@ -54,9 +49,9 @@ use constant {
     #-------------
     ALIGN_SPLIT => 12,
     #-------------
-    _IS_PAIRED => 1, # SAM FLAG bits
+    # _IS_PAIRED => 1, # SAM FLAG bits
     _REVERSE => 16,
-    _SECOND_IN_PAIR => 128,
+    # _SECOND_IN_PAIR => 128,
     #-------------
     SHIFT_REVERSE => 4, # how far to shift those bits to yield binary values
     SHIFT_SECOND => 7,
@@ -88,14 +83,16 @@ my $writeH = $writeH[1];
 my ($threadName);
 while(my $line = <STDIN>){
     $nInputAlns++;
-    my ($qName) = split("\t", $line, 2);     
-    if($threadName and $qName ne $threadName){
+    my ($qName) = split("\t", $line, 2);   
+    $qName =~ m/(.+):\d/; # strip the trailing readN to group read by readPair
+    my $pairName = $1;
+    if($threadName and $pairName ne $threadName){
         $nReadPairs++;        
         print $writeH END_READ_PAIR, "\n";
         $writeH = $writeH[$nReadPairs % $N_CPU + 1];
     }    
     print $writeH $line; # commit to worker thread
-    $threadName = $qName;
+    $threadName = $pairName;
 }
 $nReadPairs++;
 print $writeH END_READ_PAIR, "\n"; # finish last read pair
@@ -120,17 +117,12 @@ sub parseReadPair {
         if($line eq END_READ_PAIR){
             
             # extract information on the source read pair
-            if($IS_USER_BAM){ # user-supplied bam file cannot support UMIs, get merge status from FLAG
-                $umi1 = $umi2 = 1;            
-                $isMerged = !($alns[READ1] ? $alns[READ1][0][FLAG] & _IS_PAIRED : 1);
-            } else { # reads were aligned by genomex-mdi-tools align
-                ($molId, $umi1, $umi2, $isMerged) = $alns[READ1] ? split(":", $alns[READ1][0][QNAME]) : ();
-            }
- 
+            ($molId, $umi1, $umi2, $isMerged) = $alns[READ1] ? split(":", $alns[READ1][0][QNAME]) : ();
+
             # discard orphan reads since cannot associate UMIs with endpoints
             # process others according to current merge state
             if($isMerged or ($alns[READ1] and $alns[READ2])){
-                @umis = ($umi1, $umi2);            
+                @umis = ($umi1, $umi2);    
                 $isMerged ? processPremerged(): processUnmerged();
             }
 
@@ -139,7 +131,9 @@ sub parseReadPair {
             
         } else { # add new alignment to growing read pair
             my @aln = (split("\t", $line, ALIGN_SPLIT))[QNAME..QUAL];
-            push @{$alns[($aln[FLAG] & _SECOND_IN_PAIR) >> SHIFT_SECOND]}, \@aln; # 0=read1, 1=read2
+            $aln[QNAME] =~ m/(.+):(\d)/; # strip the trailing readN to group read by readPair
+            $aln[QNAME] = $1;
+            push @{$alns[ $2 - 1 ]}, \@aln; # 0=read1, 1=read2
         }
     }
     
@@ -152,7 +146,7 @@ sub parseReadPair {
 #---------------------------------------------------------------------
 sub processPremerged {
     @refAlns = ();
-    
+
     # calculate clip lengths for all alignments
     map {
         my $clip1  = ($$_[FLAG] & _REVERSE) ? $rightClip_ : $leftClip_;
@@ -169,18 +163,12 @@ sub processPremerged {
     # shortest clip1 is closest to READ1 primer
     } else {
         my @sorted = sort {$$a[CLIP1] <=> $$b[CLIP1]} @{$alns[READ1]};
-        
-        # but reject low MAPQ outermost alignments as reference alignments                       
-        my $i = 0;
-        while($sorted[$i][MAPQ] < $MIN_MAPQ and $i < $#sorted){ $i++ }
-        $refAlns[READ1] = $sorted[$i];        
-        $i = $#sorted;
-        while($sorted[$i][MAPQ] < $MIN_MAPQ and $i > 0){ $i-- }
-        $refAlns[READ2] = $sorted[$i];  
+        $refAlns[READ1] = $sorted[0]; # amplicons always use the outermost alignment as reference, regardless of MAPQ    
+        $refAlns[READ2] = $sorted[$#sorted];  
     }
-    
-    # if no alignments were of sufficient MAPQ, reject the merged read
-    $refAlns[READ1][MAPQ] >= $MIN_MAPQ or return;
+
+    # if either reference alignment was not of sufficient MAPQ, reject the read pair
+    ($refAlns[READ1][MAPQ] >= $MIN_MAPQ and $refAlns[READ2][MAPQ] >= $MIN_MAPQ) or return;
     $nQualityPairs++;
 
     # set strandedness information
@@ -203,12 +191,10 @@ sub processPremerged {
 
     # output all fields required for read-pair consensus calling into one sortable line
     print join("\t",              
-        getMoleculeKey($read1, $read2, $clip1, $clip2, $side1, $side2),
-        $refAlns[$read1][$groupPos1], $refAlns[$read2][$groupPos2],
+        getMoleculeKey($read1, $read2, $side1, $side2, $groupPos1, $groupPos2),
         @{$refAlns[$seqRead]}[SEQ, QUAL], ($nullSymbol) x 2,
-        $refAlns[READ1][QNAME], # QNAME used for read recovery from primary bam
-        $read1, # the strand of source molecule, 0 or 1 (1 means we flipped the reads)
-        2, int(rand(10)) # sortable merge status
+        "NA",
+        2 # sortable merge status
     ), "\n";
 }
 sub setMergedGroupPos {
@@ -232,7 +218,7 @@ sub setMergedGroupPos {
 #---------------------------------------------------------------------
 sub processUnmerged {    
     (@refAlns, @end1Alns) = ();    
-  
+
     # analyze each read of the pair
     foreach my $read(READ1, READ2){
 
@@ -254,17 +240,11 @@ sub processUnmerged {
         } else {           
             my @sorted = sort {$$a[$clipI] <=> $$b[$clipI]} @{$alns[$read]};
             push @end1Alns, $sorted[$read==READ1 ? 0 : $#sorted];                 
-            
-            # but reject low MAPQ outermost alignments as reference alignments
-            # low MAPQ alignments are more likely to be placed differently by aligner
-            # even when they are longer (e.g. randomly choosing between genome repeat units)                        
-            my $i = 0;
-            while($sorted[$i][MAPQ] < $MIN_MAPQ and $i < $#sorted){ $i++ }
-            push @refAlns, $sorted[$i];
+            push @refAlns, $sorted[0]; # amplicons always use the outermost alignment as reference, regardless of MAPQ    
         } 
     }
     
-    # if either alignment was not of sufficient MAPQ, reject the read pair
+    # if either reference alignment was not of sufficient MAPQ, reject the read pair
     ($refAlns[READ1][MAPQ] >= $MIN_MAPQ and $refAlns[READ2][MAPQ] >= $MIN_MAPQ) or return;
     $nQualityPairs++;
     
@@ -280,7 +260,7 @@ sub processUnmerged {
     my $end1Offset = getEnd1Offset($end1Alns[READ1], $end1Alns[READ2]);
 
     # merge if possible otherwise commit non-overlapping unmerged pairs
-    defined($end1Offset) ? mergeWithGuidance($end1Offset) : commitUnmerged();     
+    defined($end1Offset) ? mergeWithGuidance($end1Offset) : commitUnmerged("NA");     
 }
 sub setUnmergedGroupPos {
     my ($aln, $actingRead) = @_;
@@ -332,7 +312,7 @@ sub mergeWithGuidance {
     # check for sufficient potential overlap
     my $readLen = length($end1Alns[READ1][SEQ]);  # not necessarily READ_LEN if adapters were trimmed
     my $overlapLen = $readLen - abs($end1Offset); # integer > 0
-    $overlapLen >= $MIN_MERGE_OVERLAP or return commitUnmerged();    
+    $overlapLen >= $MIN_MERGE_OVERLAP or return commitUnmerged($overlapLen);    
     
     # extract the potential overlap sequences and qualities
     my ($refRead, $qryRead) = $end1Alns[READ1][REVERSE] ? (READ2, READ1) : (READ1, READ2);
@@ -359,11 +339,11 @@ sub mergeWithGuidance {
     if($refSeq eq $qrySeq){
         $overlapSeq  = $refSeq;    
         $overlapQual = $refQual;
-        
+   
     # otherwise attempt aggressive Smith-Waterman of read against read to make them merge
     } else {
         my ($qryOnRef, $score, $startQry, $endQry, $startRef, $endRef) = smith_waterman($qrySeq, $refSeq, 1); # fast algorithm with minimal register shifting
-        $score or return commitUnmerged(); # no alignment at all
+        $score or return commitUnmerged($overlapLen); # no alignment at all
         
         # prepare to track base matching
         my @ref = split('', $refSeq);
@@ -424,7 +404,7 @@ sub mergeWithGuidance {
         
         # check for sufficient merge quality
         ($nMatches >= $MIN_MERGE_OVERLAP and
-         $nMatches / $overlapLen >= $MIN_MERGE_DENSITY) or return commitUnmerged();      
+         $nMatches / $overlapLen >= $MIN_MERGE_DENSITY) or return commitUnmerged($overlapLen);      
     }
 
     # assemble the merged read SEQ and QUAL
@@ -445,21 +425,20 @@ sub mergeWithGuidance {
     # set additional bits for committing
     $refAlns[READ1][QNAME] =~ s/:0$/:1/; # merge status 1 is lower priority molecule than 2=fastp merge
     my ($read1, $read2, $groupPos1, $groupPos2, $clip1, $clip2, $side1, $side2) = sortReferenceAlignments(); 
-    
+
     # output all fields required for read-pair consensus calling into one sortable line
     print join("\t",              
-        getMoleculeKey($read1, $read2, $clip1, $clip2, $side1, $side2),
-        $refAlns[$read1][$groupPos1], $refAlns[$read2][$groupPos2],
+        getMoleculeKey($read1, $read2, $side1, $side2, $groupPos1, $groupPos2),
         $mergeSeq, $mergeQual, ($nullSymbol) x 2,
-        $refAlns[READ1][QNAME], # QNAME used for read recovery from primary bam
-        $read1, # the strand of source molecule, 0 or 1 (1 means we flipped the reads)
-        1, int(rand(10)) # sortable merge status
+        $overlapLen,
+        1 # sortable merge status
     ), "\n";  
 }
 
 # reads could not be merged even with alignment guidance
 # most likely non-overlapping, i.e., large source molecules
 sub commitUnmerged {
+    my ($overlapLen) = @_;
 
     # order duplex endpoints to set molecule strand
     my ($read1, $read2, $groupPos1, $groupPos2, $clip1, $clip2, $side1, $side2) = sortReferenceAlignments();    
@@ -489,12 +468,10 @@ sub commitUnmerged {
     
     # output all fields required for read-pair consensus calling into one sortable line
     print join("\t",              
-        getMoleculeKey($read1, $read2, $clip1, $clip2, $side1, $side2),
-        $refAlns[$read1][$groupPos1], $refAlns[$read2][$groupPos2],
+        getMoleculeKey($read1, $read2, $side1, $side2, $groupPos1, $groupPos2),
         @{$refAlns[$read1]}[SEQ, QUAL], @{$refAlns[$read2]}[SEQ, QUAL],
-        $refAlns[READ1][QNAME], # QNAME used for read recovery from primary bam
-        $read1, # the strand of source molecule, 0 or 1 (1 means we flipped the reads)
-        0, int(rand(10)) # sortable merge status
+        $overlapLen, # if not NA, read pair is a merge failure
+        0 # sortable merge status
     ), "\n";   
 }
 
@@ -527,24 +504,12 @@ sub sortReferenceAlignments {
     }   
 }
 
-# molecule-defining data bits except for positions, which are sorted separately
+# molecule-defining data bits
 sub getMoleculeKey {
-    my ($read1, $read2, $clip1, $clip2, $side1, $side2) = @_;
-
-    # include a flag whether a refAln pos was clipped, i.e., should be stratified as an SV position
-    # this prevents an SV outer clip from grouping with a proper fragment with the same groupPos
-    my $isSVClip1 = $refAlns[$read1][$clip1] >= $MIN_CLIP ? 1 : 0;
-    my $isSVClip2 = $refAlns[$read2][$clip2] >= $MIN_CLIP ? 1 : 0;    
-    
-    # for Nextera libraries (or any without Y-adapter-like source strand discrimination)
-    # include inferred source strand as part of the molecule key
-    # since identical endpoints with opposite read1/2 orientation are independent molecules
-    my $groupingStrand = $collapseStrands ? '0' : $read1; # does NOT break molecule group if TruSeq
-
-    # return the key, consistent across merged and unmerged read pairs
-    join(",", 
-        $umis[$read1], @{$refAlns[$read1]}[RNAME, $side1], $isSVClip1,
-        $umis[$read2], @{$refAlns[$read2]}[RNAME, $side2], $isSVClip2,
-        $groupingStrand
+    my ($read1, $read2, $side1, $side2, $groupPos1, $groupPos2) = @_;  
+    join("\t", 
+        join(",", @{$refAlns[$read1]}[RNAME, $side1, $groupPos1], ), # node 1 
+        join(",", @{$refAlns[$read2]}[RNAME, $side2, $groupPos2]),   # node 2
+        join(",", $umis[$read1], $umis[$read2]) # molecule identifier, if in use
     );
 }

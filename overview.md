@@ -17,7 +17,7 @@ at the University of Michigan.
 Pipelines and apps in stable release are:
 - **svCapture** = find SVs in whole-genome capture sequencing
 
-Pipelines and apps in beta are:
+Pipelines and apps in alpha or beta are:
 - **svWGS** = find SVs in whole-genome sequencing data (without capture)
 - **scCNV** = find CNVs in single-cell whole-genome amplification sequencing
 - **svAmplicon** = find SVs in targeted amplicon sequences
