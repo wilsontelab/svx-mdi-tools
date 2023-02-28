@@ -27,8 +27,13 @@ slurp -s 10M $NAME_REALIGNED_BAM_FILE |
 samtools view - |
 perl $ACTION_DIR/extract/extract_nodes.pl | 
 
-# head -n 10
-# exit 1
+$SORT -k8,8nr | 
+# awk '$8 ~ /chr/' | 
+# awk '$7 > 0 && $9 > 0' | 
+cat
+# head -n 100
+exit 1
+
 $SORT -k4,4nr | 
 cat > /nfs/turbo/path-wilsonte-turbo/mdi/wilsontelab/greatlakes/data-scripts/lukaszewicz/svAmplicon/TMP.txt
 exit 1

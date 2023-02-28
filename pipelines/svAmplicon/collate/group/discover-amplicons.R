@@ -108,7 +108,6 @@ amplicons[, ":="(
     ref1 = if(proper == "notPossible") getPosSide(chrom1, side1, pos1) else getChromSpan(chrom1, pos1, pos2),
     ref2 = if(proper == "notPossible") getPosSide(chrom2, side2, pos2) else "*"
 ), by = amplicon]
-
 setPaddingBases <- function(side, ref, alt){
     if(ref == "*") ref <- alt
     if(env$MATCH_KEEP_DISTANCE < 1) return( list() )

@@ -12,7 +12,8 @@ use constant {
     QUAL1   => 3,
     QUAL2   => 4,
     OVERLAP => 5,
-    COUNT   => 6
+    IS_REFERENCE => 6,
+    COUNT   => 7
 };
 
 # parse the stream
@@ -21,7 +22,7 @@ while(my $line = <STDIN>){
     $i++;
     chomp $line;
     my @line = split("\t", $line);
-    my $name = join(":", $i, @line[AMPLICON, OVERLAP, COUNT], $line[SEQ2] eq "*" ? 1 : 0);
+    my $name = join(":", $i, @line[AMPLICON, OVERLAP, IS_REFERENCE, COUNT], $line[SEQ2] eq "*" ? 1 : 0);
     my $qual1 = $line[COUNT] > 1 ? getModalQual($line[QUAL1]) : $line[QUAL1]; # repeat sequences assumed to have high base quality
     print "\@$name:1\n$line[SEQ1]\n+\n$qual1\n";
     if($line[SEQ2] ne "*"){

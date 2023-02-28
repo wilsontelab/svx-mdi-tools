@@ -5,6 +5,15 @@ use warnings;
 # finish the process of repairing the outer ends to match the amplicon
 # (outer ends are never informative for a PCR product, so no information is lost here)
 
+# environment variables
+my $perlUtilDir = "$ENV{GENOMEX_MODULES_DIR}/utilities/perl";
+map { require "$perlUtilDir/$_.pl" } qw(workflow);
+fillEnvVar(\our $COLLATE_PREFIX,   'COLLATE_PREFIX');
+$perlUtilDir = "$ENV{MODULES_DIR}/utilities/perl/svAmplicon";
+map { require "$perlUtilDir/$_.pl" } qw(amplicons);
+use vars qw(@amplicons);
+
+# constants
 use constant {
     CHROM1  => 0, # shared leader columns
     SIDE1   => 1,
@@ -26,7 +35,19 @@ use constant {
     SEQ2    => 10,
     QUAL2   => 11,
     OVERLAP => 12,
-    MERGED  => 13
+    MERGED  => 13,
+    #-------------
+    AMP_AMPLICON_ID => 0, # amplicon fields
+    AMP_PROPER => 1,
+    AMP_MOL_COUNT => 2,
+    AMP_CHROM1 => 3,
+    AMP_SIDE1 => 4,
+    AMP_POS1 => 5,
+    AMP_REF1 => 6,
+    AMP_CHROM2 => 7,
+    AMP_SIDE2 => 8,
+    AMP_POS2 => 9,
+    AMP_REF2 => 10,
 };
 
 # collect the list of allowed outer node pairs
@@ -76,8 +97,16 @@ while(my $mol = <STDIN>){
     } else {
         applyEndPatch($$nodePair[PATCH2], \@mol, SIDE2, SEQ2, QUAL2);  
     }
+    my $amplicon = $amplicons[$$nodePair[AMPLICON]];
+    my $isReference = 0; # notPossible stays here, of course, no read pair can be reference
+    if($$amplicon[AMP_PROPER] eq "expectOverlap"){ # unmerged expectOverlap reads cannot possibly have the reference sequence (they would have merged)
+        $mol[SEQ1] eq $$amplicon[AMP_REF1] and $mol[SEQ2] eq "*" and $isReference = 1;
+    } elsif($$amplicon[AMP_PROPER] eq "expectGaps") {
+        $mol[SEQ1] eq $$amplicon[AMP_REF1] and $mol[SEQ2] eq $$amplicon[AMP_REF2] and $isReference = 1;
+    }
     print join("\t", 
         $$nodePair[AMPLICON],     
-        @mol[SEQ1, SEQ2, QUAL1, QUAL2, OVERLAP]
+        @mol[SEQ1, SEQ2, QUAL1, QUAL2, OVERLAP],
+        $isReference
     )."\n";
 }

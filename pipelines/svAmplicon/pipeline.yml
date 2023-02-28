@@ -26,6 +26,7 @@ actions:
             - genomex-mdi-tools//read-filtering
             - genomex-mdi-tools//read-merging
             - amplicon-discovery
+            - sv-finding
         resources:
             required:
                 total-ram: 32G
@@ -74,6 +75,16 @@ optionFamilies:
                 required: false
                 default: 1000
                 description: "largest DNA insert size that can be sequenced by the paired-end method in use"
+    sv-finding:
+        options:
+            min-sv-size:
+                order: 1
+                short: Z
+                type: integer
+                required: false
+                default: 10
+                description: "don't report internal deletions or insertions of fewer than -Z base pairs"  
+
 # package:
 #     find: # the pipeline action after which a data package should assembled
 #         uploadType: svWGS # a signal to the Stage 2 framework regarding the package contents
@@ -102,6 +113,3 @@ optionFamilies:
 #     registry:  ghcr.io  # domain name of your OCI-compatible, oras-accessible, container registry [ghcr.io]
 #     owner:     wilsontelab # REQUIRED: the name of the owner, e.g., user or organization, at 'registry'
 #     installer: apt-get  # the installer program used by the container OS, typically apt-get or yum [apt-get]
-
-
-

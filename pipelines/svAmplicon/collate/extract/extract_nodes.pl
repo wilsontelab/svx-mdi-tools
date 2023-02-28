@@ -21,9 +21,13 @@ fillEnvVar(\our $ACTION_DIR,       'ACTION_DIR');
 fillEnvVar(\our $N_CPU,            'N_CPU'); # user options, or derived from them
 fillEnvVar(\our $READ_LEN,         'READ_LEN');
 fillEnvVar(\our $MAX_INSERT_SIZE,  'MAX_INSERT_SIZE');
+fillEnvVar(\our $MIN_SV_SIZE,      'MIN_SV_SIZE');
 
 # load additional dependencies
+$perlUtilDir = "$ENV{MODULES_DIR}/utilities/perl/svAmplicon";
 map { require "$ACTION_DIR/extract/$_.pl" } qw(parse_nodes);
+map { require "$perlUtilDir/$_.pl" } qw(amplicons);
+use vars qw(@amplicons);
 
 # initialize the genome
 use vars qw(%chromIndex);
@@ -56,8 +60,7 @@ use constant {
     TLEN => 8,
     SEQ => 9,
     QUAL => 10,
-    ALN_N => 11,
-    RNAME_INDEX => 12,
+    RNAME_INDEX => 11,
     #-------------
     _IS_PAIRED => 1, # SAM FLAG bits
     _UNMAPPED => 4,
@@ -69,25 +72,16 @@ use constant {
     MOL_ID => 0,    # molecule-level data, carried here in QNAME
     AMPLICON_ID => 1, 
     N_OVERLAP_BASES => 2, 
-    MOL_COUNT => 3, 
-    IS_MERGED => 4, 
-    READ_N => 5, 
-    MOL_CLASS => 5, # values added by extract_nodes regardless of pipeline or bam source
+    IS_REFERENCE => 3,
+    MOL_COUNT => 4, 
+    IS_MERGED => 5, 
+    READ_N => 6, 
+    MOL_CLASS => 6, # values added by extract_nodes regardless of pipeline or bam source
     #-------------
     READ1 => 0, # for code readability
     READ2 => 1,
     MERGED_READ => 0
 };
-
-# load the pre-determined amplicons
-our @amplicons;
-open my $inH, "<", "$COLLATE_PREFIX.amplicons.txt" or die "missing file: $COLLATE_PREFIX.amplicons.txt\n";
-while(my $line = <$inH>){
-    chomp $line;
-    my @line = split("\t", $line);
-    $amplicons[$line[AMP_AMPLICON_ID]] = \@line;
-}
-close $inH;
 
 # process data by molecule over multiple parallel threads
 launchChildThreads(\&parseReadPair);
@@ -124,13 +118,13 @@ sub parseReadPair {
     $| = 1;
 
     # working variables
-    our ($alnN, $jxnN, @alns, @mol, $amplicon) = (1, 0);
+    our (@alns, @mol, $amplicon) = ();
   
     # run aligner output one alignment at a time
     my $readH = $readH[$childN];
     while(my $line = <$readH>){
         chomp $line;
-        my @aln = ((split("\t", $line, 11))[QNAME..QUAL], $alnN);     
+        my @aln = (split("\t", $line, 12))[QNAME..QUAL];     
 
         # parse output one source molecule at a time
         if($aln[0] eq END_READ_PAIR){
@@ -166,14 +160,11 @@ sub parseReadPair {
             }
 
             # prepare for next read-pair
-            $alnN = 1;
-            $jxnN = 0;
             @alns = ();
 
         } else{ # add new alignment to growing source molecule
             $aln[RNAME_INDEX] = $chromIndex{$aln[RNAME]} || 0; # non-canonical chroms are excluded, unmapped continue on (for now)   
             push @alns, \@aln;
-            $alnN++; # unique identifier to establish alignment edges between nodes   
         }
     }
 }
