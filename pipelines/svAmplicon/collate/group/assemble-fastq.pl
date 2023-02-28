@@ -22,14 +22,13 @@ while(my $line = <STDIN>){
     chomp $line;
     my @line = split("\t", $line);
     my $name = join(":", $i, @line[AMPLICON, OVERLAP, COUNT], $line[SEQ2] eq "*" ? 1 : 0);
-    my $qual1 = $line[COUNT] > 1 ? getModalQual($line[QUAL1]) : $line[QUAL1]; # repeat sequences assumed to have high quality
+    my $qual1 = $line[COUNT] > 1 ? getModalQual($line[QUAL1]) : $line[QUAL1]; # repeat sequences assumed to have high base quality
     print "\@$name:1\n$line[SEQ1]\n+\n$qual1\n";
     if($line[SEQ2] ne "*"){
-        my $qual2 = $line[COUNT] > 1 ? "C" x length($line[QUAL2]) : $line[QUAL2];
+        my $qual2 = $line[COUNT] > 1 ? getModalQual($line[QUAL2]) : $line[QUAL2];
         print "\@$name:2\n$line[SEQ2]\n+\n$qual2\n";  
     }
 }
-
 sub getModalQual {
     my %counts;    
     map { $counts{$_}++ } split("", $_[0]);

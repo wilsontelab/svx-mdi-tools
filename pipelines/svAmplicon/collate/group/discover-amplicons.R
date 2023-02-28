@@ -14,7 +14,10 @@ checkEnvVars(list(
     string = c(
         'DISCOVERY_FILE',
         'ALLOWED_FILE',
-        'AMPLICONS_FILE'   
+        'AMPLICONS_FILE',
+        'GENOME_FASTA',
+        'PLOTS_DIR',
+        'PLOT_PREFIX'
     ),
     integer = c(
         'N_CPU',
@@ -78,17 +81,7 @@ while(nodePairs[1, count >= firstAmplicon$count * env$MIN_FRACTION_ADD_INDEX] &&
 #=====================================================================================
 
 #=====================================================================================
-write.table(
-    keptNodePairs, 
-    file = env$ALLOWED_FILE, 
-    quote = FALSE, 
-    sep = "\t",
-    row.names = FALSE,
-    col.names = FALSE
-)
-#=====================================================================================
-
-#=====================================================================================
+message("  analyzing amplicons")
 amplicons <- keptNodePairs[index == 1]
 amplicons[, proper := ifelse(
     chrom1 != chrom2 | 
@@ -102,9 +95,63 @@ amplicons[, proper := ifelse(
         "expectGaps"
     )
 )]
+getChromSpan <- function(chrom, pos1, pos2){
+    x <- system2("samtools", c("faidx", env$GENOME_FASTA, paste0(chrom, ":", pos1, "-", pos2)), stdout = TRUE)
+    x <- paste(x[2:length(x)], collapse = "")
+    toupper(x)
+}
+getPosSide <- function(chrom, side, pos){
+    if(side == L) getChromSpan(chrom, pos - env$MAX_INSERT_SIZE + 1, pos)
+             else getChromSpan(chrom, pos, pos + env$MAX_INSERT_SIZE -1)
+}
+amplicons[, ":="(
+    ref1 = if(proper == "notPossible") getPosSide(chrom1, side1, pos1) else getChromSpan(chrom1, pos1, pos2),
+    ref2 = if(proper == "notPossible") getPosSide(chrom2, side2, pos2) else "*"
+), by = amplicon]
+
+setPaddingBases <- function(side, ref, alt){
+    if(ref == "*") ref <- alt
+    if(env$MATCH_KEEP_DISTANCE < 1) return( list() )
+    length <- nchar(ref)
+    sapply(1:env$MATCH_KEEP_DISTANCE, function(nBases){
+        if(side == "R") substr(ref, 1, nBases)
+                   else substr(ref, length - nBases + 1, length)
+    })
+}
+amplicons[, ":="(
+    padding1 = list(setPaddingBases(side1, ref1)),
+    padding2 = list(setPaddingBases(side2, ref2, ref1))
+), by = amplicon]
 write.table(
-    amplicons, 
+    amplicons[, .SD, .SDcols = c(
+        "amplicon","proper","count",
+        "chrom1","side1","pos1","ref1",
+        "chrom2","side2","pos2","ref2"
+    )], 
     file = env$AMPLICONS_FILE, 
+    quote = FALSE, 
+    sep = "\t",
+    row.names = FALSE,
+    col.names = FALSE
+)
+#=====================================================================================
+
+#=====================================================================================
+message("  repairing molecule outer endpoints to match amplicons")
+getEndPatch <- Vectorize(function(amplicon_, refPos, side, padding, pos){
+    amplicon <- amplicons[amplicon == amplicon_]
+    if(amplicon[[refPos]] == pos) return("0")
+    delta <- if(amplicon[[side]] == "R") pos - amplicon[[refPos]] else amplicon[[refPos]] - pos
+    if(delta < 0) return(as.character(delta))
+    amplicon[[padding]][[1]][delta]
+})
+keptNodePairs[, ":="(
+    patch1 = unlist(getEndPatch(amplicon, "pos1", "side1", "padding1", pos1)),
+    patch2 = unlist(getEndPatch(amplicon, "pos2", "side2", "padding2", pos2))
+)]
+write.table(
+    keptNodePairs, 
+    file = env$ALLOWED_FILE, 
     quote = FALSE, 
     sep = "\t",
     row.names = FALSE,

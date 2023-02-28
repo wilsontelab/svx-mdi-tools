@@ -67,7 +67,7 @@ perl $ACTION_DIR/group/filter-read-pairs.pl |
 # identify and count the unique sequences within the pool of kept ampliconic read pairs
 # parse the corresponding QUAL for passing to realignment
 # at this stage, N bases and sequencing errors still break molecule groups (will group later based on junctions)
-bedtools groupby -g 1,2,3 -c 4,5,6,6 -o first,first,first,count | 
+bedtools groupby -g 1,2,3 -c 4,5,6,6 -o first,first,first,count | # TODO: use better aggregate QUAL, e.g., via $val = ord ($char) - 33 ??
 perl $ACTION_DIR/group/assemble-fastq.pl | 
 pigz -p $N_CPU -c | 
 slurp -o $FASTQ_FILE

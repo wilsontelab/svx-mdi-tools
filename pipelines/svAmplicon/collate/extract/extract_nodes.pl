@@ -33,16 +33,17 @@ setCanonicalChroms();
 use constant {
     END_READ_PAIR => '_ERP_',
     #-------------
-    AMP_CHROM1 => 0, # amplicon fields
-    AMP_SIDE1 => 1,
-    AMP_POS1 => 2,
-    AMP_CHROM2 => 3, # amplicon fields
-    AMP_SIDE2 => 4,
-    AMP_POS2 => 5,
-    AMP_MOL_COUNT => 6,
-    AMP_AMPLICON_ID => 7,
-    AMP_INDEX => 8,
-    AMP_PROPER => 9,
+    AMP_AMPLICON_ID => 0, # amplicon fields
+    AMP_PROPER => 1,
+    AMP_MOL_COUNT => 2,
+    AMP_CHROM1 => 3,
+    AMP_SIDE1 => 4,
+    AMP_POS1 => 5,
+    AMP_REF1 => 6,
+    AMP_CHROM2 => 7,
+    AMP_SIDE2 => 8,
+    AMP_POS2 => 9,
+    AMP_REF2 => 10,
     #-------------
     QNAME => 0, # SAM fields
     FLAG => 1,
@@ -54,8 +55,9 @@ use constant {
     PNEXT => 7,
     TLEN => 8,
     SEQ => 9,
-    ALN_N => 10,
-    RNAME_INDEX => 11,
+    QUAL => 10,
+    ALN_N => 11,
+    RNAME_INDEX => 12,
     #-------------
     _IS_PAIRED => 1, # SAM FLAG bits
     _UNMAPPED => 4,
@@ -117,6 +119,9 @@ printCount($nReadPairs, 'nReadPairs', 'input read pairs');
 # child process to parse bam read pairs
 sub parseReadPair {
     my ($childN) = @_;
+    
+    # auto-flush output to prevent buffering and ensure proper feed to sort
+    $| = 1;
 
     # working variables
     our ($alnN, $jxnN, @alns, @mol, $amplicon) = (1, 0);
@@ -125,7 +130,7 @@ sub parseReadPair {
     my $readH = $readH[$childN];
     while(my $line = <$readH>){
         chomp $line;
-        my @aln = ((split("\t", $line, 11))[QNAME..SEQ], $alnN);     
+        my @aln = ((split("\t", $line, 11))[QNAME..QUAL], $alnN);     
 
         # parse output one source molecule at a time
         if($aln[0] eq END_READ_PAIR){
@@ -133,7 +138,7 @@ sub parseReadPair {
             # reject molecules with even one unmapped read
             my $anyUnmapped = 0;
             foreach my $aln (@alns){ ($$aln[FLAG] & _UNMAPPED) and $anyUnmapped = 1 } 
-            if(!$anyUnmapped){
+            unless($anyUnmapped){
 
                 # initialize molecule-level data 
                 @mol = split(":", $alns[0][QNAME]); # has READ_N in eventual MOL_CLASS slot

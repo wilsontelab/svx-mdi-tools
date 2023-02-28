@@ -19,7 +19,7 @@ SORT_RAM=$SORT_RAM"b"
 SORT="sort --parallel $N_CPU -T $TMP_DIR_WRK -S $SORT_RAM --compress-program=pigz"
 
 #########################
-export N_CPU=1
+# export N_CPU=1
 
 # parse alignments into productive pairs
 echo "parsing alignments into paired outer endpoint nodes"
@@ -27,8 +27,22 @@ slurp -s 10M $NAME_REALIGNED_BAM_FILE |
 samtools view - |
 perl $ACTION_DIR/extract/extract_nodes.pl | 
 
-# head -n 500
+# head -n 10
 # exit 1
+$SORT -k4,4nr | 
+cat > /nfs/turbo/path-wilsonte-turbo/mdi/wilsontelab/greatlakes/data-scripts/lukaszewicz/svAmplicon/TMP.txt
+exit 1
+
+# awk '$5 == 1 && $7 == "P"' | #  && $8 > 20
+# sed 's/~~~/\n/g' | 
+# grep "N:" | 
+
+
+
+# head -n 500
+cat # > /dev/null
+
+exit 1
 
 # pigz -p $N_CPU -c | 
 # slurp -s 10M -o $MOLECULE_FILE

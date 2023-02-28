@@ -1,18 +1,23 @@
 use strict;
 use warnings;
 
+# as compared to other svX extractions, svAmplicon
+#   has very little need for processing outer clips; those positions are fixed as the amplicon ends
+#   unmerged pair GAP junctions are assessed relative to the two outermost alignments to yield M=merge failue or N=inserted sequence
+
 # constants
 use constant {
-    AMP_CHROM1 => 0, # amplicon fields
-    AMP_SIDE1 => 1,
-    AMP_POS1 => 2,
-    AMP_CHROM2 => 3, # amplicon fields
-    AMP_SIDE2 => 4,
-    AMP_POS2 => 5,
-    AMP_MOL_COUNT => 6,
-    AMP_AMPLICON_ID => 7,
-    AMP_INDEX => 8,
-    AMP_PROPER => 9,
+    AMP_AMPLICON_ID => 0, # amplicon fields
+    AMP_PROPER => 1,
+    AMP_MOL_COUNT => 2,
+    AMP_CHROM1 => 3,
+    AMP_SIDE1 => 4,
+    AMP_POS1 => 5,
+    AMP_REF1 => 6,
+    AMP_CHROM2 => 7,
+    AMP_SIDE2 => 8,
+    AMP_POS2 => 9,
+    AMP_REF2 => 10,
     #-------------
     QNAME => 0, # SAM fields
     FLAG => 1,
@@ -24,8 +29,9 @@ use constant {
     PNEXT => 7,
     TLEN => 8,
     SEQ => 9,
-    ALN_N => 10,
-    RNAME_INDEX => 11,
+    QUAL => 10,
+    ALN_N => 11,
+    RNAME_INDEX => 12,
     #-------------
     _IS_PAIRED => 1, # SAM FLAG bits
     _UNMAPPED => 4,
@@ -92,10 +98,8 @@ use vars qw($READ_LEN $MAX_INSERT_SIZE @alns @mol $jxnN $amplicon);
 # source molecules that had one contiguous alignment, only possible in expectOverlap mode
 sub commitContiguousAlignment { # aln1/umi1 are the left/proximal end of the source molecule as provided to the aligner
     my ($aln) = @_;
-    $mol[MOL_CLASS] = IS_PROPER; # molecule may still have a small indel that did not cause alignment splitting
-    setEndpointData(\my @outData1, $aln, LEFT,  RIGHT); # LEFT = process the left clip if mapped on the forward strand
-    setEndpointData(\my @outData2, $aln, RIGHT, LEFT);  
-    summarizeMolecule([$aln], \@outData1, \@outData2, PROPER); # molecule has no inner endpoints
+    $mol[MOL_CLASS] = IS_PROPER; # molecule may still have a small indel that did not cause alignment splitting 
+    summarizeMolecule([$aln], PROPER); # molecule has no inner endpoints
 }
 #---------------------------------------------------------------------------------------------------
 # a merged read-pair (or single read) aligned in at least two segments, i.e., that crossed an SV junction
@@ -103,9 +107,8 @@ sub parseMergedSplit {
     # shortest clip1 will match umi1, longest will match umi2
     my ($outData1s, @alnIs) = sortReadAlignments(\@alns, LEFT, RIGHT);
     $mol[MOL_CLASS] = IS_SV;
-    setEndpointData(\my @outData2, $alns[$alnIs[$#alnIs]], RIGHT, LEFT);
     my $jxnTypes = printSequencedJunctions(@alns[@alnIs]); 
-    summarizeMolecule([@alns[@alnIs]], $$outData1s[$alnIs[0]], \@outData2, $jxnTypes); # molecule has no inner endpoints
+    summarizeMolecule([@alns[@alnIs]], $jxnTypes); # molecule has no inner endpoints
 }
 #---------------------------------------------------------------------------------------------------
 # an unmerged FR read pair with no split alignments (i.e., exactly one aln each read)
@@ -114,16 +117,14 @@ sub parseUnmergedHiddenJunction {
     my ($read1, $read2) = ($alns[READ1][FLAG] & _FIRST_IN_PAIR) ? (READ1, READ2) : (READ2, READ1);
     $mol[MOL_CLASS] = IS_SV;
     setEndpointData(\my @innData1, $alns[$read1], RIGHT, LEFT);
-    setEndpointData(\my @innData2, $alns[$read2], LEFT,  RIGHT);
-    setEndpointData(\my @outData1, $alns[$read1], LEFT,  RIGHT);
-    setEndpointData(\my @outData2, $alns[$read2], RIGHT, LEFT);  
+    setEndpointData(\my @innData2, $alns[$read2], LEFT,  RIGHT); 
     my $jxnType = getJxnType($alns[$read1], $alns[$read2], \@innData1, \@innData2, GAP);
     if($jxnType eq PROPER or $jxnType eq MERGE_FAILURE){
         $mol[MOL_CLASS] = IS_PROPER; 
     } else {   
         # printJunction(GAP, $alns[$read1], $alns[$read2]);     
     }
-    summarizeMolecule([$alns[$read1], $alns[$read2]], \@outData1, \@outData2, $jxnType);  
+    summarizeMolecule([$alns[$read1], $alns[$read2]], $jxnType);  
 }
 #---------------------------------------------------------------------------------------------------
 # an unmerged FR read-pair that sequenced an SV junction in >=1 of its reads (the most complex alignment patterns land here)
@@ -141,7 +142,7 @@ sub parseUnmergedSplit {
         my $key1 = join(":", sort map { join(":", @$_[RNAME_INDEX,POS]) } @{$alnsByRead[READ1]});
         my $key2 = join(":", sort map { join(":", @$_[RNAME_INDEX,POS]) } @{$alnsByRead[READ2]});
         if($key1 eq $key2){ # same set of split alignments for each read in an unmerged pair
-            @alns = @{$alnsByRead[READ1]}; # eliminate one read, it is identical to the other
+            # @alns = @{$alnsByRead[READ1]}; # eliminate one read, it is identical to the other
             return;
         }  
     }
@@ -150,28 +151,20 @@ sub parseUnmergedSplit {
         my ($fwdSide, $revSide) = ($read == READ1) ? (LEFT, RIGHT) : (RIGHT, LEFT);
         if(@{$alnsByRead[$read]} == 1){ # an unsplit read paired with a split read
             @{$alnIs[$read]} = (0); # the index within @alnsByRead, not @alns
-            setEndpointData(\my @outData, $alnsByRead[$read][0], $fwdSide, $revSide);
-            $outDatas[$read] = [\@outData];
         } else { # one of either one or two split reads
             ($outDatas[$read], @{$alnIs[$read]}) = sortReadAlignments($alnsByRead[$read], $fwdSide, $revSide); 
         }  
     }
-    my $outI1 = $alnIs[READ1][0];
-    my $outI2 = $alnIs[READ2][0]; 
-    $mol[MOL_CLASS] = IS_SV;      
-    my $innI1 = $alnIs[READ1][$#{$alnIs[READ1]}];
-    my $innI2 = $alnIs[READ2][$#{$alnIs[READ2]}]; 
-    my @jxnTypes = printJunction(GAP, $alnsByRead[READ1][$innI1], $alnsByRead[READ2][$innI2]); 
+    $mol[MOL_CLASS] = IS_SV;  
+    my $innI1 = $alnIs[READ1][0];
+    my $innI2 = $alnIs[READ2][0]; 
+    my @jxnTypes = (printJunction(GAP, $alnsByRead[READ1][$innI1], $alnsByRead[READ2][$innI2])); 
     foreach my $read(READ1, READ2){
         push @jxnTypes, @{$alnsByRead[$read]} > 1 ?
             printSequencedJunctions(@{$alnsByRead[$read]}[@{$alnIs[$read]}]) :
             PROPER;
-    }  
-    summarizeMolecule(
-        [@{$alnsByRead[READ1]}[@{$alnIs[READ1]}], @{$alnsByRead[READ2]}[@{$alnIs[READ2]}]], 
-        $outDatas[READ1][$outI1], $outDatas[READ2][$outI2], 
-        join("::", @jxnTypes)
-    );  
+    }    # as for all, aligns are ordered across the entire molecule, so alns[0] and alns[$#alns] are outemost
+    summarizeMolecule([@{$alnsByRead[READ1]}[@{$alnIs[READ1]}], @{$alnsByRead[READ2]}[reverse @{$alnIs[READ2]}]], join("::", @jxnTypes));  
 } 
 #===================================================================================================
 
@@ -272,10 +265,10 @@ sub getJxnType {
     my $dist = $$innData1[_SIDE] eq LEFTWARD ? 
                     $$innData2[_POS] - $$innData1[_POS] : # LR pair, canonical PDL strand
                     $$innData1[_POS] - $$innData2[_POS];  # RL pair, non-canonical strand (will be flipped later)
-    if($nodeClass == GAP){ # based on TLEN=insertSize (since we lack a junction)
+    if($nodeClass == GAP){ # based on amplicon type
         if($$amplicon[AMP_PROPER] eq "expectOverlap"){ # read pair should have merged, why didn't it?
             $dist <= 0 and return MERGE_FAILURE; # these should be mostly low quality reads
-            $dist  > 0 and return INSERTION;     # but novel sequence in the span could also lead failed merging
+            $dist  > 0 and return INSERTION;     # but novel sequence in the span could also lead to failed merging
         } elsif($$amplicon[AMP_PROPER] eq "expectGaps") { # POOR DESIGN CHOICE, ignore until someone needs this path
             return PROPER;
             # my $refSpan = $$amplicon[AMP_POS2] - $$amplicon[AMP_POS1] + 1; # this code is a start but not adequate
@@ -350,20 +343,34 @@ sub setEndpointData {
 # print molecule-defining data bits
 #---------------------------------------------------------------------------------------------------
 sub summarizeMolecule {
-    my ($orderedAlns, $outData1, $outData2, $jxnType) = @_; 
-    my $nBases = $mol[IS_MERGED] ? 
-        length($$orderedAlns[0][SEQ]) :
-        $mol[N_OVERLAP_BASES] eq "NA" ?
-            "NA" :
-            $READ_LEN + $READ_LEN - $mol[N_OVERLAP_BASES];
+    my ($orderedAlns, $jxnTypes) = @_; 
+    # my $nBases = $mol[IS_MERGED] ? # NO, this comes from CIGAR, M, outermost S
+    #     length($$orderedAlns[0][SEQ]) :
+    #     $mol[N_OVERLAP_BASES] eq "NA" ?
+    #         "NA" :
+    #         $READ_LEN + $READ_LEN - $mol[N_OVERLAP_BASES];
+
+    # TODO: "print" junctions above to collect junction signatures
+    # parse CIGAR strings for larger indels
+    # calculate fragment size? (easy for merged, less clear for unmerged)
+    # calculate reference coverage
+    # map map of reference
+
+    # max internal MAPQ (requires 3 alignments at least)
+    my $nAlns = scalar(@$orderedAlns);
+    my $maxInternalMapq = 0;
+    if($nAlns >= 3){
+        map { $$_[MAPQ] > $maxInternalMapq and $maxInternalMapq = $$_[MAPQ] } @$orderedAlns[1..($nAlns-2)];
+    }
     print join("\t",
-        @mol, 
-        $jxnType,
-        @$outData1[_POS], #
-        @$outData2[_POS], 
-        scalar(@$orderedAlns),
-        $nBases,
-        join("::", map { join(":", @$_[FLAG, RNAME, POS,MAPQ, CIGAR]) } @$orderedAlns)
+        @mol, # molId ampliconId nOverlapBases molCount merged MOL_CLASS 
+        $jxnTypes,
+        $maxInternalMapq,
+        ,
+        # $nBases,
+        join("::", map { join(":", @$_[FLAG, RNAME, POS, MAPQ, CIGAR]) } @$orderedAlns),
+        # "~~~".$$orderedAlns[0][SEQ],
+        # "~~~".$$orderedAlns[0][QUAL]
     ), "\n"; 
 }
 #===================================================================================================
