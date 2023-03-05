@@ -16,7 +16,7 @@ source $GENOMEX_MODULES_DIR/source/check_name_bam_file.sh
 echo "input bam: $NAME_BAM_FILE"
 
 # get ready
-INTERIM_FILE=$DATA_FILE_PREFIX.interim.txt.gz
+INTERIM_FILE=$DATA_FILE_PREFIX.group.interim.txt.gz
 export DISCOVERY_FILE=$DATA_FILE_PREFIX.discovery.txt
 export ALLOWED_FILE=$DATA_FILE_PREFIX.allowed.txt
 export AMPLICONS_FILE=$COLLATE_PREFIX.amplicons.txt
@@ -47,7 +47,7 @@ cut -f1-3 |
 $SORT -k1,1 -k2,2 | 
 bedtools groupby -g 1,2 -c 3 -o $GROUP_COUNT | 
 $SORT -k3,3nr | 
-sed -e 's/,/\t/g' | 
+sed -e 's/ZZ/\t/g' | 
 slurp -s 10M -o $DISCOVERY_FILE
 checkPipe
 
@@ -61,7 +61,7 @@ cat $AMPLICONS_FILE
 # reject molecules with too-large a position difference from and index and too low a count to become a new index
 echo "counting and saving unique DNA sequences from kept amplicon molecules"
 zcat $INTERIM_FILE | 
-sed -e 's/,/\t/g' | 
+sed -e 's/ZZ/\t/g' | 
 perl $ACTION_DIR/group/filter-read-pairs.pl | 
 
 # identify and count the unique sequences within the pool of kept ampliconic read pairs

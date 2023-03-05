@@ -26,7 +26,8 @@ checkEnvVars(list(
         'MAX_AMPLICONS',
         'MAX_INSERT_SIZE',
         'MIN_MERGE_OVERLAP',
-        'READ_LEN'
+        'READ_LEN',
+        'PRIMER_MATCH_LENGTH'
     ),
     double = c(
         'MIN_FRACTION_ADD_INDEX'
@@ -117,15 +118,23 @@ setPaddingBases <- function(side, ref, alt){
                    else substr(ref, length - nBases + 1, length)
     })
 }
+getPrimer <- function(side, ref, alt){
+    if(ref == "*") ref <- alt
+    length <- nchar(ref)
+    if(side == "R") substr(ref, 1, env$PRIMER_MATCH_LENGTH)
+               else substr(ref, length - env$PRIMER_MATCH_LENGTH + 1, length)
+}
 amplicons[, ":="(
     padding1 = list(setPaddingBases(side1, ref1)),
-    padding2 = list(setPaddingBases(side2, ref2, ref1))
+    padding2 = list(setPaddingBases(side2, ref2, ref1)),
+    primer1  = getPrimer(side1, ref1),
+    primer2  = getPrimer(side2, ref2, ref1) # NOT reverse complemented
 ), by = amplicon]
 write.table(
     amplicons[, .SD, .SDcols = c(
         "amplicon","proper","count",
-        "chrom1","side1","pos1","ref1",
-        "chrom2","side2","pos2","ref2"
+        "chrom1","side1","pos1","ref1","primer1",
+        "chrom2","side2","pos2","ref2","primer2"
     )], 
     file = env$AMPLICONS_FILE, 
     quote = FALSE, 

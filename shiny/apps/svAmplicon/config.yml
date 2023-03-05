@@ -1,0 +1,55 @@
+---
+#----------------------------------------------------------------------
+# app metadata
+#----------------------------------------------------------------------
+name: svAmplicon
+description: "Analyze targeted amplicon sequences for evidence of deletions and other SVs"
+version: v0.0.0
+# suiteVersions:
+#     suiteName: v0.0.0
+
+#----------------------------------------------------------------------
+# project data file type(s) associated with this app
+# the keys in uploadTypes are matched to key uploadType in incoming package.yml
+#----------------------------------------------------------------------
+uploadTypes:
+    svAmplicon: 
+        contentFileTypes: # anything not listed will not be available to the app
+            manifestFile:
+                required: true
+            moleculeTypes:
+                required: true
+            junctions:
+                required: true
+            amplicons:
+                required: true
+
+#----------------------------------------------------------------------
+# labels and definitions for all sequential analysis steps shown in sidebar
+#----------------------------------------------------------------------
+# module = the appSteps module used for a sequential step
+#    the keyed name of a step becomes its namespace in the 'app' object
+# shortLabel = as shown on dashboard menu (required if not provided as module default)
+# shortDescription = as shown on the Overview page (required if not provided as module default)
+# options = passed to both <module>UI and <module>Server functions
+#    longLabel = the title for the appStep tabbed page
+#    alwaysVisible = declares that step is NOT sequential and thus always available
+#    other options are module specific; see module definitions
+#----------------------------------------------------------------------
+appSteps:
+    upload: # nearly always the 1st step of every app
+        module: sourceFileUpload
+    assign: # usually the 2nd step of every app
+        module: assignSamples        
+        options:
+            categories:
+                group: # category1
+                    singular: Group
+                    plural: Groups
+                    nLevels: 1:10
+                condition: # category2
+                    singular: Condition
+                    plural: Conditions
+                    nLevels: 1:10
+    density: # usually the 2nd step of every app
+        module: density        

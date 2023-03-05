@@ -507,9 +507,9 @@ sub sortReferenceAlignments {
 # molecule-defining data bits
 sub getMoleculeKey {
     my ($read1, $read2, $side1, $side2, $groupPos1, $groupPos2) = @_;  
-    join("\t", 
-        join(",", @{$refAlns[$read1]}[RNAME, $side1, $groupPos1], ), # node 1 
-        join(",", @{$refAlns[$read2]}[RNAME, $side2, $groupPos2]),   # node 2
-        join(",", $umis[$read1], $umis[$read2]) # molecule identifier, if in use
+    join("\t",  # string "ZZ" cannot appear in chrom, side, pos, UMI, SEQ or QUAL
+        join("ZZ", @{$refAlns[$read1]}[RNAME, $side1, $groupPos1]), # node 1 
+        join("ZZ", @{$refAlns[$read2]}[RNAME, $side2, $groupPos2]), # node 2
+        join("ZZ", $umis[$read1], $umis[$read2]) # molecule identifier, if in use
     );
 }

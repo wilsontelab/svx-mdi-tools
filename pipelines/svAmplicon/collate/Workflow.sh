@@ -36,5 +36,7 @@ runWorkflowStep 3 extract extract/extract.sh
 # clean up
 rm -fr $TMP_DIR_WRK
 # rm -f $DATA_FILE_PREFIX.interim.txt.gz
+# rm -f $DATA_FILE_PREFIX.*.interim.txt.gz
 # rm -f $DATA_FILE_PREFIX.discovery.txt
 # rm -f $DATA_FILE_PREFIX.allowed.txt
+# rm -f $DATA_FILE_PREFIX.collate.fastq.gz

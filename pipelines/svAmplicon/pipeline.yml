@@ -26,6 +26,7 @@ actions:
             - genomex-mdi-tools//read-filtering
             - genomex-mdi-tools//read-merging
             - amplicon-discovery
+            - read-pair-filtering
             - sv-finding
         resources:
             required:
@@ -67,7 +68,7 @@ optionFamilies:
                 type: double
                 required: false
                 default: 0.05
-                description: "additional amplicon index positions must exceed this fraction coverage of the first index"
+                description: "additional amplicons must exceed this fraction coverage of the first amplicon"
             max-insert-size:
                 order: 5
                 short: z
@@ -75,6 +76,22 @@ optionFamilies:
                 required: false
                 default: 1000
                 description: "largest DNA insert size that can be sequenced by the paired-end method in use"
+    read-pair-filtering:
+        options:
+            primer-match-length:
+                order: 1
+                short: e
+                type: integer
+                required: false
+                default: 25 # ~20-base primer plus ~5 internal base match space
+                description: "perform amplicon primer matching over -e base pairs at the ends of read-pairs"
+            max-primer-mismatches:
+                order: 2
+                short: E
+                type: integer
+                required: false
+                default: 3
+                description: "reject read-pairs with more than -E base mismatches over -e primer bases"        
     sv-finding:
         options:
             min-sv-size:
@@ -83,31 +100,24 @@ optionFamilies:
                 type: integer
                 required: false
                 default: 10
-                description: "don't report internal deletions or insertions of fewer than -Z base pairs"  
-
-# package:
-#     find: # the pipeline action after which a data package should assembled
-#         uploadType: svWGS # a signal to the Stage 2 framework regarding the package contents
-#         files:
-#             metadata:
-#                 type: yml
-#                 file: $FIND_PREFIX.metadata.yml
-#             structuralVariants:
-#                 type: rds-file
-#                 file: $FIND_PREFIX.structural_variants.rds
-#             junctionMolecules:
-#                 type: rds-file
-#                 file: $FIND_PREFIX.junction_molecules.rds
-#             manifestFile:
-#                 type: comma-delimited
-#                 manifestType: simple
-#                 file: $MANIFEST_PREFIX.sample_manifest.csv
-#             distributionsZip:
-#                 type: zip-file
-#                 file: $MANIFEST_PREFIX.distribution_plots.zip
-#             coverageFile:
-#                 type: rds-file
-#                 file: $COVERAGE_PREFIX.rds
+                description: "don't report internal deletions or insertions of fewer than -Z base pairs"
+package:
+    collate: # the pipeline action after which a data package should assembled
+        uploadType: svAmplicon # a signal to the Stage 2 framework regarding the package contents
+        files:
+            manifestFile:
+                type: comma-delimited
+                manifestType: simple
+                file: $COLLATE_PREFIX.manifest.csv
+            moleculeTypes:
+                type: rds-file
+                file: $COLLATE_PREFIX.moleculeTypes.rds
+            junctions:
+                type: rds-file
+                file: $COLLATE_PREFIX.junctions.rds
+            amplicons:
+                type: tab-delimited
+                file: $COLLATE_PREFIX.amplicons.txt
 # container:
 #     supported: false    # set to true if you maintain a container registry for this pipeline [false]
 #     registry:  ghcr.io  # domain name of your OCI-compatible, oras-accessible, container registry [ghcr.io]

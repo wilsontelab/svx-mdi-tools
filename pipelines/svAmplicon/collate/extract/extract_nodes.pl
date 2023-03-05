@@ -44,10 +44,12 @@ use constant {
     AMP_SIDE1 => 4,
     AMP_POS1 => 5,
     AMP_REF1 => 6,
-    AMP_CHROM2 => 7,
-    AMP_SIDE2 => 8,
-    AMP_POS2 => 9,
-    AMP_REF2 => 10,
+    AMP_PRIMER1 => 7,
+    AMP_CHROM2 => 8,
+    AMP_SIDE2 => 9,
+    AMP_POS2 => 10,
+    AMP_REF2 => 11,
+    AMP_PRIMER2 => 12,
     #-------------
     QNAME => 0, # SAM fields
     FLAG => 1,
