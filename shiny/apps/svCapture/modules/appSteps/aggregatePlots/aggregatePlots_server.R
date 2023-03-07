@@ -22,7 +22,8 @@ settings <- settingsServer( # display settings not stored in the UI, exposed by 
         file.path(app$sources$suiteGlobalDir, "settings", "svCapture_filters.yml"),
         id
     ),
-    fade = FALSE
+    fade = FALSE,
+    presets = settingsPresets
 )
 sampleSelector <- sampleSelectorServer( # selectors to pick one or more samples from a sample set
     id = 'sampleSelector',

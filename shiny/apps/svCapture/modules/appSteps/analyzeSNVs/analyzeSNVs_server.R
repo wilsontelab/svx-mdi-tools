@@ -22,7 +22,8 @@ settings <- settingsServer( # display settings not stored in the UI, exposed by 
         file.path(app$sources$suiteGlobalDir, "settings", "svCapture_filters.yml"),
         id
     ),
-    fade = FALSE
+    fade = FALSE,
+    presets = settingsPresets
 )
 globalSettingsDir <- file.path(app$sources$suiteGlobalDir, "settings")
 alignmentSettings <- settingsServer(

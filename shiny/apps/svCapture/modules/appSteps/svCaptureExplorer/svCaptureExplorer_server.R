@@ -25,6 +25,7 @@ settings <- settingsServer( # display settings not stored in the UI, exposed by 
         file.path(app$sources$suiteGlobalDir, "settings", "external_svs.yml")
     ),
     fade = FALSE,
+    presets = settingsPresets,
     size = "m"
 )
 sampleSelector <- sampleSelectorServer(id = 'sampleSelector', parentId = id)
