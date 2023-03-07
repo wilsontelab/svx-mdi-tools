@@ -8,7 +8,7 @@ published: true
 
 ## {{page.title}}
 
-As [described here](https://midataint.github.io/docs/analysis-flow/)
+As [described here](https://midataint.github.io/docs/analysis-flow/),
 data analysis in MDI tool suites is divided into two stages called
 **pipelines**, which perform high-performance computing on Linux servers,
 and **apps**, which support interactive data visualization in R Shiny.
@@ -57,7 +57,7 @@ mdi <pipeline> template > mydata.yml # e.g., mdi svCapture template
 nano mydata.yml
 ```
 
-Finally, the following commands will give you help screen for a pipeline
+Finally, the following commands will give show help for a pipeline
 or one of its actions to understand how options are organized and what they do:
 
 ```sh

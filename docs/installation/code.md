@@ -26,7 +26,7 @@ In the recommended multi-suite mode, you will:
 ### Install the MDI framework
 
 Please read the _install.sh_ menu options and the 
-[MDI installer instructions](https://github.com/MiDataInt/mdi.git) to decide
+[MDI utility instructions](https://github.com/MiDataInt/mdi.git) to decide
 which installation option is best for you. Choose option 1
 if you will only run Stage 1 HPC pipelines from your installation.
 

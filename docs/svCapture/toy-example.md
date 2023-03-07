@@ -38,11 +38,13 @@ to create:
 - an alias to the MDI utility called _mdi_
 
 If you choose a different type of installation or don't make an alias, 
-please adjust all commands as needed.
+please adjust all commands below as needed.
 
-Then, [build the required conda runtime environments](https://wilsontelab.github.io/svx-mdi-tools/docs/installation/runtime.html)
+Then, [build any required conda runtime environments](https://wilsontelab.github.io/svx-mdi-tools/docs/installation/runtime.html)
 and [download the hg38 reference genome](https://wilsontelab.github.io/svx-mdi-tools/docs/installation/genome.html)
 into the demo directory by following the installation instructions.
+Building conda environments is only required if you do not have Singularity available
+on your server as all svCapture pipelines support containers.
 If you install the genome into a different directory, you will need 
 to edit the job file.
 
@@ -66,7 +68,7 @@ or if you installed the hg38 genome into a different location, above.
 To execute the demo in the command shell, use:
 
 ```sh
-mdi svCapture svCapture-demo.yml --dry-run
+mdi svCapture svCapture-demo.yml --dry-run # check the configuration but don't do anything
 mdi svCapture svCapture-demo.yml
 ```
 
@@ -74,7 +76,7 @@ To submit the demo to your cluster job scheduler, use:
 
 ```sh
 mdi submit --dry-run svCapture-demo.yml
-mdi submit svCapture-demo.yml
+mdi submit svCapture-demo.yml # add options such as --account if needed on your server
 ```
 
 Depending on your HPC server, you might need to specify additional options,

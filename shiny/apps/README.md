@@ -3,6 +3,7 @@ title: App-Specific Files
 parent: Stage 2 Apps
 has_children: false
 nav_order: 1
+published: false
 ---
 
 {% include table-of-contents.md %}
