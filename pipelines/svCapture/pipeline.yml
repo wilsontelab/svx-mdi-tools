@@ -115,7 +115,7 @@ package:
                 type: rds-file
                 file: $GENOTYPE_PREFIX.haplotype_comparisons.rds
 container:
-    supported: false    # set to true if you maintain a container registry for this pipeline [false]
+    supported: true    # set to true if you maintain a container registry for this pipeline [false]
     registry:  ghcr.io  # domain name of your OCI-compatible, oras-accessible, container registry [ghcr.io]
     owner:     wilsontelab # REQUIRED: the name of the owner, e.g., user or organization, at 'registry'
     installer: apt-get  # the installer program used by the container OS, typically apt-get or yum [apt-get]
