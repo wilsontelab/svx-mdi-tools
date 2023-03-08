@@ -3,7 +3,7 @@
 #-----------------------------------------------------------------
 # define common actions
 #-----------------------------------------------------------------
-SORT_RAM_INT=`echo $TOTAL_RAM_INT | awk '{print $1 - 2000000000}'`
+SORT_RAM_INT=`echo $TOTAL_RAM_INT | awk '{printf "%0.0f", $1 - 2000000000}'`
 SLURP_GZ="slurp -s 100M pigz -p $N_CPU -dc"
 SORT="sort --parallel=$N_CPU -T $TMP_DIR_WRK -S $SORT_RAM_INT""b"
 PERL_COMPARE="perl $ACTION_DIR"

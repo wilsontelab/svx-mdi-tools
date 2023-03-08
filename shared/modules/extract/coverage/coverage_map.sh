@@ -14,7 +14,7 @@
 if [[ "$TARGETS_BED" = "" || "$TARGETS_BED" = "NA" || "$TARGETS_BED" = "null" ]]; then
 
 # set the sort parameters
-SORT_RAM_INT=`echo $TOTAL_RAM_INT | awk '{print int(($1 - 4000000000) / 2)}'`
+SORT_RAM_INT=`echo $TOTAL_RAM_INT | awk '{printf "%0.0f", int(($1 - 4000000000) / 2)}'`
 SORT="sort --parallel=$N_CPU -T $TMP_DIR_WRK -S $SORT_RAM_INT"b" --compress-program=pigz"
 
 # extract SV info from name sorted bam and send all reads to coordinate sort

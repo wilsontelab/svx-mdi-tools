@@ -15,7 +15,7 @@
 #-----------------------------------------------------------------
 # define common actions
 #-----------------------------------------------------------------
-SORT_RAM_INT=`echo $TOTAL_RAM_INT | awk '{print int(($1 - 4000000000) / 2)}'`
+SORT_RAM_INT=`echo $TOTAL_RAM_INT | awk '{printf "%0.0f", int(($1 - 4000000000) / 2)}'`
 SLURP_GZ="slurp -s 100M pigz -p $N_CPU -dc"
 SORT="sort --parallel=$N_CPU -T $TMP_DIR_WRK -S $SORT_RAM_INT""b"
 GROUP_BY="bedtools groupby"

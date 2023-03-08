@@ -9,7 +9,7 @@ source $MODULES_DIR/files/set_svx_paths.sh
 # set the sort parameters and temporary directories
 source $MODULES_DIR/utilities/shell/create_temp_dir.sh
 source $MODULES_DIR/utilities/shell/create_shm_dir.sh
-SORT_RAM_INT=`echo $TOTAL_RAM_INT | awk '{print int(($1 - 2000000000) / 2)}'`
+SORT_RAM_INT=`echo $TOTAL_RAM_INT | awk '{printf "%0.0f", int(($1 - 2000000000) / 2)}'`
 rm -f $SHM_DIR_WRK/*
 
 # determine if this is a single-sample find or a multi-sample compare
