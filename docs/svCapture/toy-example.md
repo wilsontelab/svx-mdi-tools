@@ -44,7 +44,7 @@ Then, [build any required conda runtime environments](https://wilsontelab.github
 and [download the hg38 reference genome](https://wilsontelab.github.io/svx-mdi-tools/docs/installation/genome.html)
 into the demo directory by following the installation instructions.
 Building conda environments is only required if you do not have Singularity available
-on your server as all svCapture pipelines support containers.
+on your server as the svCapture pipeline supports containers.
 If you install the genome into a different directory, you will need 
 to edit the job file.
 

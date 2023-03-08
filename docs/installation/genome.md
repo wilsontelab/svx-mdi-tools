@@ -10,7 +10,8 @@ published: true
 
 The svx-mdi-tools code suite uses 
 [Illumina iGenomes](https://support.illumina.com/sequencing/sequencing_software/igenome.html) 
-for consistent formatting of reference genome FASTA and aligner index files.
+for consistent formatting of reference genome FASTA and aligner index files,
+plus additional metadata files from the UCSC genome browser and the ENCODE project.
 
 Specifically, when called as follows:
 
@@ -21,8 +22,8 @@ mdi <pipeline> <action> --genomes-dir /path/to/genomes --genome hg38
 pipelines in the svx-mdi-tools suite expect to find folder structure:
 
 ```sh
-tree -L 4 /path/to/genomes/iGenomes/Homo_sapiens/
-/path/to/genomes/iGenomes/Homo_sapiens/
+tree -L 4 /path/to/genomes/iGenomes/Homo_sapiens
+/path/to/genomes/iGenomes/Homo_sapiens
 └── UCSC
     └── hg38
         ├── Annotation
@@ -37,12 +38,22 @@ tree -L 4 /path/to/genomes/iGenomes/Homo_sapiens/
             ├── BWAIndex
             ├── Chromosomes
             └── WholeGenomeFasta
+
+tree /path/to/genomes/metadata/hg38
+/path/to/genomes/metadata/hg38
+├── ENCODE
+│   └── hg38-blacklist.v2.bed.gz
+├── UCSC
+│   ├── gap.txt.gz
+│   └── hg38.gc5Base.wigVarStep.gz
 ```
+
+### Download iGenome
 
 Use the link above to find and copy the URL of your required genome archive 
 and use the `download iGenomes` pipeline action to retrieve it to your server.
 
-For example, the following commands will download the UCSC hg38 reference genome
+The following commands will download the UCSC hg38 reference genome
 to the current working directory.
 
 ```sh
@@ -51,7 +62,19 @@ export URL=http://igenomes.illumina.com.s3-website-us-east-1.amazonaws.com/Homo_
 mdi download iGenomes --urls ${URL} --output-dir ${PWD}/iGenomes --data-name hg38
 ```
 
-If you do not have Singularity on your server, the command above will fail
+### Download metadata
+
+The following commands will download the associated hg38 metadata files
+to the current working directory.
+
+```sh
+mkdir -p download/metadata
+mdi download metadata --output-dir ${PWD}/download/metadata --data-name hg38
+```
+
+### Troubleshooting
+
+If you do not have Singularity on your server, the commands above will fail
 until you build the required conda runtime environment:
 
 ```sh
@@ -67,4 +90,4 @@ mdi download conda --help
 ```
 
 If you already have an appropriately formatted reference genome installation you can use it,
-but it must conform to the iGenomes folder specifications.
+but it must conform to the folder specifications above.
