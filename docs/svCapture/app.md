@@ -3,7 +3,7 @@ title: Stage 2 app
 parent: svCapture
 has_children: false
 nav_order: 20
-published: false
+published: true
 ---
 
 ## {{page.title}}
@@ -13,15 +13,14 @@ and used in other downstream applications via the VCF formatted output
 and other files.
 
 You can also load the data package ending with `mdi.package.zip`
-into the svCapture R Shiny app.
-The best way to run the app server
+into the svCapture R Shiny app. The best way to run the app server
 is by [installing the MDI Desktop](https://midataint.github.io/mdi-desktop-app/docs/installation),
 which gives you several options for running the server on your local computer,
 on your HPC server, or on a public web server.
 
 Please see the instructions in the running app for details.
 The general steps are to:
-- load your desired data package(s)
+- load your desired pipeline data package(s)
 - rename samples and assign them into experimental groups
 - examine library QC
 - explore indvidual SV calls

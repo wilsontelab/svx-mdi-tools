@@ -21,6 +21,9 @@ bookkeeping of both source molecule DNA strands and alignment discontinuities.
 Once satisfied, confident detection of even single-molecule,
 nonhomologous SVs can be asserted.
 
+{% include figure.html file="svLocations.png"  width="50%" %}
+{% include figure.html file="svProperties.png" width="50%" %}
+
 ### Citation
 
 svCapture and its use for SV identification is described in detail here:

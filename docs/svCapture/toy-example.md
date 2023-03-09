@@ -16,15 +16,11 @@ associated data set for testing and demonstrating your svCapture installation.
 Working from whatever folder you'd like, download and unpack the demo archive (file size = 135 MB):
 
 ```sh
-URL=https://data.mendeley.com/public-files/datasets/38zrkbsbph/files/8b11a546-dac0-4610-9da4-1278936bb16f/file_downloaded
-wget ${URL} -o svCapture-demo.tar.gz
+wget https://mdi-demo.wilsonte-umich.io/files/svx-mdi-tools/svCapture-demo.tar.gz
 tar -xzvf svCapture-demo.tar.gz
 rm svCapture-demo.tar.gz
 cd svCapture-demo
 ```
-
-As an alternative to `wget`, you can also download the tarball here:
-- <https://data.mendeley.com/datasets/38zrkbsbph>
 
 The entire demo will take place in the 'svCapture-demo' directory so you can easily delete it later.
 

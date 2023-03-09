@@ -8,14 +8,14 @@ published: true
 
 ## {{page.title}}
 
-svCapture data analysis first entails execution of a pipeline with actions:
+svCapture data analysis first entails execution of a pipeline with primary actions:
 - **align** = align input fastq files to the reference genome
 - **collate** = assemble read groups, make consensuses, and re-align to genome
 - **extract** = scan name-sorted reads for anomalous molecules with alignment discontinuities
 - **find** = scan anomalous molecules from one or more samples to make SV junction calls
 
 This stepwise implementation:
-- allows users to perform alignment outside of the svCapture pipeline
+- allows users to perform alignment inside or outside of the svCapture pipeline
 - supports simultaneous SV finding across multiple related samples
 - permits code-sharing with other pipelines in the svx-mdi-tools code suite
 
@@ -39,11 +39,11 @@ reads as a name-sorted bam file using option `--bam-file`.
 
 ### Your capture target regions
 
-svCapture requires that you provide a BED-format file via option `--targets-bed`
+svCapture requires that you provide a BED4-format file via option `--targets-bed`
 that lists all genome spans that were targeted - typically captured - 
 for sequencing. These are used to categorize SV types, calculate coverage, etc.
 
-### Unique molecular identifiers
+### OPTIONAL: Unique molecular identifiers
 
 If your library strategy included unique molecular identifiers, you
 list and describe them using options `--umi-file` and `--umi-skip-bases`.
@@ -74,7 +74,7 @@ to single, independent source DNA molecules.
 The most important pipeline outputs are the lists of characterized SV junction calls:
 - an R-compatible RDS file included in a date package for use in the svCapture app, *.find.structural_variants.rds
 - a gzipped flat file, *.find.structural_variants.gz
-- a VCF format file, *.find.structural_variants.vcf.bgz
+- a VCF format file, *.find.structural_variants.vcf.bgz, for use with other SV analysis tools
 
 Additional important output files are:
 - the app data package for interactive visualization, *.mdi.package.zip
