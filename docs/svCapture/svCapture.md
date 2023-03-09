@@ -25,3 +25,9 @@ nonhomologous SVs can be asserted.
 
 svCapture and its use for SV identification is described in detail here:
 - <https://www.biorxiv.org/content/10.1101/2022.07.07.497948v1>
+
+Job scripts, log files and resource files associated with the work in
+this publication are available here (a simpler demo is available via
+the link at the left):
+
+- <https://github.com/wilsontelab/publications/tree/main/svCapture-2022>

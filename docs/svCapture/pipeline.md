@@ -20,7 +20,7 @@ This stepwise implementation:
 - permits code-sharing with other pipelines in the svx-mdi-tools code suite
 
 As an example, a user might apply svCapture to multipe pre-existing
-bam files and then combine the extracted data into a single 'find' operation.
+bam files and then combine the extracted data in a single 'find' operation.
 
 ## Pipeline inputs
 
@@ -76,7 +76,7 @@ The most important pipeline outputs are the lists of characterized SV junction c
 - a gzipped flat file, *.find.structural_variants.gz
 - a VCF format file, *.find.structural_variants.vcf.bgz
 
-Some additional output files are:
+Additional important output files are:
 - the app data package for interactive visualization, *.mdi.package.zip
 
 ## Additional pipeline options
