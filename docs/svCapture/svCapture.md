@@ -21,8 +21,8 @@ bookkeeping of both source molecule DNA strands and alignment discontinuities.
 Once satisfied, confident detection of even single-molecule,
 nonhomologous SVs can be asserted.
 
-{% include inline-figure.html file="svLocations.png"  width="50%" %}
-{% include inline-figure.html file="svProperties.png" width="50%" %}
+{%- include inline-figure.html file="svLocations.png"  width="50%" -%}
+{%- include inline-figure.html file="svProperties.png" width="50%" -%}
 
 ### Citation
 
