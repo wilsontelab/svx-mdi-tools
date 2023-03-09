@@ -28,7 +28,7 @@ As an alternative to `wget`, you can also download the tarball here:
 
 The entire demo will take place in the 'svCapture-demo' directory so you can easily delete it later.
 
-Reads in the FASTQ files were obtained from a commercially available human cell line from
+Reads in the FASTQ files were obtained from a commercially available cell line from
 a tagmentation svCapture library in which the central
 400 kb of the WWOX gene on chr16 was subjected to probe capture.
 Reads were filtered to include only chr16 and downsampled
