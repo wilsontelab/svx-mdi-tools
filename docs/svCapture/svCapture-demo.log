@@ -1,0 +1,586 @@
+$ mdi status svCapture-demo.yml
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+updating .../svCapture-demo/.svCapture-demo.yml.data/svCapture-demo.yml.status
+updated 3/8/2023 15:13:30
+qType   slurm
+submitted       3/8/2023 11:29:26       wilsonte
+job_name                              array  job_ID     exit_status  start_time  wall_time  maxvmem
+svCapture_align_svCapture-demo ---------     48912963   0    Wed 03/08/23 11:29  00:00:57   6.518G 
+svCapture_collate_svCapture-demo -------     48912964   0    Wed 03/08/23 11:30  00:01:21   6.024G 
+svCapture_extract_svCapture-demo -------     48912965   0    Wed 03/08/23 11:31  00:00:12   0.233G 
+svCapture_find_svCapture-demo ----------     48912966   0    Wed 03/08/23 11:32  00:00:59   0.19G  
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+$ mdi report -j all svCapture-demo.yml
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+====================================================================================================
+job: 48912963
+----------------------------------------------------------------------------------------------------
+.../svCapture-demo/.svCapture-demo.yml.data/log/slurm/svCapture_align_svCapture-demo.o48912963
+----------------------------------------------------------------------------------------------------
+
+---
+job-manager:
+    host: gl3031.arc-ts.umich.edu
+    started: Wed 03/08/23 11:29
+---
+pipeline: svx-mdi-tools/svCapture:v1.3.9
+description: "Characterize structural variant junctions in short-read, paired-end capture library(s)"
+suiteVersions:
+    genomex-mdi-tools: main
+execute: align
+thread: default
+nTasks: 1
+align:
+    fastq-input:
+        input-dir:      .../svCapture-demo
+        input-name:     svCapture-demo
+    fixed-umi:
+        umi-file:       null
+        umi-skip-bases: 1
+    trim-reads:
+        adapter-sequence: null
+        min-insert-size: 25
+    quality-filtering:
+        n-terminal-bases: 30
+        min-qual:       0:0:0
+        max-homopolymer: 0
+    alignment:
+        force-alignment: false
+        bam-sort:       name
+    genome:
+        genomes-dir:    .../svCapture-demo
+        genome:         hg38
+    bam-format:
+        use-cram:       false
+    output:
+        output-dir:     .../svCapture-demo
+        data-name:      svCapture-demo
+    version:
+        version:        latest
+    resources:
+        runtime:        auto
+        n-cpu:          16
+        ram-per-cpu:    4G
+        tmp-dir:        /tmp
+        tmp-dir-large:  /tmp
+    job-manager:
+        email:          nobody@nowhere.edu
+        account:        wilsonte0
+        time-limit:     48:00:00
+        partition:      standard
+    workflow:
+        force:          false
+        rollback:       null
+        quiet:          false
+    help:
+        help:           false
+        dry-run:        true
+    conda:
+        prefix: .../svCapture-demo/mdi/environments/8f504b688f *** NOT PRESENT LOCALLY ***
+        channels:
+            - conda-forge
+            - bioconda
+            - defaults
+        dependencies:
+            - pigz=2.6
+            - sra-tools=3.0.0
+            - fastp=0.23.2
+            - bwa=0.7.17
+            - samtools=1.16.1
+    singularity:
+        image: oras://ghcr.io/wilsontelab/svx-mdi-tools/svcapture:v1.0
+        level: pipeline
+...
+
+executing: svCapture align, step 1 = align
+aligning paired end reads to genome hg38 with pre-alignment merging
+  read length: 151
+  read #1 fastq files:
+    .../svCapture-demo/svCapture-demo_R1.fastq.gz
+  read #2 fastq files:
+    .../svCapture-demo/svCapture-demo_R2.fastq.gz
+  genome: .../svCapture-demo/iGenomes/Homo_sapiens/UCSC/hg38/Sequence/BWAIndex/genome.fa
+prepare_fastq	0	nInputReads	input reads
+prepare_fastq	1000000	nInputPairs	input read pairs
+prepare_fastq	1000000	nOutputPairs	output read pairs
+done
+
+---
+job-manager:
+    exit_status: 0
+    walltime: 0:57.08
+    seconds: 57.08
+    maxvmem: 6518132K
+    swaps: 0
+---
+job-manager:
+    ended: Wed 03/08/23 11:30
+...
+====================================================================================================
+job: 48912964
+----------------------------------------------------------------------------------------------------
+.../svCapture-demo/.svCapture-demo.yml.data/log/slurm/svCapture_collate_svCapture-demo.o48912964
+----------------------------------------------------------------------------------------------------
+
+---
+job-manager:
+    host: gl3052.arc-ts.umich.edu
+    started: Wed 03/08/23 11:30
+---
+pipeline: svx-mdi-tools/svCapture:v1.3.9
+description: "Characterize structural variant junctions in short-read, paired-end capture library(s)"
+suiteVersions:
+    genomex-mdi-tools: main
+execute: collate
+thread: default
+nTasks: 1
+collate:
+    genome:
+        genomes-dir:    .../svCapture-demo
+        genome:         hg38
+    name-bam-file:
+        bam-file:       null
+    bam-format:
+        use-cram:       false
+    illumina-type:
+        library-type:   Nextera
+    read-filtering:
+        min-mapq:       20
+    read-merging:
+        min-merge-density: 0.8
+        min-merge-overlap: 5
+    grouping:
+        min-clip:       5
+        adjacency-limit: 1
+    consensus:
+        downsample-n:   11
+        min-sw-score-factor: 0.7
+        consensus-factor: 0.667
+    target-region:
+        targets-bed:    .../svCapture-demo/target-regions.bed
+        region-padding: 400000
+    output:
+        output-dir:     .../svCapture-demo
+        data-name:      svCapture-demo
+    version:
+        version:        latest
+    resources:
+        runtime:        auto
+        n-cpu:          8
+        ram-per-cpu:    4G
+        tmp-dir:        /tmp
+        tmp-dir-large:  /tmp
+    job-manager:
+        email:          nobody@nowhere.edu
+        account:        wilsonte0
+        time-limit:     24:00:00
+        partition:      standard
+    workflow:
+        force:          false
+        rollback:       null
+        quiet:          false
+    help:
+        help:           false
+        dry-run:        true
+    conda:
+        prefix: .../svCapture-demo/mdi/environments/8f504b688f *** NOT PRESENT LOCALLY ***
+        channels:
+            - conda-forge
+            - bioconda
+            - defaults
+        dependencies:
+            - pigz=2.6
+            - sra-tools=3.0.0
+            - fastp=0.23.2
+            - bwa=0.7.17
+            - samtools=1.16.1
+    singularity:
+        image: oras://ghcr.io/wilsontelab/svx-mdi-tools/svcapture:v1.0
+        level: pipeline
+...
+ACTION	STEP#	STEP	DATE
+align	1	align	Wed Mar  8 11:30:25 EST 2023
+
+alignment file: .../svCapture-demo/svCapture-demo/svCapture-demo.hg38.name.bam
+extracting READ_LEN
+READ_LEN = 151
+extracting MAX_TLEN
+MAX_TLEN = 762
+
+executing: svCapture collate, step 1 = group
+grouping read pairs to unique, consensus source molecules
+input bam: .../svCapture-demo/svCapture-demo/svCapture-demo.hg38.name.bam
+parse_bam	124060	nQualityPairs_8	read pairs passed MAPQ 20 in thread 8
+parse_bam	124024	nQualityPairs_7	read pairs passed MAPQ 20 in thread 7
+parse_bam	124027	nQualityPairs_6	read pairs passed MAPQ 20 in thread 6
+parse_bam	124034	nQualityPairs_5	read pairs passed MAPQ 20 in thread 5
+parse_bam	123985	nQualityPairs_4	read pairs passed MAPQ 20 in thread 4
+parse_bam	124035	nQualityPairs_3	read pairs passed MAPQ 20 in thread 3
+parse_bam	124049	nQualityPairs_2	read pairs passed MAPQ 20 in thread 2
+parse_bam	123995	nQualityPairs_1	read pairs passed MAPQ 20 in thread 1
+parse_bam	1359541	nInputAlns	input aligned segments over all read pairs
+parse_bam	999187	nReadPairs	input read pairs
+group_reads	992209	nInputReadPairs	input read pairs (one per line)
+group_reads	765816	nOutputGroups	output molecule groups
+group_reads	992209	nOutputReadPairs	read pairs in the output molecule groups
+make_consensus	95727	nThreadMolecules-8	total molecules processed in thread 8
+make_consensus	66978	nThreadMerged-8	molecules were merged in thread 8
+make_consensus	0	nThreadDuplex-8	molecules were duplex in thread 8
+make_consensus	95727	nThreadMolecules-7	total molecules processed in thread 7
+make_consensus	66975	nThreadMerged-7	molecules were merged in thread 7
+make_consensus	0	nThreadDuplex-7	molecules were duplex in thread 7
+make_consensus	95727	nThreadMolecules-6	total molecules processed in thread 6
+make_consensus	66785	nThreadMerged-6	molecules were merged in thread 6
+make_consensus	0	nThreadDuplex-6	molecules were duplex in thread 6
+make_consensus	95727	nThreadMolecules-5	total molecules processed in thread 5
+make_consensus	66976	nThreadMerged-5	molecules were merged in thread 5
+make_consensus	0	nThreadDuplex-5	molecules were duplex in thread 5
+make_consensus	95727	nThreadMolecules-4	total molecules processed in thread 4
+make_consensus	67012	nThreadMerged-4	molecules were merged in thread 4
+make_consensus	0	nThreadDuplex-4	molecules were duplex in thread 4
+make_consensus	95727	nThreadMolecules-3	total molecules processed in thread 3
+make_consensus	66908	nThreadMerged-3	molecules were merged in thread 3
+make_consensus	0	nThreadDuplex-3	molecules were duplex in thread 3
+make_consensus	95727	nThreadMolecules-2	total molecules processed in thread 2
+make_consensus	66888	nThreadMerged-2	molecules were merged in thread 2
+make_consensus	0	nThreadDuplex-2	molecules were duplex in thread 2
+make_consensus	95727	nThreadMolecules-1	total molecules processed in thread 1
+make_consensus	66911	nThreadMerged-1	molecules were merged in thread 1
+make_consensus	0	nThreadDuplex-1	molecules were duplex in thread 1
+make_consensus	992209	nReadPairs	input read pairs
+make_consensus	1984418	nReads	input reads (nReadPairs * 2)
+make_consensus	765816	nMolecules	input source DNA molecules
+done
+
+executing: svCapture collate, step 2 = realign
+re-aligning consensus reads to genome
+coverage	1	nRegions	target regions
+coverage	400000	sumTargetLens	total bp covered by target regions
+coverage	1200000	sumPaddedTargetLens	total bp covered by padded target regions
+coverage	198742012	sumCoverage[TT]	number of bases covered in unpadded target regions
+coverage	441794	sumCoverage[--]	number of bases covered in off-target regions
+coverage	496.855	foldCoverage[TT]	coverage depth in target regions
+coverage	0	foldCoverage[--]	coverage depth in off-target regions
+coverage	0	enrichment	foldCoverage[TT] / foldCoverage[--]
+done
+
+---
+job-manager:
+    exit_status: 0
+    walltime: 1:21.72
+    seconds: 81.72
+    maxvmem: 6023968K
+    swaps: 0
+---
+job-manager:
+    ended: Wed 03/08/23 11:31
+...
+====================================================================================================
+job: 48912965
+----------------------------------------------------------------------------------------------------
+.../svCapture-demo/.svCapture-demo.yml.data/log/slurm/svCapture_extract_svCapture-demo.o48912965
+----------------------------------------------------------------------------------------------------
+
+---
+job-manager:
+    host: gl3052.arc-ts.umich.edu
+    started: Wed 03/08/23 11:31
+---
+pipeline: svx-mdi-tools/svCapture:v1.3.9
+description: "Characterize structural variant junctions in short-read, paired-end capture library(s)"
+suiteVersions:
+    genomex-mdi-tools: main
+execute: extract
+thread: default
+nTasks: 1
+extract:
+    genome:
+        genomes-dir:    .../svCapture-demo
+        genome:         hg38
+    name-bam-file:
+        bam-file:       null
+    bam-format:
+        use-cram:       false
+    illumina-type:
+        library-type:   Nextera
+    read-filtering:
+        min-mapq:       20
+    read-merging:
+        min-merge-density: 0.8
+        min-merge-overlap: 5
+    clip:
+        min-clip:       5
+    target-region:
+        targets-bed:    .../svCapture-demo/target-regions.bed
+        region-padding: 400000
+    output:
+        output-dir:     .../svCapture-demo
+        data-name:      svCapture-demo
+    version:
+        version:        latest
+    resources:
+        runtime:        auto
+        n-cpu:          8
+        ram-per-cpu:    4G
+        tmp-dir:        /tmp
+        tmp-dir-large:  /tmp
+    job-manager:
+        email:          nobody@nowhere.edu
+        account:        wilsonte0
+        time-limit:     4:00:00
+        partition:      standard
+    workflow:
+        force:          false
+        rollback:       null
+        quiet:          false
+    help:
+        help:           false
+        dry-run:        true
+    conda:
+        prefix: .../svCapture-demo/mdi/environments/ef8ad54517 *** NOT PRESENT LOCALLY ***
+        channels:
+            - conda-forge
+            - bioconda
+            - defaults
+        dependencies:
+            - pigz=2.6
+            - samtools=1.16.1
+            - bedtools=2.30.0
+            - r-base=4.1.3
+            - r-essentials=4.1
+            - r-r.utils=2.12.0
+    singularity:
+        image: oras://ghcr.io/wilsontelab/svx-mdi-tools/svcapture:v1.0
+        level: pipeline
+...
+ACTION	STEP#	STEP	DATE
+align	1	align	Wed Mar  8 11:30:25 EST 2023
+collate	1	group	Wed Mar  8 11:31:07 EST 2023
+collate	2	realign	Wed Mar  8 11:31:50 EST 2023
+
+alignment file: .../svCapture-demo/svCapture-demo/svCapture-demo.hg38.name.bam
+extracting READ_LEN
+READ_LEN = 151
+extracting MAX_TLEN
+MAX_TLEN = 762
+
+executing: svCapture extract, step 1 = extract
+extracting SV data from name-sorted bam
+.../svCapture-demo/svCapture-demo/svCapture-demo.hg38.name.realigned.bam
+extract_nodes	1	nRegions	target regions
+extract_nodes	400000	sumTargetLens	total bp covered by target regions
+extract_nodes	1200000	sumPaddedTargetLens	total bp covered by padded target regions
+extract_nodes	95501	nThreadPairs-8	total read pairs processed in thread 8
+extract_nodes	31	nExcluded-8	rejected read pairs in excluded regions in thread 8
+extract_nodes	123	nFailedQuality-8	rejected read pairs failed MIN_MAPQ 20 in thread 8
+extract_nodes	95501	nThreadPairs-7	total read pairs processed in thread 7
+extract_nodes	45	nExcluded-7	rejected read pairs in excluded regions in thread 7
+extract_nodes	143	nFailedQuality-7	rejected read pairs failed MIN_MAPQ 20 in thread 7
+extract_nodes	95501	nThreadPairs-6	total read pairs processed in thread 6
+extract_nodes	29	nExcluded-6	rejected read pairs in excluded regions in thread 6
+extract_nodes	127	nFailedQuality-6	rejected read pairs failed MIN_MAPQ 20 in thread 6
+extract_nodes	95501	nThreadPairs-5	total read pairs processed in thread 5
+extract_nodes	29	nExcluded-5	rejected read pairs in excluded regions in thread 5
+extract_nodes	141	nFailedQuality-5	rejected read pairs failed MIN_MAPQ 20 in thread 5
+extract_nodes	95502	nThreadPairs-4	total read pairs processed in thread 4
+extract_nodes	37	nExcluded-4	rejected read pairs in excluded regions in thread 4
+extract_nodes	138	nFailedQuality-4	rejected read pairs failed MIN_MAPQ 20 in thread 4
+extract_nodes	95502	nThreadPairs-3	total read pairs processed in thread 3
+extract_nodes	27	nExcluded-3	rejected read pairs in excluded regions in thread 3
+extract_nodes	148	nFailedQuality-3	rejected read pairs failed MIN_MAPQ 20 in thread 3
+extract_nodes	95502	nThreadPairs-2	total read pairs processed in thread 2
+extract_nodes	35	nExcluded-2	rejected read pairs in excluded regions in thread 2
+extract_nodes	146	nFailedQuality-2	rejected read pairs failed MIN_MAPQ 20 in thread 2
+extract_nodes	95502	nThreadPairs-1	total read pairs processed in thread 1
+extract_nodes	38	nExcluded-1	rejected read pairs in excluded regions in thread 1
+extract_nodes	146	nFailedQuality-1	rejected read pairs failed MIN_MAPQ 20 in thread 1
+extract_nodes	995389	nInputAlns	input aligned segments over all read pairs
+extract_nodes	764012	nReadPairs	input read pairs
+plotting insert size histogram
+done
+
+executing: svCapture extract, step 2 = coverage
+
+executing: svCapture extract, step 3 = compile
+identifying SV molecules that share endpoints with proper molecules
+calculating duplex rates and strand family sizes
+  targetClass       class  total duplex duplex3 singleton duplexRate
+1          TT      Proper 758320      0       0    758320          0
+2          TT Del/Dup/Inv   1624      0       0      1624          0
+3          tt    Artifact      0      0       0         0        NaN
+4          --      Proper   1684      0       0      1684          0
+5          --    Artifact      3      0       0         3          0
+parsing and printing SV junction edges
+printing outer clip nodes
+done
+
+---
+job-manager:
+    exit_status: 0
+    walltime: 0:12.60
+    seconds: 12.60
+    maxvmem: 232540K
+    swaps: 0
+---
+job-manager:
+    ended: Wed 03/08/23 11:32
+...
+====================================================================================================
+job: 48912966
+----------------------------------------------------------------------------------------------------
+.../svCapture-demo/.svCapture-demo.yml.data/log/slurm/svCapture_find_svCapture-demo.o48912966
+----------------------------------------------------------------------------------------------------
+
+---
+job-manager:
+    host: gl3052.arc-ts.umich.edu
+    started: Wed 03/08/23 11:32
+---
+pipeline: svx-mdi-tools/svCapture:v1.3.9
+description: "Characterize structural variant junctions in short-read, paired-end capture library(s)"
+suiteVersions:
+    genomex-mdi-tools: main
+execute: find
+thread: default
+nTasks: 1
+find:
+    genome:
+        genomes-dir:    .../svCapture-demo
+        genome:         hg38
+    read-merging:
+        min-merge-density: 0.8
+        min-merge-overlap: 5
+    sv-filtering:
+        min-mapq-one:   30
+        min-mapq-both:  20
+        min-sv-size:    1000
+        sv-size-factor: 0
+        purge-distance: 5
+        purge-limit:    100
+        min-coverage:   1
+        on-target:      1
+    target-region:
+        targets-bed:    .../svCapture-demo/target-regions.bed
+        region-padding: 400000
+    output:
+        output-dir:     .../svCapture-demo
+        data-name:      svCapture-demo
+    version:
+        version:        latest
+    resources:
+        runtime:        auto
+        n-cpu:          8
+        ram-per-cpu:    4G
+        tmp-dir:        /tmp
+        tmp-dir-large:  /tmp
+    job-manager:
+        email:          nobody@nowhere.edu
+        account:        wilsonte0
+        time-limit:     4:00:00
+        partition:      standard
+    workflow:
+        force:          false
+        rollback:       null
+        quiet:          false
+    help:
+        help:           false
+        dry-run:        true
+    conda:
+        prefix: .../svCapture-demo/mdi/environments/ef8ad54517 *** NOT PRESENT LOCALLY ***
+        channels:
+            - conda-forge
+            - bioconda
+            - defaults
+        dependencies:
+            - pigz=2.6
+            - samtools=1.16.1
+            - bedtools=2.30.0
+            - r-base=4.1.3
+            - r-essentials=4.1
+            - r-r.utils=2.12.0
+    singularity:
+        image: oras://ghcr.io/wilsontelab/svx-mdi-tools/svcapture:v1.0
+        level: pipeline
+...
+ACTION	STEP#	STEP	DATE
+align	1	align	Wed Mar  8 11:30:25 EST 2023
+collate	1	group	Wed Mar  8 11:31:07 EST 2023
+collate	2	realign	Wed Mar  8 11:31:50 EST 2023
+extract	1	extract	Wed Mar  8 11:32:03 EST 2023
+extract	2	coverage	Wed Mar  8 11:32:03 EST 2023
+extract	3	compile	Wed Mar  8 11:32:06 EST 2023
+
+setting find mode
+  find
+
+executing: svCapture find, step 1 = find
+collecting library stats
+aggregating junction molecules into SV calls
+initializing samples
+loading and parsing molecules
+applying SV size filter to junction molecules
+parsing junction continuity groups into SVs
+marking ambiguous source molecules
+aggregating source molecule duplicates
+assigning SV reference molecules
+collecting candidate matching outer clipped nodes
+  svCapture-demo
+attempting to merge gap junctions using clipped nodes
+purging invalid/untrustworthy clip evidence
+initializing genome sequence retrieval
+initializing target region parsing (if any)
+initializing target regions
+characterizing final SV junction calls
+counting SVs by sample
+setting SV molecule plot positions
+writing SV summary table
+writing molecule evidence table
+done
+
+executing: svCapture find, step 2 = manifest
+zipping distribution plots
+  adding: svCapture-demo.family_sizes.png (deflated 17%)
+  adding: svCapture-demo.insertSizes.png (deflated 19%)
+assembling sample manifest table
+loading sample metadata
+loading SV summary table
+writing sample manifest
+done
+
+executing: svCapture find, step 3 = coverage
+
+executing: svCapture find, step 4 = vcf
+writing VCF file using breakends
+  initializing
+  parsing VCF header
+  parsing variant records
+indexing VCF file using tabix
+done
+
+writing Stage 2 package file for svCapture find
+.../svCapture-demo/svCapture-demo/svCapture-demo.svCapture.find.mdi.package.zip
+  adding: svCapture-demo.hg38.find.structural_variants.rds (deflated 0%)
+  adding: package.yml (deflated 67%)
+  adding: svCapture-demo.svCapture.concatenatedLogs (deflated 82%)
+  adding: svCapture-demo.hg38.manifest.distribution_plots.zip (stored 0%)
+  adding: svCapture-demo.hg38.find.target_regions.bed (deflated 29%)
+  adding: svCapture-demo.hg38.find.metadata.yml (deflated 36%)
+  adding: svCapture-demo.hg38.find.junction_molecules.rds (deflated 0%)
+  adding: svCapture-demo.svCapture.status (deflated 65%)
+  adding: svCapture-demo.hg38.manifest.sample_manifest.csv (deflated 31%)
+
+
+---
+job-manager:
+    exit_status: 0
+    walltime: 0:59.86
+    seconds: 59.86
+    maxvmem: 190216K
+    swaps: 0
+---
+job-manager:
+    ended: Wed 03/08/23 11:33
+...
+====================================================================================================
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

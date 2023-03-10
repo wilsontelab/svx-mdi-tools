@@ -51,7 +51,7 @@ columnsIn <- list(
     alns        = 18,
     molTypeId   = 2, # was called molId upstream, will be become the type id once an index is selected
     molClass    = 13,
-    isMerged    = 3,
+    mergeLevel  = 3,
     overlap     = 4,
     tLen        = 8,
     nMBases     = 9,
@@ -81,7 +81,7 @@ moleculeTypes <- molecules[
     .(
         # amplicon    = amplicon[1], # molecule-level properties
         molTypeId   = molTypeId[1],  # one molecule id selected as the index for the type
-        isMerged    = as.logical(getmode(isMerged)),
+        mergeLevel  = max(mergeLevel),
         overlap     = getmode(overlap),
         isRef       = as.logical(isRef[1]),
         nReadPairs  = sum(nReadPairs), # continue summing all original read pairs that has this type   
@@ -138,7 +138,7 @@ junctions <- moleculeTypes[, .(
 # merge some molecule back fields back into the junction table 
 junctions <- merge(
     junctions,
-    moleculeTypes[, .SD, .SDcols = c("molTypeId","amplicon","nReadPairs","nMols","isMerged","tLen")],
+    moleculeTypes[, .SD, .SDcols = c("molTypeId","amplicon","nReadPairs","nMols","mergeLevel","tLen")],
     by = "molTypeId",
     all.x = TRUE
 )
@@ -157,7 +157,7 @@ junctions <- junctions[,
         nMolTypes = .N, 
         nMols = sum(nMols),
         nReadPairs = sum(nReadPairs),
-        hasMerged =any(isMerged),
+        hasMerged = any(mergeLevel > 0),
         tLens = paste(sort(unique(tLen)), collapse = ","),
         overlap  = if(any(!is.na(overlap)))  overlap[is.na(overlap)][1]   else as.integer(NA),
         jxnBases = if(any(!is.na(jxnBases))) jxnBases[is.na(jxnBases)][1] else as.character(NA),

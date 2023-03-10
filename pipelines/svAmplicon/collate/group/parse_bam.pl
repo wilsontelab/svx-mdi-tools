@@ -111,19 +111,19 @@ sub parseReadPair {
 
     # run aligner output one alignment at a time
     my $readH = $readH[$childN];
-    my ($molId, $umi1, $umi2, $isMerged);
+    my ($molId, $umi1, $umi2, $isMerged, $overlapLen);
     while(my $line = <$readH>){
         chomp $line;
         if($line eq END_READ_PAIR){
             
             # extract information on the source read pair
-            ($molId, $umi1, $umi2, $isMerged) = $alns[READ1] ? split(":", $alns[READ1][0][QNAME]) : ();
+            ($molId, $umi1, $umi2, $isMerged, $overlapLen) = $alns[READ1] ? split(":", $alns[READ1][0][QNAME]) : ();
 
             # discard orphan reads since cannot associate UMIs with endpoints
             # process others according to current merge state
             if($isMerged or ($alns[READ1] and $alns[READ2])){
                 @umis = ($umi1, $umi2);    
-                $isMerged ? processPremerged(): processUnmerged();
+                $isMerged ? processPremerged($molId, $overlapLen): processUnmerged($molId);
             }
 
             # prepare for next read-pair
@@ -145,6 +145,7 @@ sub parseReadPair {
 # handle read pairs that were pre-merged by fastp
 #---------------------------------------------------------------------
 sub processPremerged {
+    my ($molId, $overlapLen) = @_;
     @refAlns = ();
 
     # calculate clip lengths for all alignments
@@ -193,8 +194,9 @@ sub processPremerged {
     print join("\t",              
         getMoleculeKey($read1, $read2, $side1, $side2, $groupPos1, $groupPos2),
         @{$refAlns[$seqRead]}[SEQ, QUAL], ($nullSymbol) x 2,
-        "NA",
-        2 # sortable merge status
+        2, # sortable merge status        
+        $overlapLen,
+        $molId
     ), "\n";
 }
 sub setMergedGroupPos {
@@ -216,7 +218,8 @@ sub setMergedGroupPos {
 # handle read pairs that were NOT already merged by fastp
 # at entry, could be either pre-merge failures or unmergable (non-overlapping) pairs
 #---------------------------------------------------------------------
-sub processUnmerged {    
+sub processUnmerged {   
+    my ($molId) = @_; 
     (@refAlns, @end1Alns) = ();    
 
     # analyze each read of the pair
@@ -260,7 +263,7 @@ sub processUnmerged {
     my $end1Offset = getEnd1Offset($end1Alns[READ1], $end1Alns[READ2]);
 
     # merge if possible otherwise commit non-overlapping unmerged pairs
-    defined($end1Offset) ? mergeWithGuidance($end1Offset) : commitUnmerged("NA");     
+    defined($end1Offset) ? mergeWithGuidance($molId, $end1Offset) : commitUnmerged($molId, "NA");     
 }
 sub setUnmergedGroupPos {
     my ($aln, $actingRead) = @_;
@@ -307,12 +310,12 @@ sub getEnd1Offset {
 # alignments indicate that reads do overlap, work to merge them
 # can be slow to fit each molecule, but is important to merge molecules that truly do overlap
 sub mergeWithGuidance {
-    my ($end1Offset) = @_;
+    my ($molId, $end1Offset) = @_;
     
     # check for sufficient potential overlap
     my $readLen = length($end1Alns[READ1][SEQ]);  # not necessarily READ_LEN if adapters were trimmed
     my $overlapLen = $readLen - abs($end1Offset); # integer > 0
-    $overlapLen >= $MIN_MERGE_OVERLAP or return commitUnmerged($overlapLen);    
+    $overlapLen >= $MIN_MERGE_OVERLAP or return commitUnmerged($molId, $overlapLen);    
     
     # extract the potential overlap sequences and qualities
     my ($refRead, $qryRead) = $end1Alns[READ1][REVERSE] ? (READ2, READ1) : (READ1, READ2);
@@ -343,7 +346,7 @@ sub mergeWithGuidance {
     # otherwise attempt aggressive Smith-Waterman of read against read to make them merge
     } else {
         my ($qryOnRef, $score, $startQry, $endQry, $startRef, $endRef) = smith_waterman($qrySeq, $refSeq, 1); # fast algorithm with minimal register shifting
-        $score or return commitUnmerged($overlapLen); # no alignment at all
+        $score or return commitUnmerged($molId, $overlapLen); # no alignment at all
         
         # prepare to track base matching
         my @ref = split('', $refSeq);
@@ -404,7 +407,7 @@ sub mergeWithGuidance {
         
         # check for sufficient merge quality
         ($nMatches >= $MIN_MERGE_OVERLAP and
-         $nMatches / $overlapLen >= $MIN_MERGE_DENSITY) or return commitUnmerged($overlapLen);      
+         $nMatches / $overlapLen >= $MIN_MERGE_DENSITY) or return commitUnmerged($molId, $overlapLen);      
     }
 
     # assemble the merged read SEQ and QUAL
@@ -423,22 +426,23 @@ sub mergeWithGuidance {
     }
     
     # set additional bits for committing
-    $refAlns[READ1][QNAME] =~ s/:0$/:1/; # merge status 1 is lower priority molecule than 2=fastp merge
+    # $refAlns[READ1][QNAME] =~ s/:0:0$/:1:$overlapLen/; # merge status 1 is lower priority molecule than 2=fastp merge
     my ($read1, $read2, $groupPos1, $groupPos2, $clip1, $clip2, $side1, $side2) = sortReferenceAlignments(); 
 
     # output all fields required for read-pair consensus calling into one sortable line
     print join("\t",              
         getMoleculeKey($read1, $read2, $side1, $side2, $groupPos1, $groupPos2),
         $mergeSeq, $mergeQual, ($nullSymbol) x 2,
+        1, # sortable merge status        
         $overlapLen,
-        1 # sortable merge status
+        $molId
     ), "\n";  
 }
 
 # reads could not be merged even with alignment guidance
 # most likely non-overlapping, i.e., large source molecules
 sub commitUnmerged {
-    my ($overlapLen) = @_;
+    my ($molId, $overlapLen) = @_;
 
     # order duplex endpoints to set molecule strand
     my ($read1, $read2, $groupPos1, $groupPos2, $clip1, $clip2, $side1, $side2) = sortReferenceAlignments();    
@@ -470,8 +474,9 @@ sub commitUnmerged {
     print join("\t",              
         getMoleculeKey($read1, $read2, $side1, $side2, $groupPos1, $groupPos2),
         @{$refAlns[$read1]}[SEQ, QUAL], @{$refAlns[$read2]}[SEQ, QUAL],
+        0, # sortable merge status        
         $overlapLen, # if not NA, read pair is a merge failure
-        0 # sortable merge status
+        $molId
     ), "\n";   
 }
 

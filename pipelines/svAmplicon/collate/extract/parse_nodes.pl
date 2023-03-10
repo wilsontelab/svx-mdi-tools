@@ -42,11 +42,11 @@ use constant {
     #-------------
     MOL_ID => 0,    # molecule-level data, carried here in QNAME
     AMPLICON_ID => 1, 
-    N_OVERLAP_BASES => 2, 
-    IS_REFERENCE => 3,
-    MOL_COUNT => 4, 
-    IS_MERGED => 5, 
-    READ_N => 6, 
+    MERGE_LEVEL => 2,
+    N_OVERLAP_BASES => 3, 
+    IS_REFERENCE => 4,
+    MOL_COUNT => 5, 
+    READ_N => 6,  
     MOL_CLASS => 6, # values added by extract_nodes regardless of pipeline or bam source
     #-------------
     READ1 => 0, # for code readability
@@ -390,7 +390,7 @@ sub summarizeMolecule {
 
     # exact or estimated size of the sequenced DNA molecule
     my $nAlns = scalar(@$orderedAlns);    
-    my $insertSize = $mol[IS_MERGED] ? 
+    my $insertSize = $mol[MERGE_LEVEL] ? 
         length($$orderedAlns[0][SEQ]) :
         ($mol[N_OVERLAP_BASES] eq "NA" ? 
             "NA" : 
@@ -443,13 +443,13 @@ sub summarizeMolecule {
         # remaining columns describe the molecule in detail
         # as molecules are grouped, columns may be aggregated as first, mean, etc.
         join(":::", map { join(":", @$_[FLAG, RNAME, POS, MAPQ, CIGAR]) } @$orderedAlns),
-        @mol[MOL_ID, MOL_CLASS, IS_MERGED, N_OVERLAP_BASES],
+        @mol[MOL_ID, MOL_CLASS, MERGE_LEVEL, N_OVERLAP_BASES],
         $insertSize, # describe the span of molecule bases
         $nMBases,
         $nDBases,
         $nIBases,
         int(
-            ($mol[IS_MERGED] ? 
+            ($mol[MERGE_LEVEL] ? 
                 getAvgQual($$orderedAlns[0][QUAL]) : 
                 getAvgQual($$orderedAlns[0][QUAL].$$orderedAlns[$nAlns - 1][QUAL])
             ) + 0.5
@@ -460,8 +460,8 @@ sub summarizeMolecule {
         $maxInternalMapq,
         $$orderedAlns[0][SEQ], # provide the SEQ and QUAL of the index molecule
         $$orderedAlns[0][QUAL],        
-        $mol[IS_MERGED] ? "*" : $$orderedAlns[$nAlns - 1][SEQ],        
-        $mol[IS_MERGED] ? "*" : $$orderedAlns[$nAlns - 1][QUAL]        
+        $mol[MERGE_LEVEL] ? "*" : $$orderedAlns[$nAlns - 1][SEQ],        
+        $mol[MERGE_LEVEL] ? "*" : $$orderedAlns[$nAlns - 1][QUAL]        
     ), "\n"; 
 }
 #===================================================================================================

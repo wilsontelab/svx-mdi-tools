@@ -39,8 +39,9 @@ use constant {
     QUAL1   => 9,
     SEQ2    => 10,
     QUAL2   => 11,
-    OVERLAP => 12,
-    MERGED  => 13,
+    MERGED  => 12,    
+    OVERLAP => 13,
+    MOL_ID  => 14,
     #-------------
     AMP_AMPLICON_ID => 0, # amplicon fields
     AMP_PROPER => 1,
@@ -142,7 +143,7 @@ while(my $mol = <STDIN>){
     # reported patched and filtered read pairs
     print join("\t", 
         $$nodePair[AMPLICON],     
-        @mol[SEQ1, SEQ2, QUAL1, QUAL2, OVERLAP],
+        @mol[SEQ1, SEQ2, QUAL1, QUAL2, MERGED, OVERLAP, MOL_ID],
         $isReference
     )."\n";
 }
