@@ -77,7 +77,7 @@ selectedAmplicons <- reactive({
 })
 moleculeTypes <- reactive({
     assembleDataTable("moleculeTypes", readRDS)
-# [1] "sourceId"   "sample"     "molTypeId"  "amplicon"   "isMerged"  
+# [1] "sourceId"   "sample"     "molTypeId"  "amplicon"   "mergeLevel"  
 # [6] "overlap"    "isRef"      "nReadPairs" "nMols"      "tLen"
 # [11] "nMBases"    "nDBases"    "nIBases"    "avgQual"    "molClass"
 # [16] "nAlns"      "nJxns"      "jxnsKey"    "maxIntMapQ" "alns"
@@ -88,7 +88,7 @@ filteredMoleculeTypes <- reactive({
     moleculeTypes <- moleculeTypes()
     moleculeTypes[
         getAmpliconKeys(moleculeTypes) %in% getAmpliconKeys(selectedAmplicons()) & 
-        isMerged == TRUE & 
+        mergeLevel > 0 & 
         grepl(CONSTANTS$svTypes$Deletion, jxnsKey, ignore.case = TRUE) # TODO: deploy dynamic SV type filtering
     ]
 })
@@ -143,7 +143,7 @@ moleculeTypesTable <- bufferedTableServer(
             "sample",
             "amplicon","molTypeId",
             "nMols","nReadPairs",        
-            "isRef","isMerged","overlap","tLen",
+            "isRef","mergeLevel","overlap","tLen",
             "molClass","jxnsKey","avgQual","maxIntMapQ",
             "nAlns","nJxns"
         )]
@@ -174,16 +174,53 @@ moleculeTypeExpansion <- bufferedTableServer(
         I <- moleculeTypesTable$rows_selected()
         req(I)
         moleculeType <- tableFilteredMoleculeTypes()[I]
-        data.table(
+        dt <- data.table(
             key_ = names(moleculeType), 
             value_ = as.character(unlist(moleculeType))
         )
+
+        # steps to creating an alignment of two merged reads
+        # identify which read is R, which is L
+        # rc(L read)
+        # pad with spaces at right end of and left end of L
+        # should always match the length of merged?
+        # create a match line, | for match
+        # create the output lines
+
+        # steps to creating an alignment of reads to the amplicon
+        # retrieve the amplicon sequence
+        # parse the CIGAR strings for each alignment left to right
+        # use to count number of times each query base is covered by an alignment
+        # 0 = novel insertion, 1 = mapped, 2 = microhomology
+        # or use Smith-Waterman (in genomex)?
+        # quite possibly see svCapture, has some code (but not necessarily handled the same)
+
+        if(moleculeType[, mergeLevel > 0]){
+            premerged <- getPremergedReads(moleculeType)
+            if(!is.null(premerged)) dt <- rbind(dt, premerged)
+        }
+        dt   
     }),
     selection = 'single',
     options = list(
         paging = FALSE
     )
 )
+getPremergedReads <- function(molType){
+    x <- read_yaml(expandSourceFilePath(molType[, sourceId], "package.yml"))$task$collate$output
+    file <- paste0(x[['data-name']], '.indexed_reads.bgz')
+    file <- file.path(x[['output-dir']], x[['data-name']], file)
+    if(!file.exists(file)) return(NULL) # this only works on an HPC server
+    tbx <- Rsamtools::TabixFile(file)
+    index <- floor(molType[, molTypeId] / 100) + 1 # molTypeId is one example of a read pair with the sequence/type
+    i <- molType[, molTypeId] - (index - 1) * 100 + 1
+    x <- Rsamtools::scanTabix(tbx, param = GenomicRanges::GRanges("X", IRanges::IRanges(index, width = 1)))
+    x <- strsplit(x[[1]][i], "\t")[[1]]
+    data.table(
+        key_ = c("SEQ1","QUAL1","SEQ2","QUAL2"),
+        value_ = x[4:7]
+    )
+}
 
 #----------------------------------------------------------------------
 # make junction position density plots

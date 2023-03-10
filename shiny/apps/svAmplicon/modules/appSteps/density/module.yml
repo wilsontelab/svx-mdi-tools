@@ -16,8 +16,9 @@ sourceTypes: assign # ... and of the module(s) on which it depends
 # dependencies
 #----------------------------------------------------------------------
 packages: # required R packages
-    R:  null
-    Bioconductor: null
+    R: null
+    Bioconductor: 
+        - Rsamtools
 
 ## optional data classes and UI modules this module will use
 ## e.g., might expect to find shared/optional/classes/<classType>/<className>/<className>_*.R
