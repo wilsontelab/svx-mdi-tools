@@ -73,10 +73,10 @@ use constant {
     #-------------
     MOL_ID => 0,    # molecule-level data, carried here in QNAME
     AMPLICON_ID => 1, 
-    N_OVERLAP_BASES => 2, 
-    IS_REFERENCE => 3,
-    MOL_COUNT => 4, 
-    IS_MERGED => 5, 
+    MERGE_LEVEL => 2,
+    N_OVERLAP_BASES => 3, 
+    IS_REFERENCE => 4,
+    MOL_COUNT => 5, 
     READ_N => 6, 
     MOL_CLASS => 6, # values added by extract_nodes regardless of pipeline or bam source
     #-------------
@@ -141,7 +141,7 @@ sub parseReadPair {
                 $amplicon = $amplicons[$mol[AMPLICON_ID]];
 
                 # identify pairs as proper or SV-containing and act accordingly
-                if($mol[IS_MERGED]){ # merged reads, expect just one alignment; any supplemental = SV
+                if($mol[MERGE_LEVEL]){ # merged reads, expect just one alignment; any supplemental = SV
                     if(@alns == 1){
                         $alns[MERGED_READ][FLAG] & _UNMAPPED or # unmapped singleton reads are discarded
                             commitContiguousAlignment($alns[MERGED_READ]);

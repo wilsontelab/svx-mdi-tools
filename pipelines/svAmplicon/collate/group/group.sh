@@ -68,7 +68,7 @@ perl $ACTION_DIR/group/filter-read-pairs.pl |
 # parse the corresponding QUAL for passing to realignment
 # at this stage, N bases and sequencing errors still break molecule groups (will group later based on junctions)
 $SORT -k1,1n -k2,2 -k3,3 | 
-bedtools groupby -g 1,2,3 -c 4,5,6,7,7 -o first,first,first,first,count | # TODO: use better aggregate QUAL, e.g., via $val = ord ($char) - 33 ??
+bedtools groupby -g 1,2,3 -c 4,5,6,7,8,9,9 -o first,first,max,first,first,first,count | # TODO: use better aggregate QUAL, e.g., via $val = ord ($char) - 33 ??
 perl $ACTION_DIR/group/assemble-fastq.pl | 
 pigz -p $N_CPU -c | 
 slurp -o $FASTQ_FILE

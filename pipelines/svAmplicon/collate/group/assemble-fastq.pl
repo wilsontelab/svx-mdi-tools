@@ -11,18 +11,18 @@ use constant {
     SEQ2    => 2,
     QUAL1   => 3,
     QUAL2   => 4,
-    OVERLAP => 5,
-    IS_REFERENCE => 6,
-    COUNT   => 7
+    MERGED  => 5,
+    OVERLAP => 6,
+    MOL_ID  => 7, # one representative molecule of a given sequence
+    IS_REFERENCE => 8,
+    COUNT   => 9
 };
 
 # parse the stream
-my $i = 0;
 while(my $line = <STDIN>){
-    $i++;
     chomp $line;
     my @line = split("\t", $line);
-    my $name = join(":", $i, @line[AMPLICON, OVERLAP, IS_REFERENCE, COUNT], $line[SEQ2] eq "*" ? 1 : 0);
+    my $name = join(":", @line[MOL_ID, AMPLICON, MERGED, OVERLAP, IS_REFERENCE, COUNT]);
     my $qual1 = $line[COUNT] > 1 ? getModalQual($line[QUAL1]) : $line[QUAL1]; # repeat sequences assumed to have high base quality
     print "\@$name:1\n$line[SEQ1]\n+\n$qual1\n";
     if($line[SEQ2] ne "*"){
