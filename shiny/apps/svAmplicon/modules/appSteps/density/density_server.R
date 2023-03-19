@@ -166,61 +166,6 @@ junctionsTable <- bufferedTableServer(
     }),
     selection = 'single'
 )
-moleculeTypeExpansion <- bufferedTableServer(
-    "moleculeTypeExpansion",
-    id,
-    input,
-    tableData = reactive({
-        I <- moleculeTypesTable$rows_selected()
-        req(I)
-        moleculeType <- tableFilteredMoleculeTypes()[I]
-        dt <- data.table(
-            key_ = names(moleculeType), 
-            value_ = as.character(unlist(moleculeType))
-        )
-
-        # steps to creating an alignment of two merged reads
-        # identify which read is R, which is L
-        # rc(L read)
-        # pad with spaces at right end of and left end of L
-        # should always match the length of merged?
-        # create a match line, | for match
-        # create the output lines
-
-        # steps to creating an alignment of reads to the amplicon
-        # retrieve the amplicon sequence
-        # parse the CIGAR strings for each alignment left to right
-        # use to count number of times each query base is covered by an alignment
-        # 0 = novel insertion, 1 = mapped, 2 = microhomology
-        # or use Smith-Waterman (in genomex)?
-        # quite possibly see svCapture, has some code (but not necessarily handled the same)
-
-        if(moleculeType[, mergeLevel > 0]){
-            premerged <- getPremergedReads(moleculeType)
-            if(!is.null(premerged)) dt <- rbind(dt, premerged)
-        }
-        dt   
-    }),
-    selection = 'single',
-    options = list(
-        paging = FALSE
-    )
-)
-getPremergedReads <- function(molType){
-    x <- read_yaml(expandSourceFilePath(molType[, sourceId], "package.yml"))$task$collate$output
-    file <- paste0(x[['data-name']], '.indexed_reads.bgz')
-    file <- file.path(x[['output-dir']], x[['data-name']], file)
-    if(!file.exists(file)) return(NULL) # this only works on an HPC server
-    tbx <- Rsamtools::TabixFile(file)
-    index <- floor(molType[, molTypeId] / 100) + 1 # molTypeId is one example of a read pair with the sequence/type
-    i <- molType[, molTypeId] - (index - 1) * 100 + 1
-    x <- Rsamtools::scanTabix(tbx, param = GenomicRanges::GRanges("X", IRanges::IRanges(index, width = 1)))
-    x <- strsplit(x[[1]][i], "\t")[[1]]
-    data.table(
-        key_ = c("SEQ1","QUAL1","SEQ2","QUAL2"),
-        value_ = x[4:7]
-    )
-}
 
 #----------------------------------------------------------------------
 # make junction position density plots
@@ -348,6 +293,118 @@ sizeDensityPlot <- staticPlotBoxServer(
             xlab = "SV Size (bp)",
             ylab = "Density"
         )
+
+        for(i in seq_along(d$sizeDensity)){
+            svTrianglePlot$addLines(
+                x = d$sizeDensity[[i]]$x,
+                y = d$sizeDensity[[i]]$y,
+                col = CONSTANTS$plotlyColors[[i]]
+            )            
+        }
+        svTrianglePlot$addLegend(
+            legend = d$ampKeys,
+            col = unlist(CONSTANTS$plotlyColors[1:length(d$ampKeys)])
+        )
+    }
+)
+
+#----------------------------------------------------------------------
+# make junction position density plots
+#----------------------------------------------------------------------
+getPremergedReads <- function(molType){
+    x <- read_yaml(expandSourceFilePath(molType[, sourceId], "package.yml"))$task$collate$output
+    file <- paste0(x[['data-name']], '.indexed_reads.bgz')
+    file <- file.path(x[['output-dir']], x[['data-name']], file)
+    if(!file.exists(file)) return(NULL) # this only works on an HPC server
+    tbx <- Rsamtools::TabixFile(file)
+    index <- floor(molType[, molTypeId] / 100) + 1 # molTypeId is one example of a read pair with the sequence/type
+    i <- molType[, molTypeId] - (index - 1) * 100 + 1
+    x <- Rsamtools::scanTabix(tbx, param = GenomicRanges::GRanges("X", IRanges::IRanges(index, width = 1)))
+    x <- strsplit(x[[1]][i], "\t")[[1]]
+    data.table(
+        key_ = c("SEQ1","QUAL1","SEQ2","QUAL2"),
+        value_ = x[4:7]
+    )
+}
+moleculeTypeData <- reactive({
+    I <- moleculeTypesTable$rows_selected()
+    req(I)
+    moleculeType <- tableFilteredMoleculeTypes()[I]
+    dt <- data.table(
+        key_ = names(moleculeType), 
+        value_ = as.character(unlist(moleculeType))
+    )    
+    if(moleculeType[, mergeLevel > 0]){
+        premerged <- getPremergedReads(moleculeType)
+        if(!is.null(premerged)) dt <- rbind(dt, premerged)
+    }
+    dt   
+})
+moleculeTypeExpansion <- bufferedTableServer(
+    "moleculeTypeExpansion",
+    id,
+    input,
+    tableData = reactive({
+        moleculeTypeData()
+        # steps to creating an alignment of two merged reads
+        # identify which read is R, which is L
+        # rc(L read)
+        # pad with spaces at right end of and left end of L
+        # should always match the length of merged?
+        # create a match line, | for match
+        # create the output lines
+
+        # steps to creating an alignment of reads to the amplicon
+        # retrieve the amplicon sequence
+        # parse the CIGAR strings for each alignment left to right
+        # use to count number of times each query base is covered by an alignment
+        # 0 = novel insertion, 1 = mapped, 2 = microhomology
+        # or use Smith-Waterman (in genomex)?
+        # quite possibly see svCapture, has some code (but not necessarily handled the same)
+    }),
+    selection = 'single',
+    options = list(
+        paging = FALSE
+    )
+)
+moleculeDotPlot <- staticPlotBoxServer(
+    "moleculeDotPlot",
+    maxHeight = "400px",
+    points   = TRUE,
+    legend  = FALSE,
+    margins = FALSE,
+    create = function() {
+        d <- moleculeTypeData()
+        amplicon <- selectedAmplicons()[
+            sourceId == d[key_ == "sourceId", value_] & 
+            amplicon == d[key_ == "amplicon", value_]
+        ]
+        if(amplicon[, type != "expectOverlap"]) return(NULL)
+        ref <- amplicon[, ref1]
+        alns   <- lapply(d[key_ == "alns",   strsplit(value_, ":::")[[1]]], function(x) strsplit(x, ":")[[1]])
+        jxns   <- lapply(d[key_ == "jxns",   strsplit(value_, ":::")[[1]]], function(x) strsplit(x, ":")[[1]])  # one jxn between every two alns
+        indels <- lapply(d[key_ == "indels", strsplit(value_, ":::")[[1]]], function(x) strsplit(x, "::")[[1]]) # one entry per aln, with potential multiple jxns
+        str(alns)
+
+        par(mar = c(4.1, 4.1, 0.1, 0.1))
+        positionDensityPlot$initializeFrame(
+            xlim = c(amplicon$pos1, amplicon$pos2),
+            ylim = c(1, as.integer(d[key_ == "tLen", value_])),
+            xlab = "Reference Coordinate",
+            ylab = "Position in Query Molecule"
+        )        
+
+
+        return(NULL)
+
+        # alns = 0:chr1:33764688:60:331M-48D-196M
+        #        2048:chr1:33764688:60:128M447S:::0:chr1:33764951:60:263S312M
+        # jxns   1:D:32:chr1/L/33765192:chr1/R/33765225:-32:GATAATTTTTTTTTTTCTTTTTTTTTTAGTTGGAAAT
+        # indels 1:D:48:chr1/L/33765018:chr1/R/33765067:NA:NA
+
+
+
+
 
         for(i in seq_along(d$sizeDensity)){
             svTrianglePlot$addLines(

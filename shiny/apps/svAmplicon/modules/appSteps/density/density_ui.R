@@ -73,8 +73,12 @@ densityUI <- function(id, options) {
             staticPlotBoxUI(
                 ns("sizeDensityPlot"), 
                 title = "Size Density"
+            ),
+            staticPlotBoxUI(
+                ns("moleculeDotPlot"), 
+                title = "Alignment Dot Plot"
             )
-        ),        
+        ),     
         fluidRow(
             bufferedTableUI (
                 ns("moleculeTypeExpansion"), 
