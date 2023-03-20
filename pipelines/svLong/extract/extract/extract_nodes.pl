@@ -18,9 +18,12 @@ resetCountFile();
 # environment variables
 fillEnvVar(\our $EXTRACT_PREFIX,   'EXTRACT_PREFIX');
 fillEnvVar(\our $ACTION_DIR,       'ACTION_DIR');
+fillEnvVar(\our $INPUT_DIR,        'INPUT_DIR');
+fillEnvVar(\our $GENOMEX_MODULES_DIR, 'GENOMEX_MODULES_DIR');
 fillEnvVar(\our $N_CPU,            'N_CPU'); # user options, or derived from them
 fillEnvVar(\our $WINDOW_POWER,     'WINDOW_POWER');
 fillEnvVar(\our $WINDOW_SIZE,      'WINDOW_SIZE');
+fillEnvVar(\our $MIN_SV_SIZE,      'MIN_SV_SIZE');
 fillEnvVar(\our $GENOME_FASTA,     'GENOME_FASTA');
 fillEnvVar(\our $USE_CHR_M,        'USE_CHR_M');
 
@@ -29,8 +32,9 @@ use vars qw(%chromIndex);
 setCanonicalChroms();
 
 # load additional dependencies
+require "$GENOMEX_MODULES_DIR/align/dna-long-read/get_indexed_reads.pl";
 $perlUtilDir = "$ENV{MODULES_DIR}/utilities/perl/svLong";
-map { require "$ACTION_DIR/extract/$_.pl" } qw(initialize_nodes parse_nodes);
+map { require "$ACTION_DIR/extract/$_.pl" } qw(initialize_windows parse_nodes check_junctions);
 initializeWindowCoverage();
 
 # constants
@@ -51,7 +55,6 @@ use constant {
     MAPQ => 11,
     PAF_TAGS => 12,
     RNAME_INDEX => 13  # added by us 
-    #-------------
 };
 
 # process data by molecule over multiple parallel threads
@@ -64,7 +67,7 @@ while(my $line = <STDIN>){
     my ($qName) = split("\t", $line, 2);  
     if($threadName and $qName ne $threadName){
         $nInputMols++;        
-        print $writeH END_MOLECULE, "\t$nInputMols\n";        
+        print $writeH END_MOLECULE, "\t$threadName\n";        
         $writeH = $writeH[$nInputMols % $N_CPU + 1];
     }    
     print $writeH $line; # commit to worker thread
@@ -75,8 +78,8 @@ print $writeH END_MOLECULE, "\t$nInputMols\n";
 finishChildThreads();
 
 # print summary information
-printCount($nInputAlns, 'nInputAlns', 'input aligned segments over all molecules');
 printCount($nInputMols, 'nInputMols', 'input molecules');
+printCount($nInputAlns, 'nInputAlns', 'input aligned segments over all molecules');
 
 # child process to parse PAF molecules
 sub parseMolecule {
@@ -86,10 +89,9 @@ sub parseMolecule {
     $| = 1;
 
     # working variables
-    our (@alns, 
-         @nodes,    @types,    @mapQs,    @sizes,    @insSizes, 
-         @alnNodes, @alnTypes, @alnMapQs, @alnSizes, @alnInsSizes, 
-         $molId) = ();
+    our (@alns, $molId,
+         @nodes,    @types,    @mapQs,    @sizes,    @insSizes,    @outAlns,
+         @alnNodes, @alnTypes, @alnMapQs, @alnSizes, @alnInsSizes, @alnAlns) = ();
   
     # run aligner output one alignment at a time
     my $readH = $readH[$childN];
@@ -99,61 +101,50 @@ sub parseMolecule {
 
         # process all alignments from one source molecule    
         if($aln[0] eq END_MOLECULE){
+            $molId = $aln[1]; # ($aln[1] * 100) + $childN;            
 
             # characterize the path of a single molecule
-            $molId = ($aln[1] * 100) + $childN;
             @alns = sort { $$a[QSTART] <=> $$b[QSTART] } @alns; # sort alignments in query order (could be right to left on bottom strand)
-
-            if(@alns == 2){
-
             foreach my $i(0..$#alns){
 
-                $i > 0 and printSplitJunction($alns[$i-1], $alns[$i]);
+                # add information on the junction between two alignments
+                if($i > 0){
+                    my $jxn = processSplitJunction($alns[$i-1], $alns[$i]);
+                    push @types,    $$jxn{jxnType};
+                    push @mapQs,    0;
+                    push @sizes,    $$jxn{svSize};
+                    push @insSizes, $$jxn{insSize};
+                    push @outAlns,  [];
+                }         
 
-                # my ($cigar) = ($alns[0][PAF_TAGS] =~ m/cg:Z:(\S+)/);
-                # $cigar =~ m/\d+D\d+I/ or next;
-
-                (@alnNodes, @alnTypes, @alnMapQs, @alnSizes, @alnInsSizes) = ();
+                # add each alignment    
+                (@alnNodes, @alnTypes, @alnMapQs, @alnSizes, @alnInsSizes, @alnAlns) = ();
                 processAlignedSegment($alns[$i]);
                 push @nodes,    @alnNodes;
                 push @types,    @alnTypes;
                 push @mapQs,    @alnMapQs;
                 push @sizes,    @alnSizes;
                 push @insSizes, @alnInsSizes;
+                push @outAlns,  @alnAlns;
             }
-            
-            
-            if(@nodes){
 
-            # set junction MAPQ as minimum MAPQ of flanking alignments
+            # set junction MAPQ as minimum MAPQ of the two flanking alignments
             if(@mapQs > 1){
                 for (my $i = 1; $i <= $#mapQs - 1; $i += 2){
                     $mapQs[$i] = min($mapQs[$i - 1], $mapQs[$i + 1])
                 }
             }
 
-            # print one line per node pair in the collapsed molecule sequence
-            # print en bloc to keep together when merging parallel streams
-            my $out = "";  
-            foreach my $i(1..$#nodes){
-                $out .= join(
-                    "\t", 
-                    $molId, 
-                    $nodes[$i-1], 
-                    $nodes[$i], 
-                    $types[$i-1], 
-                    $mapQs[$i-1], 
-                    $sizes[$i-1], 
-                    $insSizes[$i-1]
-                )."\n";
-            }
-            print $out, "\n";    
+            # examine any molecule with a preliminary SV call for evidence of chimeric reads
+            # adjusts the output arrays as needed
+            @nodes > 1 and checkJunctionsForAdapters();
 
-            }
-            }
+            # print one line per node pair in the collapsed molecule sequence
+            # print molecule en bloc to keep together when merging parallel streams
+            # printMolecule();
 
             # reset for next molecule
-            (@alns, @nodes, @types, @mapQs, @sizes, @insSizes) = ();
+            (@alns, @nodes, @types, @mapQs, @sizes, @insSizes, @outAlns) = ();
 
         # add new alignment to growing source molecule    
         } else{
@@ -161,7 +152,4 @@ sub parseMolecule {
             push @alns, \@aln;
         }
     }
-
-    # print the partial coverage map from this thread
-    printWindowCoverage($childN);
 }

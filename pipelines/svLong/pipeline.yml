@@ -20,19 +20,20 @@ actions:
     extract:
         order: 2
         optionFamilies: # these options apply to all actions
+            - genomex-mdi-tools//fastq-dir
             - genomex-mdi-tools//read-filtering
             - sv-finding
         resources:
             required:
-                total-ram: 32G
+                total-ram: 16G
             recommended: 
-                n-cpu: 16
+                n-cpu: 8
                 ram-per-cpu: 2G
         job-manager:
             recommended:
                 time-limit: 4:00:00
         description: "pull molecules that support an SV junction and create a coverage map"
-optionFamilies:        
+optionFamilies:
     sv-finding:
         options:
             window-power:
@@ -40,8 +41,15 @@ optionFamilies:
                 short: P
                 type: integer
                 required: false
+                default: 2
+                description: "scan for SVs at a window size resolution of 10^--window-power bp"   
+            sv-size-power:
+                order: 2
+                short: Z
+                type: integer
+                required: false
                 default: 3
-                description: "scan for SVs at a window size resolution of 10^P bp"   
+                description: "only report SVs >= 10^--sv-size-power bp; smaller indels hide within A segments" 
 # package:
 #     collate: # the pipeline action after which a data package should assembled
 #         uploadType: svAmplicon # a signal to the Stage 2 framework regarding the package contents

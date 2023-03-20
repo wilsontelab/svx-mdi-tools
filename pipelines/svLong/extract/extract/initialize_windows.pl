@@ -77,14 +77,25 @@ sub printWindowCoverage {
     my $file = "$EXTRACT_PREFIX.windowCoverage.$childN.txt.gz";
     open my $outH, "|-", "gzip -c > $file" or die "$error: could not open: $file\n";
     foreach my $chromIndex (1..$#windowCoverage){
-        my $chrom = $revChromIndex{$chromIndex};
         my $coverage = 0;
         foreach my $windowIndex (0..($#{$windowCoverage[$chromIndex]} - 1)){
             $coverage += $windowCoverage[$chromIndex][$windowIndex];
-            print $outH join("\t", $chrom, windowIndexToCoordinate($windowIndex), $coverage), "\n";
+            $coverage and print $outH join("\t", $chromIndex, $windowIndex, $coverage), "\n";
         } 
     }
     close $outH;
+}
+sub mergeWindowCoverage {
+    my ($chromIndex, $windowIndex, $coverage) = @_;
+    $windowCoverage[$chromIndex][$windowIndex] += $coverage;
+}
+sub printMergedWindowCoverage {
+    foreach my $chromIndex (1..$#windowCoverage){
+        my $chrom = $revChromIndex{$chromIndex};
+        foreach my $windowIndex (0..($#{$windowCoverage[$chromIndex]} - 1)){
+            print join("\t", $chrom, windowIndexToCoordinate($windowIndex), $windowCoverage[$chromIndex][$windowIndex]), "\n";
+        } 
+    }
 }
 
 1;
