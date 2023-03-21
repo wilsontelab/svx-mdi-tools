@@ -26,7 +26,7 @@ use constant {
 };
 
 # functions for converting between chromosome coordinates and window indexes
-# encode in signed 32-bit integer as [strand = signed empty byte][chromIndex = 1 byte][windowIndex = 2 bytes]
+# encode in signed 32-bit integer as [strand = sign, chromIndex = 1 byte][windowIndex = 3 bytes]
 # thus, runs of windows are numerically sequential, different chroms are obviously different, DNA strand is intuitively represented
 sub coordinateToWindowIndex {
     int(($_[0] - 1) / $WINDOW_SIZE); # bases 1-100 => windowIndex 0 for windowSize==100
@@ -36,7 +36,7 @@ sub windowIndexToCoordinate {
 }
 sub getUnsignedWindow {
     my ($chromIndex, $coordinate, $add) = @_;
-    ($chromIndex << 16) + coordinateToWindowIndex($coordinate + $add);
+    ($chromIndex << 24) + coordinateToWindowIndex($coordinate + $add);
 }
 sub getSignedWindow {
     my ($chromIndex, $coordinate, $strand, $add) = @_;
@@ -46,11 +46,11 @@ sub parseSignedWindow {
     my ($window) = @_;
     my $strand = $window > 0 ? "+" : "-";
     $window = abs($window);
-    my $chromIndex = $window >> 16;
+    my $chromIndex = $window >> 24;
     {
         chromIndex  => $chromIndex,
         chrom       => $chromIndex ? $revChromIndex{$chromIndex} : "?",
-        coordinate  => $window & (2**16 - 1),
+        windowIndex => $window & (2**24 - 1),
         strand      => $strand
     }
 }
@@ -68,34 +68,24 @@ sub initializeWindowCoverage {
     close $inH; 
 }
 sub incrementWindowCoverage { # place up/down marks in windows
-    my ($aln) = @_;
-    $windowCoverage[$$aln[RNAME_INDEX]][coordinateToWindowIndex($$aln[RSTART] + 1)] +=  1; # up in the aln's first window
-    $windowCoverage[$$aln[RNAME_INDEX]][coordinateToWindowIndex($$aln[REND]) + 1]   += -1; # down in the window AFTER this aln
+    my ($window1, $window2) = @_;
+    $window1 = parseSignedWindow($window1);
+    $window2 = parseSignedWindow($window2);
+    $$window1{windowIndex} > $$window2{windowIndex} and ($window1, $window2) = ($window2, $window1);
+    $windowCoverage[$$window1{chromIndex}][$$window1{windowIndex}]     += 1; # up in the aln's first window
+    $windowCoverage[$$window2{chromIndex}][$$window2{windowIndex} + 1] -= 1; # down in the window AFTER this aln
 }
 sub printWindowCoverage {
-    my ($childN) = @_;
-    my $file = "$EXTRACT_PREFIX.windowCoverage.$childN.txt.gz";
-    open my $outH, "|-", "gzip -c > $file" or die "$error: could not open: $file\n";
+    open my $outH, "|-", "bgzip -c | slurp -s 10M -o $ENV{COVERAGE_FILE}" or die "could not open: $ENV{COVERAGE_FILE}\n";
     foreach my $chromIndex (1..$#windowCoverage){
+        my $chrom = $revChromIndex{$chromIndex};        
         my $coverage = 0;
         foreach my $windowIndex (0..($#{$windowCoverage[$chromIndex]} - 1)){
             $coverage += $windowCoverage[$chromIndex][$windowIndex];
-            $coverage and print $outH join("\t", $chromIndex, $windowIndex, $coverage), "\n";
+            print $outH join("\t", $chrom, windowIndexToCoordinate($windowIndex), $coverage), "\n";
         } 
     }
     close $outH;
-}
-sub mergeWindowCoverage {
-    my ($chromIndex, $windowIndex, $coverage) = @_;
-    $windowCoverage[$chromIndex][$windowIndex] += $coverage;
-}
-sub printMergedWindowCoverage {
-    foreach my $chromIndex (1..$#windowCoverage){
-        my $chrom = $revChromIndex{$chromIndex};
-        foreach my $windowIndex (0..($#{$windowCoverage[$chromIndex]} - 1)){
-            print join("\t", $chrom, windowIndexToCoordinate($windowIndex), $windowCoverage[$chromIndex][$windowIndex]), "\n";
-        } 
-    }
 }
 
 1;

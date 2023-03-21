@@ -4,7 +4,7 @@ use warnings;
 # as compared to other svX extractions, svLong:
 #   expects PAF format as input
 #   expects single-end long reads, so gaps are irrelevant
-#   doesn't process outer clips, they are largely irrelevant and untrustworthy in likely being adapters and/or low quality bases
+#   doesn't process outer clips, they are largely irrelevant and untrustworthy in being adapters and/or low quality bases
 #   tracks strands, not sides, to allow path tracking across multiple SV junctions in a single molecule
 #   has no sense of canonical strands, since an SV might occur in different parts/orientations of a path across multiple molecules
 #   reports insertions as a positive _insertion size_, microhomology as negative (as opposed to inserttion = negative _overlap size_ elsewhere)

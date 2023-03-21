@@ -12,7 +12,7 @@ my ($nInputAlns, $nInputMols) = (0) x 20;
 my $perlUtilDir = "$ENV{GENOMEX_MODULES_DIR}/utilities/perl";
 map { require "$perlUtilDir/$_.pl" } qw(workflow numeric);
 map { require "$perlUtilDir/genome/$_.pl" } qw(chroms);
-map { require "$perlUtilDir/sequence/$_.pl" } qw(general);
+map { require "$perlUtilDir/sequence/$_.pl" } qw(general); # faidx smith_waterman
 resetCountFile();
 
 # environment variables
@@ -32,7 +32,7 @@ use vars qw(%chromIndex);
 setCanonicalChroms();
 
 # load additional dependencies
-require "$GENOMEX_MODULES_DIR/align/dna-long-read/get_indexed_reads.pl";
+# require "$GENOMEX_MODULES_DIR/align/dna-long-read/get_indexed_reads.pl";
 $perlUtilDir = "$ENV{MODULES_DIR}/utilities/perl/svLong";
 map { require "$ACTION_DIR/extract/$_.pl" } qw(initialize_windows parse_nodes check_junctions);
 initializeWindowCoverage();
@@ -128,6 +128,13 @@ sub parseMolecule {
                 push @outAlns,  @alnAlns;
             }
 
+            # examine SV junctions for evidence of chimeric reads
+            # adjusts the output arrays as needed
+            my $nEdges = @types;
+            my $nStrands = checkForDuplex($nEdges);
+            # $nEdges = @types; # since checkForDuplex may have modified the molecule data
+            # $nEdges > 1 and checkForChimericJunctions($nEdges); # TODO as needed
+
             # set junction MAPQ as minimum MAPQ of the two flanking alignments
             if(@mapQs > 1){
                 for (my $i = 1; $i <= $#mapQs - 1; $i += 2){
@@ -135,13 +142,8 @@ sub parseMolecule {
                 }
             }
 
-            # examine any molecule with a preliminary SV call for evidence of chimeric reads
-            # adjusts the output arrays as needed
-            @nodes > 1 and checkJunctionsForAdapters();
-
             # print one line per node pair in the collapsed molecule sequence
-            # print molecule en bloc to keep together when merging parallel streams
-            # printMolecule();
+            printMolecule($nStrands);
 
             # reset for next molecule
             (@alns, @nodes, @types, @mapQs, @sizes, @insSizes, @outAlns) = ();
