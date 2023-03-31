@@ -12,16 +12,17 @@ actions:
             - genomex-mdi-tools//base
             - genomex-mdi-tools//genome
             - r-4.2
+            - rsamtools
         optionFamilies:
             - genomex-mdi-tools//genome
     align:
         order: 1
         module: genomex-mdi-tools//align/dna-paired-end 
-    collate:
+    extract:
         order: 2
         condaFamilies:
             - genomex-mdi-tools//bwa
-        optionFamilies: # these options apply to all actions
+        optionFamilies:
             - genomex-mdi-tools//bam-format
             - genomex-mdi-tools//read-filtering
             - genomex-mdi-tools//read-merging
@@ -37,7 +38,13 @@ actions:
         job-manager:
             recommended:
                 time-limit: 12:00:00
-        description: "group molecules by sequence identity, discover and characterize amplicon(s)"
+        description: "group molecules by sequence, discover and characterize amplicon(s), call SVs"
+condaFamilies:
+    rsamtools:
+        dependencies:
+            - bioconductor-rsamtools=2.14.0
+            - bioconductor-genomicranges=1.50.0
+            - bioconductor-iranges=2.32.0
 optionFamilies:   
     amplicon-discovery:
         options:
@@ -102,22 +109,22 @@ optionFamilies:
                 default: 10
                 description: "don't report internal deletions or insertions of fewer than -Z base pairs"
 package:
-    collate: # the pipeline action after which a data package should assembled
+    extract: # the pipeline action after which a data package should assembled
         uploadType: svAmplicon # a signal to the Stage 2 framework regarding the package contents
         files:
             manifestFile:
                 type: comma-delimited
                 manifestType: simple
-                file: $COLLATE_PREFIX.manifest.csv
+                file: $EXTRACT_PREFIX.manifest.csv
             moleculeTypes:
                 type: rds-file
-                file: $COLLATE_PREFIX.moleculeTypes.rds
+                file: $EXTRACT_PREFIX.moleculeTypes.rds
             junctions:
                 type: rds-file
-                file: $COLLATE_PREFIX.junctions.rds
+                file: $EXTRACT_PREFIX.junctions.rds
             amplicons:
                 type: tab-delimited
-                file: $COLLATE_PREFIX.amplicons.txt
+                file: $EXTRACT_PREFIX.amplicons.txt
 # container:
 #     supported: false    # set to true if you maintain a container registry for this pipeline [false]
 #     registry:  ghcr.io  # domain name of your OCI-compatible, oras-accessible, container registry [ghcr.io]

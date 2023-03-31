@@ -63,22 +63,28 @@ densityUI <- function(id, options) {
         ),        
         fluidRow(
             staticPlotBoxUI(
-                ns("positionDensityPlot"), 
-                title = "Position Density"
+                ns("svTrianglePlot"), 
+                title = "Triangle Plot",
+                width = 4
             ),            
             staticPlotBoxUI(
-                ns("svTrianglePlot"), 
-                title = "Triangle Plot"
-            ),
+                ns("positionDensityPlot"), 
+                title = "Position Density",
+                width = 4
+            ),            
             staticPlotBoxUI(
                 ns("sizeDensityPlot"), 
-                title = "Size Density"
-            ),
-            staticPlotBoxUI(
-                ns("moleculeDotPlot"), 
-                title = "Alignment Dot Plot"
+                title = "Size Density",
+                width = 4
             )
         ),     
+        fluidRow(
+            staticPlotBoxUI(
+                ns("moleculeDotPlot"), 
+                title = "Alignment Dot Plot",
+                width = 12
+            )
+        ),
         fluidRow(
             bufferedTableUI (
                 ns("moleculeTypeExpansion"), 

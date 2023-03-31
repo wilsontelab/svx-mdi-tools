@@ -1,0 +1,72 @@
+#----------------------------------------------------------------------
+# ui
+#----------------------------------------------------------------------
+shortLabel:       "Keep & Reject" # shown on dashboard menu 
+shortDescription: "Decide whether to keep or reject all molecules based on alignments." # shown on Overview page
+longLabel:        "Keep & reject molecules" # shown at top of appStep page 
+
+#----------------------------------------------------------------------
+# server
+#----------------------------------------------------------------------
+types: # names of the type(s) of this module ...
+    - keepReject
+sourceTypes: assign # ... and of the module(s) on which it depends
+
+#----------------------------------------------------------------------
+# dependencies
+#----------------------------------------------------------------------
+packages: # required R packages
+    R: null
+    Bioconductor: null
+
+## optional data classes and UI modules this module will use
+## e.g., might expect to find shared/optional/classes/<classType>/<className>/<className>_*.R
+#classes:
+#    classType:
+#        - className            
+#modules: null
+
+#----------------------------------------------------------------------
+# module-level settings
+#----------------------------------------------------------------------
+# settings:
+#     SV_Filters:
+#         SV_Type:
+#             type: selectInput
+#             choices:
+#                 - Deletion
+#                 - Translocation
+#             value: Deletion   
+#         Has_Merged:
+#             type: radioButtons
+#             choices:
+#                 - "Yes"
+#                 - "No" 
+#                 - "All"
+#             value: All  
+#         <settingName>:
+#             type: selectInput
+#             choices:
+#                 - abc
+#                 - xyz
+#             value: abc    
+#         <settingName>:
+#             type: radioButtons
+#             choices:
+#                 - abc
+#                 - xyz
+#             value: abc    
+#         <settingName>:
+#             type: checkboxGroupInput
+#             choices:
+#                 - abc
+#                 - xyz
+#             value: abc 
+#         <settingName>:
+#             type: checkboxInput
+#             value: true 
+#         <settingName>:
+#             type:   fileInput
+#             accept: 
+#                 - ".csv"
+#                 - ".txt"

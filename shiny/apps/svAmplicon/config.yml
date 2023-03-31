@@ -51,5 +51,5 @@ appSteps:
                     singular: Condition
                     plural: Conditions
                     nLevels: 1:10
-    density: # usually the 2nd step of every app
-        module: density        
+    keepReject:
+        module: keepReject        

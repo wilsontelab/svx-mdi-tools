@@ -20,7 +20,7 @@ on their outer endpoints.
 
 ### Operating modes and assocated experimental designs
 
-svAmplicon is built on the same algorithms used for _de novo_ genomic
+svAmplicon is built on the same basic algorithms used for _de novo_ genomic
 SV calling so is highly generalized. However, only two experimental
 approaches will yield optimal results.
 
@@ -29,7 +29,7 @@ sequence an amplicon with relatively close primer positions.
 Here, svAmplicon expects junctions to have been sequenced
 completely. Therefore, it is imperative that the read length be more than 
 half as long as the longest expected molecule. Molecules with longer
-internal insertions will be identified by not characterized in detail.
+internal insertions will be identified but not characterized in detail.
 This mode is called **expectOverlap** in amplicon reports.
 
 Less commonly, you might design **distant primer pairs** that 
@@ -52,11 +52,11 @@ Accordingly, you must provide a set of fastq.gz format files,
 with one pair of files for each sample corresponding to the two 
 reads of a paired-end sequencing run. These are specified using 
 the '--input-dir' and '--input-name' options of the 'align' action.
-Your job configuration should execute actions 'align' and 'collate'.
+Your job configuration should execute actions 'align' and 'extract'.
 
 It is not possible to use externally provided bam files due to the special 
 handling of the alignment process in svAmplicon. Amplicon sequencing
-alignment is generally small and fast so this is not a significant limitation.
+alignment is fast so this is not a significant limitation.
 
 It is not necessary to provide up-front information on the amplicon(s)
 your are sequencing. svAmplicon uses an agnostic approach in which
@@ -67,7 +67,7 @@ can set to control the number and quality of found amplicons.
 The amplicon discovery approach makes it routinely possible to sequence
 pools of distinct amplicons without barcoding them. The ends of the sequenced
 molecules identify the amplicon they correspond to. 
-Of course, if you wish to pool the same amplicon from different samples,
+If you wish to pool the same amplicon from different samples,
 they must be barcoded and demultiplexed before running svAmplicon. 
 
 ### Required genome inputs
@@ -79,4 +79,5 @@ required genome reference files, which must include
 sub-directory 'iGenomes' properly populated with the named
 genome. See:
 
-<https://support.illumina.com/sequencing/sequencing_software/igenome.html>
+- <https://support.illumina.com/sequencing/sequencing_software/igenome.html>
+- <https://github.com/wilsontelab/genomex-mdi-tools/tree/main/pipelines/download>
