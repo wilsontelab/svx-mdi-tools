@@ -1,1 +1,1 @@
-Analyze targeted amplicon sequences for evidence of deletions and other SVs
+Analyze targeted amplicon sequences for evidence of deletions and other SVs.

@@ -1,18 +1,18 @@
 #----------------------------------------------------------------------
-# server components for the keepReject appStep module
+# server components for the summaryPlots appStep module
 #----------------------------------------------------------------------
 
 #----------------------------------------------------------------------
 # BEGIN MODULE SERVER
 #----------------------------------------------------------------------
-keepRejectServer <- function(id, options, bookmark, locks) { 
+summaryPlotsServer <- function(id, options, bookmark, locks) { 
     moduleServer(id, function(input, output, session) {    
 #----------------------------------------------------------------------
 
 #----------------------------------------------------------------------
 # initialize module
 #----------------------------------------------------------------------
-module <- 'keepReject'
+module <- 'summaryPlots'
 appStepDir <- getAppStepDir(module)
 options <- setDefaultOptions(options, stepModuleInfo[[module]])
 settings <- activateMdiHeaderLinks( # uncomment as needed
@@ -26,19 +26,6 @@ settings <- activateMdiHeaderLinks( # uncomment as needed
 )
 
 #----------------------------------------------------------------------
-# establish module outcomes
-#----------------------------------------------------------------------
-defaultThreshold <- list(
-    minBaseQual = 25,
-    minMapQ = 55
-)
-thresholds <- reactiveValues()
-setThresholds <- function(d){
-    ampliconKey <- getAmpliconKeys(selectedAmplicon())
-    thresholds[[ampliconKey]] <- d
-}
-
-#----------------------------------------------------------------------
 # get the samples and amplicons to plot
 #----------------------------------------------------------------------
 sampleSet <- sampleSetServer("sampleSet", id)
@@ -48,30 +35,48 @@ amplicons <- ampliconsReactive(samples)
 #----------------------------------------------------------------------
 # construct the amplicon table and cascading reactives
 #----------------------------------------------------------------------
-ampliconsTable <- ampliconsTableServer(id, input, amplicons, selection = "single")
-selectedAmplicon <- selectedAmpliconsReactive(amplicons, ampliconsTable)
-moleculeTypes <- moleculeTypesReactive(samples, selectedAmplicon)
+ampliconsTable <- ampliconsTableServer(id, input, amplicons, selection = "multiple")
+selectedAmplicons <- selectedAmpliconsReactive(amplicons, ampliconsTable)
+moleculeTypes <- moleculeTypesReactive(samples, selectedAmplicons)
+junctions <- junctionsReactive(samples, moleculeTypes, selectedAmplicons) # filtered by quality thresholds
 
 #----------------------------------------------------------------------
-# construct the path class table and composite paired quality plot
+# construct the junction types table
 #----------------------------------------------------------------------
-pathClasses <- pathClassesReactive(moleculeTypes)
-pathClassesTable <- pathClassesTableServer(id, input, pathClasses, selection = "single")
-pathClassMoleculeTypes <- pathClassMoleculeTypesReactive(moleculeTypes, pathClasses, pathClassesTable)
-pairedQualityPlot <- pairedQualityPlotServer(pathClassMoleculeTypes)
-observeEvent(pairedQualityPlot$click(), {
-    d <- pairedQualityPlot$click()$coord
-    setThresholds(list(minBaseQual = d$x, minMapQ = d$y))
-})
+junctionTypes <- junctionTypesReactive(junctions)
+junctionTypesTable <- junctionTypesTableServer(id, input, junctionTypes, selection = "multiple")
+junctionTypesJunctions <- junctionTypesJunctionsReactive(junctions, junctionTypes, junctionTypesTable) # i.e., filtered by table selection
 
 #----------------------------------------------------------------------
-# construct the molecule-level metadata and plot
+# make junction plots
 #----------------------------------------------------------------------
-keepRejectMoleculeTypes <- keepRejectMoleculeTypesReactive(pathClassMoleculeTypes, input)
-moleculeTypeStepper <- listStepperButtonsServer("moleculeTypeStepper", keepRejectMoleculeTypes)
-moleculeMetadata <- moleculeMetadataReactive(selectedAmplicon, moleculeTypeStepper)
-output$moleculeMetadata <- moleculeMetadataUI(moleculeMetadata)
-output$moleculeQcPlot <- renderPlot({ moleculeQcPlot(moleculeMetadata) }) 
+junctionPlotData <- junctionPlotDataReactive(selectedAmplicons, junctionTypesJunctions)
+svTrianglePlot <- svTrianglePlotServer(junctionPlotData)
+positionDensityPlot <- positionDensityPlotServer(junctionPlotData)
+sizeDensityPlot <- sizeDensityPlotServer(junctionPlotData)
+
+#----------------------------------------------------------------------
+# construct the filtered junctions table
+#----------------------------------------------------------------------
+junctionsTableServer(id, input, junctionPlotData)
+
+#----------------------------------------------------------------------
+# make junction position density plots
+#----------------------------------------------------------------------
+# moleculeTypeData <- reactive({
+#     I <- moleculeTypesTable$rows_selected()
+#     req(I)
+#     tableFilteredMoleculeTypes()[I]
+# })
+# moleculeTypeExpansion <- reactive({
+#     moleculeTypeData <- moleculeTypeData()
+#     cols <- names(moleculeTypeData)
+#     moleculeTypeData <- moleculeTypeData[, .SD, .SDcols = cols[!(cols %in% c("dotplotL","dotplotR"))]]
+#     data.table(
+#         key_ = names(moleculeTypeData), 
+#         value_ = as.character(unlist(moleculeTypeData))
+#     )        
+# })
 
 #----------------------------------------------------------------------
 # define bookmarking actions
@@ -82,7 +87,7 @@ observe({
     # settings$replace(bm$settings)
     updateSelectInput(session, "sampleSet-sampleSet", selected = bm$input[['sampleSet-sampleSet']])
     if(!is.null(bm$outcomes)) {
-        thresholds <<- listToReactiveValues(bm$outcomes$thresholds)
+        # outcomes <<- listToReactiveValues(bm$outcomes)
     }
 })
 
@@ -93,17 +98,7 @@ list(
     input = input,
     # settings = settings$all_,
     outcomes = reactive({ list(
-        thresholds = reactiveValuesToList(thresholds)
     ) }),
-    thresholds = function(amplicons = NULL){
-        if(is.null(amplicons)) amplicons <- selectedAmplicon()
-        ampliconKeys <- getAmpliconKeys(amplicons)
-        x <- lapply(ampliconKeys, function(ampliconKey){
-            if(is.null(thresholds[[ampliconKey]])) defaultThreshold else thresholds[[ampliconKey]]
-        })  
-        names(x) <- ampliconKeys
-        x
-    },
     # isReady = reactive({ getStepReadiness(options$source, ...) }),
     NULL
 )

@@ -19,6 +19,27 @@ CONSTANTS$edgeTypes <- list(
     REJECTED_INDEL = "R",
     FUSED_MERGE_FAILURE_REJECTED_INDEL = "Q"
 )
+CONSTANTS$junctionTypes <- list(
+    D   = "deletion (D)",
+    I   = "insertion (I)",
+    U   = "duplication (U)",    
+    V   = "inversion (V)",
+    T   = "translocation (T)"
+)
+CONSTANTS$groupedPathClasses <- list(
+    "-"  = "no SV",
+    D   = "deletion (D)",
+    I   = "insertion (I)",
+    U   = "duplication (U)",    
+    VV  = "full inversion (VV)",
+    V   = "partial inversion (V)",
+    TT  = "full translocation (TT)",
+    T   = "partial translocation (T)",
+    DI  = "paired indel (DI,ID)",
+    ID  = "paired indel (DI,ID)"
+    # all other path classes listed as "other"
+)
+
 
 # appServer() is called after all modules are instantiated
 appServer <- function(){

@@ -28,61 +28,45 @@ keepRejectUI <- function(id, options) {
         code = serverEnv$IS_DEVELOPER,
         settings = FALSE,
 
-        # includeCSS(file.path(appStepDir, "keepReject.css")),
-        # tags$head(includeScript(file.path(appStepDir, "keepReject.js"))),
-
         # appStep UI elements, populate as needed
-        fluidRow(box(
-            width = 4,
-            sampleSetUI (ns("sampleSet"))
-        )),
         fluidRow(
+            box(
+                width = 4,
+                sampleSetUI (ns("sampleSet"))
+            ),
             bufferedTableUI (
                 ns("ampliconsTable"), 
                 title = "Amplicons", 
                 downloadable = TRUE,
-                width = 12,
+                width = 8,
                 collapsible = TRUE,
                 collapsed = FALSE
             )
         ),
-        # fluidRow(
-        #     bufferedTableUI (
-        #         ns("junctionsTable"), 
-        #         title = "Junctions", 
-        #         downloadable = TRUE,
-        #         width = 12,
-        #         collapsible = TRUE,
-        #         collapsed = FALSE
-        #     )
-        # ),        
-        # fluidRow(
-        #     bufferedTableUI (
-        #         ns("moleculeTypesTable"), 
-        #         title = "Molecule Types", 
-        #         downloadable = TRUE,
-        #         width = 12,
-        #         collapsible = TRUE,
-        #         collapsed = FALSE
-        #     )
-        # ),        
-        # fluidRow(
-        #     staticPlotBoxUI(
-        #         ns("svTrianglePlot"), 
-        #         title = "Triangle Plot",
-        #         width = 4
-        #     ),            
-        #     staticPlotBoxUI(
-        #         ns("positionDensityPlot"), 
-        #         title = "Position Density",
-        #         width = 4
-        #     ),            
-        #     staticPlotBoxUI(
-        #         ns("sizeDensityPlot"), 
-        #         title = "Size Density",
-        #         width = 4
-        #     )
-        # ),     
+        fluidRow(
+            bufferedTableUI (
+                ns("pathClassesTable"), 
+                title = "Molecule Path Classes", 
+                downloadable = TRUE,
+                width = 4,
+                collapsible = TRUE,
+                collapsed = FALSE
+            ),
+            mdiInteractivePlotUI(ns("pairedQualityPlot"))
+        ),
+        fluidRow(
+            style = "padding: 5px;",
+            column(
+                offset = 2,
+                width = 2,
+                style = "padding-top: 7px;",
+                radioButtons(ns("moleculeTypeFilter"), NULL, choices = c("Kept", "Rejected"), selected = "Kept", inline = TRUE)
+            ),
+            column(
+                width = 4,
+                listStepperButtonsUI(ns("moleculeTypeStepper")) 
+            )
+        ),             
         fluidRow(
             box(
                 width = 12,
@@ -95,21 +79,6 @@ keepRejectUI <- function(id, options) {
                     plotOutput(ns("moleculeQcPlot"), width = "100%", height ="600px")
                 )
             )
-            # staticPlotBoxUI(
-            #     ns("moleculeDotPlot"), 
-            #     title = "Alignment Dot Plot",
-            #     width = 12
-            # )
-        ),
-        # fluidRow(
-        #     bufferedTableUI (
-        #         ns("moleculeTypeExpansion"), 
-        #         title = "Molecule Type Details", 
-        #         downloadable = TRUE,
-        #         width = 12,
-        #         collapsible = TRUE,
-        #         collapsed = FALSE
-        #     )
-        # )
+        )
     )
 }

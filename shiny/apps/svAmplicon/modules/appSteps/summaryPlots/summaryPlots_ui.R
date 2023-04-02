@@ -1,15 +1,15 @@
 #----------------------------------------------------------------------
-# UI components for the density appStep module
+# UI components for the summaryPlots appStep module
 #----------------------------------------------------------------------
 
 # module ui function
-densityUI <- function(id, options) {
+summaryPlotsUI <- function(id, options) {
 
     # initialize namespace
     ns <- NS(id)
     
     # override missing options to module defaults
-    options <- setDefaultOptions(options, stepModuleInfo$density)
+    options <- setDefaultOptions(options, stepModuleInfo$summaryPlots)
 
     # return the UI contents
     standardSequentialTabItem(
@@ -24,49 +24,39 @@ densityUI <- function(id, options) {
         # terminal = TRUE,
         console = serverEnv$IS_DEVELOPER,
         code = serverEnv$IS_DEVELOPER,
-        settings = TRUE,
+        # settings = TRUE,
 
         # appStep UI elements, populate as needed
-        fluidRow(box(
-            width = 4,
-            sampleSetUI (ns("sampleSet"))
-        )),
         fluidRow(
+            box(
+                width = 4,
+                sampleSetUI (ns("sampleSet"))
+            ),
             bufferedTableUI (
                 ns("ampliconsTable"), 
                 title = "Amplicons", 
                 downloadable = TRUE,
-                width = 12,
+                width = 8,
                 collapsible = TRUE,
                 collapsed = FALSE
             )
         ),
         fluidRow(
             bufferedTableUI (
-                ns("junctionsTable"), 
-                title = "Junctions", 
+                ns("junctionsTypesTable"), 
+                title = "Junction Types", 
                 downloadable = TRUE,
-                width = 12,
+                width = 4,
                 collapsible = TRUE,
                 collapsed = FALSE
-            )
-        ),        
-        fluidRow(
-            bufferedTableUI (
-                ns("moleculeTypesTable"), 
-                title = "Molecule Types", 
-                downloadable = TRUE,
-                width = 12,
-                collapsible = TRUE,
-                collapsed = FALSE
-            )
-        ),        
-        fluidRow(
+            ),
             staticPlotBoxUI(
                 ns("svTrianglePlot"), 
                 title = "Triangle Plot",
                 width = 4
-            ),            
+            )
+        ), 
+        fluidRow(
             staticPlotBoxUI(
                 ns("positionDensityPlot"), 
                 title = "Position Density",
@@ -77,23 +67,34 @@ densityUI <- function(id, options) {
                 title = "Size Density",
                 width = 4
             )
-        ),     
-        fluidRow(
-            staticPlotBoxUI(
-                ns("moleculeDotPlot"), 
-                title = "Alignment Dot Plot",
-                width = 12
-            )
-        ),
+        ),   
         fluidRow(
             bufferedTableUI (
-                ns("moleculeTypeExpansion"), 
-                title = "Molecule Type Details", 
+                ns("junctionsTable"), 
+                title = "Junctions", 
                 downloadable = TRUE,
-                width = 12,
+                width = 8,
                 collapsible = TRUE,
                 collapsed = FALSE
-            )
+            ) 
         )
+        #     bufferedTableUI (
+        #         ns("moleculeTypesTable"), 
+        #         title = "Molecule Types", 
+        #         downloadable = TRUE,
+        #         width = 12,
+        #         collapsible = TRUE,
+        #         collapsed = FALSE
+        #     )   
+        # fluidRow(
+        #     bufferedTableUI (
+        #         ns("moleculeTypeExpansion"), 
+        #         title = "Molecule Type Details", 
+        #         downloadable = TRUE,
+        #         width = 12,
+        #         collapsible = TRUE,
+        #         collapsed = FALSE
+        #     )
+        # )
     )
 }

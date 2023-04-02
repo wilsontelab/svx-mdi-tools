@@ -1,4 +1,40 @@
-# make an alignment dot plot for molecule QC, i.e., Keep/Reject
+#----------------------------------------------------------------------
+# construct a composite paired quality plot, i.e. MAPQ vs. QUAL
+#----------------------------------------------------------------------
+pairedQualityPlotServer <- function(pathClassMoleculeTypes) mdiInteractivePlotServer(
+    "pairedQualityPlot",       
+    click = TRUE,
+    contents = reactive({ 
+        mts <- pathClassMoleculeTypes()        
+        thresholds <- app$keepReject$thresholds()[[1]]
+        list(
+            plotArgs = list(
+                jitter(mts$minBaseQual, amount = 1),
+                jitter(mts$minMapQ,     amount = 1),
+                pch = 19,  
+                cex = 0.5,
+                xlab = "min(QUAL)",
+                ylab = "min(MAPQ)",
+                xlim = c(0, 45),
+                ylim = c(0, 65),
+                col = ifelse(mts$passedQualityFilters, CONSTANTS$plotlyColors$green, CONSTANTS$plotlyColors$red)
+            ),
+            abline = list(h = thresholds$minMapQ, v = thresholds$minBaseQual),
+            layout = list(
+                width = 395,
+                height = 395,
+                pointsize = 9, # defaults to 8
+                mai = c(0.75, 0.75, 0.1, 0.1)
+            )
+        ) 
+    })
+)
+
+#----------------------------------------------------------------------
+# quality profile and dot plot of a single molecule's reads and alignments
+#----------------------------------------------------------------------
+
+# plotting constants
 dotPlotColors <- list(
     M = CONSTANTS$plotlyColors$grey,
     m = CONSTANTS$plotlyColors$orange,
@@ -15,7 +51,8 @@ dotStackOrder <- list(
     H = 5,
     S = 6
 )
-# use CIGAR string and refPos to the x-y coordinates of an alignment dot plot
+
+# use CIGAR string and refPos to parse the x-y coordinates of an alignment dot plot
 cigarDotPlot <- function(cigar, qryPos, refPos, strand){
     lengths    <- as.numeric(unlist(regmatches(cigar, gregexpr('\\d+', cigar))))
     operations <-            unlist(regmatches(cigar, gregexpr('\\D',  cigar)))
@@ -67,23 +104,8 @@ cigarDotPlot <- function(cigar, qryPos, refPos, strand){
         y = mean(dt$y[notS])
     )
 }
-getNRefBases <- function(cigar){
-    lengths    <- as.numeric(unlist(regmatches(cigar, gregexpr('\\d+', cigar))))
-    operations <-            unlist(regmatches(cigar, gregexpr('\\D',  cigar)))
-    i <- operations %in% c("M","D")    
-    sum(lengths[i])
-}
-getAlnStartPos <- function(pos, cigar){
-    pos - getNRefBases(cigar) + 1
-    # paste0(c(rbind(lengths[i], operations[i])), collapse = "")
-}
-getRefPos <- function(readN, strand, pos, cigar){
-    if(readN == 1){
-        if(strand == "+") pos else getAlnStartPos(pos, cigar)
-    } else {
-        if(strand == "-") pos else getAlnStartPos(pos, cigar)
-    }
-}
+
+# plot all alignment segments from a single read (could be 1 or 2 reads per moleculeType)
 plotReadAlns <- function(pts, mmd, readN, chrom, midx){
     qryPos <- 1
     is <- which(mmd$alnReadNs == readN)
@@ -117,7 +139,7 @@ plotReadAlns <- function(pts, mmd, readN, chrom, midx){
             operation = dp$dt$operation
         ))
         if(isTruthy(types[i]) && types[i] %in% c("D","I")){
-            if(!is.na(sizes[i]) && sizes[i] > 0) pts <- rbind(pts, data.table(
+            if(!is.na(sizes[i]) && sizes[i] > 0 && sizes[i] < midx * 2) pts <- rbind(pts, data.table(
                 x = rep(dp$qryPos, sizes[i]),
                 y = dp$refPos:(dp$refPos + sizes[i] - 1),
                 col = if(chroms[i] == chrom) dotPlotColors$D else NA,
@@ -140,13 +162,16 @@ plotReadAlns <- function(pts, mmd, readN, chrom, midx){
     }
     pts     
 }
+
+# plot a single chromosome segment
 renderAlignmentPlot <- function(xmax, mmd, i, ampliconic){
     ylim <- if(ampliconic) c(mmd$amplicon$pos1, mmd$amplicon$pos2) else {
-        range(mapply(function(readN, strand, pos, cigar){
+        range(mapply(function(ampliconic, readN, strand, pos, cigar){
+            if(!ampliconic) return(rep(as.integer(NA), 2))
             p <- getRefPos(readN, strand, pos, cigar)
             l <- getNRefBases(cigar)       
             c(p, p + l - 1)     
-        }, mmd$alnReadNs[i], mmd$strand[i], mmd$pos[i], mmd$cigar[i]))
+        }, mmd$ampliconic, mmd$alnReadNs[i], mmd$strand[i], mmd$pos[i], mmd$cigar[i]), na.rm = TRUE)
     }
     chrom <- if(ampliconic) mmd$amplicon$chrom1 else mmd$chroms[i][1]
     par(mar = c(if(ampliconic) 4.1 else 0.1, 4.1, 0.1, 0.1), cex = 1)
@@ -159,8 +184,9 @@ renderAlignmentPlot <- function(xmax, mmd, i, ampliconic){
         xaxt = if(ampliconic) "s" else "n"
     )
     pts <- data.table(x = integer(), y = integer(), col = character(), operation = character())
-    midx <- xmax / 2    
-    pts <- plotReadAlns(pts, mmd, 1, chrom, midx)
+    midx <- xmax / 2 
+
+    pts <- plotReadAlns(pts, mmd, 1, chrom, midx)    
     if(!mmd$isMerged) pts <- plotReadAlns(pts, mmd, 2, chrom, midx)
     pts <- pts[order(unlist(dotStackOrder[pts$operation]))]
     abline(v = midx, col = CONSTANTS$plotlyColors$black) 
@@ -170,24 +196,9 @@ renderAlignmentPlot <- function(xmax, mmd, i, ampliconic){
     abline(h = c(midy + 50 * c(1:10, -(1:10))), col = CONSTANTS$plotlyColors$grey)
     points(pts$x, pts$y, col = pts$col, pch = 19, cex = 0.5)
 }
-moleculeQcPlot <- function(moleculeMetadata) {
-    mmd <- moleculeMetadata()
-    req(mmd)
-    mt <- mmd$moleculeType
-    xmax <- max(mmd$ampliconSize, mmd$tLen)
 
-    # prepare for out-of-amplicon rows
-    if(any(!mmd$ampliconic)){
-        nOutSegments <- sum(!mmd$ampliconic)
-        nPlotRows <- nOutSegments + 2
-        heights <- c(0.15, rep(0.15, nOutSegments), 0.85 - 0.15 * nOutSegments)
-    } else {
-        nPlotRows <- 2
-        heights <- c(0.15, 0.85)
-    }
-
-    # plot QUAL
-    layout(matrix(1:nPlotRows, ncol = 1), heights = heights) 
+# plot the read(s) QUAL profile(s)
+renderReadQualPlot <- function(xmax, mmd, mt){
     par(mar = c(0.1, 4.1, 0.1, 0.1), cex = 1)
     plot(
         NA, NA,
@@ -208,9 +219,31 @@ moleculeQcPlot <- function(moleculeMetadata) {
         x = 1:nchar(mt$seq2),
         y = as.integer(sapply(strsplit(mt$qual2, "")[[1]], charToRaw)) - 33,
         col = CONSTANTS$plotlyColors$orange
-    )
+    )    
+}
 
-    # plot out-of-amplicon alignments; at present, only handle one such segment well
+# render the composite QC plot; this is the main function call, cascading upwards
+moleculeQcPlot <- function(moleculeMetadata) {
+    mmd <- moleculeMetadata()
+    req(mmd)
+    mt <- mmd$moleculeType
+    xmax <- max(mmd$ampliconSize, mmd$tLen)
+
+    # prepare for out-of-amplicon rows
+    if(any(!mmd$ampliconic)){
+        nOutSegments <- sum(!mmd$ampliconic)
+        nPlotRows <- nOutSegments + 2
+        heights <- c(0.15, rep(0.15, nOutSegments), 0.85 - 0.15 * nOutSegments)
+    } else {
+        nPlotRows <- 2
+        heights <- c(0.15, 0.85)
+    }
+    layout(matrix(1:nPlotRows, ncol = 1), heights = heights) 
+
+    # plot QUAL
+    renderReadQualPlot(xmax, mmd, mt)
+
+    # plot out-of-amplicon alignments; at present, only handle one such segment per chromosome well
     for(i in which(!mmd$ampliconic)){
         renderAlignmentPlot(xmax, mmd, i, FALSE) # these could be from different regions!
     }

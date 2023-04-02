@@ -53,3 +53,5 @@ appSteps:
                     nLevels: 1:10
     keepReject:
         module: keepReject        
+    summaryPlots:
+        module: summaryPlots   

@@ -12,7 +12,6 @@ samplesReactive <- function(sampleSet) reactive({
 assembleDataTable <- function(samples, fileType, loadFn, colNames = NULL){
     x <- samples()
     do.call(rbind, lapply(seq_len(nrow(x)), function(i){
-        print(getSourceFilePath(x$Source_ID[i], fileType))
         dt <- loadFn(getSourceFilePath(x$Source_ID[i], fileType))
         if(!is.null(colNames)) setnames(dt, colNames)
         cbind(
@@ -25,7 +24,9 @@ assembleDataTable <- function(samples, fileType, loadFn, colNames = NULL){
 
 # amplicons; could be more than one for a given sample if a mixed library
 getAmpliconKeys <- function(dt){
-    paste(dt$sample, dt$amplicon, sep = ":")
+    req(dt, nrow(dt) > 0)
+    ampId <- if("amplicon" %in% names(dt)) "amplicon" else "ampliconId"
+    paste(dt$sample, dt[[ampId]], sep = ":")
 }
 ampliconsReactive <- function(samples) reactive({
     x <- assembleDataTable(samples, "amplicons", fread, colNames = c(
@@ -42,7 +43,7 @@ ampliconsTableServer <- function(parentId, input, amplicons, selection = "single
     tableData = reactive({
         amplicons()[, .SD, .SDcols = c(
             "sample",
-            "amplicon","type",#"nReadPairs",
+            # "amplicon","type",#"nReadPairs",
             "chrom1","side1","pos1",
             "chrom2","side2","pos2",
             "size"
@@ -57,43 +58,67 @@ selectedAmpliconsReactive <- function(amplicons, ampliconsTable) reactive({
 })
 
 # moleculeTypes, i.e., one row for each distinct path through an amplicon molecule
-moleculeTypesReactive <- function(samples) reactive({ assembleDataTable(samples, "moleculeTypes", readRDS) })
-ampliconMoleculeTypesReactive <- function(moleculeTypes, selectedAmplicons) reactive({
-    moleculeTypes <- moleculeTypes()
-    moleculeTypes[
-        getAmpliconKeys(moleculeTypes) %in% getAmpliconKeys(selectedAmplicons())
-    ]
+moleculeTypesReactive <- function(samples, selectedAmplicons) reactive({ 
+    amplicons <- selectedAmplicons()
+    req(amplicons)
+    x <- assembleDataTable(samples, "moleculeTypes", readRDS) 
+    x[isRef == TRUE, pathClass := "-"] # avoids having a blank list name
+    x[, ":="(
+        ampliconKey = getAmpliconKeys(x),
+        sampleMolTypeKey = paste(sample, molKey, sep = "::")
+    )]
+    x[ampliconKey %in% getAmpliconKeys(amplicons)]
+})
+
+# pathClasses, i.e., one row for each kind of path (D, TT, VV, DID, etc.) through an amplicon molecule
+pathClassesReactive <- function(moleculeTypes) reactive({
+    x  <- moleculeTypes()
+    pc <- CONSTANTS$groupedPathClasses
+    x[, pathClass_ := if(pathClass %in% names(pc)) pc[[pathClass]] else "other", by = "pathClass"]    
+    x[, .(
+        nReadPairs = sum(nReadPairs),
+        nMols = sum(nMols),         
+        nMolTypes = .N
+    ), by = .(pathClass_)]
+})
+pathClassesTableServer <- function(parentId, input, pathClasses, selection = "single") bufferedTableServer(
+    "pathClassesTable",
+    parentId,
+    input,
+    tableData = reactive({ pathClasses() }),
+    options = list(
+        paging = FALSE,
+        searching = FALSE
+    ),
+    selection = selection
+)
+pathClassMoleculeTypesReactive <- function(moleculeTypes, pathClasses, pathClassesTable) reactive({
+    I <- pathClassesTable$rows_selected()
+    x <- if(isTruthy(I)) moleculeTypes()[pathClass_ == pathClasses()[I, pathClass_]]
+         else moleculeTypes()  
+    thresholds <- app$keepReject$thresholds()[[1]]         
+    x[, passedQualityFilters := minBaseQual >= thresholds$minBaseQual & minMapQ >= thresholds$minMapQ]
+    x
+})
+keepRejectMoleculeTypesReactive <- function(pathClassMoleculeTypes, input) reactive({
+    x <- pathClassMoleculeTypes()
+    req(x, input$moleculeTypeFilter)
+    filterState <- if(input$moleculeTypeFilter == "Kept") TRUE else FALSE    
+    x[passedQualityFilters == filterState]
 })
 
 # moleculeType, i.e., metadata on a single selected moleculeType
-moleculeMetadataReactive <- function(amplicons, moleculeTypes) reactive({
-    amplicons <- amplicons()
-    moleculeTypes <- moleculeTypes()
-    req(amplicons, moleculeTypes)
-
-    # TODO: create molecule list scroll
-
-    dprint(nrow(moleculeTypes))
-
-    moleculeType <- moleculeTypes[sample(nrow(moleculeTypes), 1)]
-    # moleculeType <- moleculeTypes[molId == 2473611] # translocation MAPQ = 0
-    # moleculeType <- moleculeTypes[molId == 3602861] # translocation MAPQ = 60, 122
-    # moleculeType <- moleculeTypes[molId == 813957]  # large deletion, split
-    # moleculeType <- moleculeTypes[molId == 2972341] # deletion -3 microhomology
-    # moleculeType <- moleculeTypes[molId == 1776032] # internal rearrangement
-#  moleculeType <- moleculeTypes[molId == 3470234]
-    # moleculeType <- moleculeTypes[molId == 596477]
-
-
-    
+moleculeMetadataReactive <- function(selectedAmplicon, moleculeTypeStepper) reactive({
+    amplicon <- selectedAmplicon()
+    moleculeType <- moleculeTypeStepper$getCurrent()
+    req(amplicon, moleculeType)
 
     # molecule-level information
-    amplicon <- amplicons[ # currently only works for expectOverlap
-        getAmpliconKeys(amplicons) == getAmpliconKeys(moleculeType)
-    ]
     alnReadNs <- as.integer(strsplit(moleculeType$readNs, ":")[[1]])
     jxnReadNs <- integer()
-    for(i in 1:(length(alnReadNs) - 1)) if(alnReadNs[i] == alnReadNs[i + 1]) jxnReadNs <- c(jxnReadNs, alnReadNs[i])
+    if(!moleculeType$isRef){
+        for(i in 1:(length(alnReadNs) - 1)) if(alnReadNs[i] == alnReadNs[i + 1]) jxnReadNs <- c(jxnReadNs, alnReadNs[i])
+    }
     moleculeType$tLen1 <- nchar(moleculeType$seq1)
     moleculeType$tLen2 <- if(moleculeType$mergeLevel > 0) NA else nchar(moleculeType$seq2)
     moleculeType$alnReadNs <- paste(alnReadNs, collapse = ":")
@@ -152,191 +177,90 @@ moleculeMetadataUI <- function(moleculeMetadata) renderUI({
         ), keyValuePair)
     )
 })
-# List of 11
-#  $ moleculeType:Classes ‘data.table’ and 'data.frame':  1 obs. of  24 variables:
-#   ..$ sourceId  : chr "8d81de94383d6a8a55cdb4181a410f69"
-#   ..$ sample    : chr "Sample_Chr1_SH_Mre11_1_IGO_08673_E_1"
-#   ..$ ampliconId: int 1
-#   ..$ path      : chr "chr1/+/33765030:chr1/+/33765125"
-#   ..$ insSizes  : chr "0"
-#   ..$ molKey    : chr "1:1402597"
-#   ..$ molId     : int 1402597
-#   ..$ isRef     : logi FALSE
-#   ..$ nReadPairs: int 9
-#   ..$ nMols     : int 4
-#   ..$ mergeLevel: int 2
-#   ..$ overlap   : int 121
-#   ..$ chroms    : chr "chr1:chr1"
-#   ..$ poss      : chr "33764688:33765125"
-#   ..$ cigars    : chr "343M:138M"
-#   ..$ readNs    : chr "1:1"
-#   ..$ mapQs     : chr "60:60"
-#   ..$ pathClass : chr "D"
-#   ..$ nodePairs :List of 1
-#   .. ..$ : chr "chr1/+/33765030:chr1/+/33765125"
-#   ..$ sizes     : chr "94"
-#   ..$ seq1      : chr "TCATGTCCGGTTTGGATGCCAAACGACCCTTTAAAAGGGGTTGCCTAAGAGCATCAG
-# AAAGCAGATATTTATATTTTGATTCACAAGAGTAGCAAAATTACAGCTAAGAAG"| __truncated__
-#   ..$ seq2      : chr "*"
-#   ..$ qual1     : chr "CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
-# CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC"| __truncated__
-#   ..$ qual2     : chr "*"
-#   ..- attr(*, ".internal.selfref")=<externalptr>
-#  $ amplicon    :Classes ‘data.table’ and 'data.frame':  1 obs. of  16 variables:
-#   ..$ sourceId  : chr "8d81de94383d6a8a55cdb4181a410f69"
-#   ..$ sample    : chr "Sample_Chr1_SH_Mre11_1_IGO_08673_E_1"
-#   ..$ amplicon  : int 1
-#   ..$ type      : chr "expectOverlap"
-#   ..$ nReadPairs: int 3179461
-#   ..$ chrom1    : chr "chr1"
-#   ..$ side1     : chr "R"
-#   ..$ pos1      : int 33764688
-#   ..$ ref1      : chr "TCATGTCCGGTTTGGATGCCAAACGACCCTTTAAAAGGGGTTGCCTAAGAGCATCAG
-# AAAGCAGATATTTATATTTTGATTCACAAGAGTAGCAAAATTACAGCTAAGAAG"| __truncated__
-#   ..$ primer1   : chr "TCATGTCCGGTTTGGATGCCAAACG"
-#   ..$ chrom2    : chr "chr1"
-#   ..$ side2     : chr "L"
-#   ..$ pos2      : int 33765262
-#   ..$ ref2      : chr "*"
-#   ..$ primer2   : chr "ATCCTCTTCTGGAGTCTTTGATTCG"
-#   ..$ size      : num 575
-#   ..- attr(*, ".internal.selfref")=<externalptr>
-#  $ ampliconSize: num 575
-#  $ tLen        : int 481
-#  $ isMerged    : logi TRUE
-#  $ chroms      : chr [1:2] "chr1" "chr1"
-#  $ poss        : int [1:2] 33764688 33765125
-#  $ cigars      : chr [1:2] "343M" "138M"
-#  $ readNs      : int [1:2] 1 1
-#  $ sizes       : int 94
-#  $ insSizes    : int 0
 
-# Classes ‘data.table’ and 'data.frame':  234 obs. of  22 variables:
-#  $ sourceId  : chr  "15dcd64821b17e6d392c2a58dc404ef5" "15dcd64821b17e6d392c2a58
-# dc404ef5" "15dcd64821b17e6d392c2a58dc404ef5" "15dcd64821b17e6d392c2a58dc404ef5" 
-# ...
-#  $ sample    : chr  "Sample_Chr1_SH_Mre11_1_IGO_08673_E_1" "Sample_Chr1_SH_Mre11
-# _1_IGO_08673_E_1" "Sample_Chr1_SH_Mre11_1_IGO_08673_E_1" "Sample_Chr1_SH_Mre11_1
-# _IGO_08673_E_1" ...
-#  $ ampliconId: int  1 1 1 1 1 1 1 1 1 1 ...
-#  $ path      : chr  "" "chr1/+/33765001:chr1/+/33764688" "chr1/+/33765021:chr1/+
-# /33764688" "chr1/+/33764999:chr1/+/33764688" ...
-#  $ insSizes  : chr  "" "0" "0" "0" ...
-#  $ molKey    : chr  "1:2948997" "1:3293777" "1:1369849" "1:3400260" ...
-#  $ molId     : int  2948997 3293777 1369849 3400260 1402597 687422 1839587 16099
-# 30 1254465 2716327 ...
-#  $ isRef     : logi  TRUE FALSE FALSE FALSE FALSE FALSE ...
-#  $ nReadPairs: int  3447982 39 24 17 12 10 10 9 9 9 ...
-#  $ nMols     : int  1019895 32 21 11 7 8 9 4 9 5 ...
-#  $ mergeLevel: int  2 2 2 2 2 2 2 2 2 2 ...
-#  $ overlap   : int  27 79 68 125 121 72 46 278 102 97 ...
-#  $ chroms
-#  $ poss
-#  $ cigars    : chr  "575M" "314M:209M" "334M:200M" "312M:165M" ...
-#  $ readNs    : chr  "1" "1:1" "1:1" "1:1" ...
-#  $ mapQs     : chr  "60" "60:60" "60:60" "60:60" ...
-#  $ pathClass : chr  "" "D" "D" "D" ...
-#  $ nodePairs :List of 234
-#   ..$ : chr
-#   ..$ : chr "chr1/+/33765001:chr1/+/33764688"
-#   .. [list output truncated]
-#  $ sizes     : chr  "" "52" "41" "98" ...
-#  $ seq1      : chr  "TCATGTCCGGTTTGGATGCCAAACGACCCTTTAAAAGGGGTTGCCTAAGAGCATCAGAA
-# AGCAGATATTTATATTTTGATTCACAAGAGTAGCAAAATTACAGCTAAGAAG"| __truncated__ "TCATGTCCGG
-# TTTGGATGCCAAACGACCCTTTAAAAGGGGTTGCCTAAGAGCATCAGAAAGCAGATATTTATATTTTGATTCACAAGAGT
-# AGCAAAATTACAGCTAAGAAG"| __truncated__ "TCATGTCCGGTTTGGATGCCAAACGACCCTTTAAAAGGGGT
-# TGCCTAAGAGCATCAGAAAGCAGATATTTATATTTTGATTCACAAGAGTAGCAAAATTACAGCTAAGAAG"| __trunc
-# ated__ "TCATGTCCGGTTTGGATGCCAAACGACCCTTTAAAAGGGGTTGCCTAAGAGCATCAGAAAGCAGATATTTAT
-# ATTTTGATTCACAAGAGTAGCAAAATTACAGCTAAGAAG"| __truncated__ ...
-#  $ seq2      : chr  "*" "*" "*" "*" ...
-#  $ qual1     : chr  "CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
-# CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC"| __truncated__ "CCCCCCCCCC
-# CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
-# CCCCCCCCCCCCCCCCCCCCC"| __truncated__ "CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
-# CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC"| __trunc
-# ated__ "CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
-# CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC"| __truncated__ ...
-#  $ qual2     : chr  "*" "*" "*" "*" ...
-#  - attr(*, ".internal.selfref")=<externalptr>
+# junctions, i.e., one row for each distinct SV edge in an amplicon molecule
+junctionsReactive <- function(samples, moleculeTypes, selectedAmplicons) reactive({ 
+    amplicons <- selectedAmplicons()
+    moleculeTypes <- moleculeTypes()
+    req(amplicons, moleculeTypes)
+    x <- assembleDataTable(samples, "junctions", readRDS) 
+    x <- x[edgeClass != CONSTANTS$edgeTypes$ALIGNMENT]
+    x[, jxnKey := paste(sample, ampliconId, nodePair, insSize, sep = "::")]
+    expandedJunctions <- x[, .(sampleMolTypeKey = paste(sample, unlist(molTypeKeys), sep = "::")), by = .(jxnKey)]
+    thresholds <- app$keepReject$thresholds(amplicons)
+    moleculeTypes <- do.call(rbind, lapply(getAmpliconKeys(amplicons), function(aKey){
+        ts <- thresholds[[aKey]]
+        moleculeTypes[ampliconKey == aKey & minBaseQual >= ts$minBaseQual & minMapQ >= ts$minMapQ]
+    }))
+    jxnKeys <- expandedJunctions[sampleMolTypeKey %in% moleculeTypes$sampleMolTypeKey, unique(jxnKey)]
+    x <- x[jxnKey %in% jxnKeys] 
+    jt <- CONSTANTS$junctionTypes    
+    x[, junctionType := if(edgeClass %in% names(jt)) jt[[edgeClass]] else "other", by = "edgeClass"]    
+    x
+})
 
-# Classes ‘data.table’ and 'data.frame':  1 obs. of  16 variables:
-#  $ sourceId  : chr "15dcd64821b17e6d392c2a58dc404ef5"
-#  $ sample    : chr "Sample_Chr1_SH_Mre11_1_IGO_08673_E_1"
-#  $ amplicon  : int 1
-#  $ type      : chr "expectOverlap"
-#  $ nReadPairs: int 3179461
-#  $ chrom1    : chr "chr1"
-#  $ side1     : chr "R"
-#  $ pos1      : int 33764688
-#  $ ref1      : chr "TCATGTCCGGTTTGGATGCCAAACGACCCTTTAAAAGGGGTTGCCTAAGAGCATCAGAAA
-# GCAGATATTTATATTTTGATTCACAAGAGTAGCAAAATTACAGCTAAGAAG"| __truncated__
-#  $ primer1   : chr "TCATGTCCGGTTTGGATGCCAAACG"
-#  $ chrom2    : chr "chr1"
-#  $ side2     : chr "L"
-#  $ pos2      : int 33765262
-#  $ ref2      : chr "*"
-#  $ primer2   : chr "ATCCTCTTCTGGAGTCTTTGATTCG"
-#  $ size      : num 575
-#  - attr(*, ".internal.selfref")=<externalptr>
+# junction Types, i.e., one row for each kind of junction (D, T, V, etc.)
+junctionTypesReactive <- function(junctions) reactive({
+    junctions <- junctions()
+    req(junctions)
+    junctions[, .(
+        nReadPairs = sum(nReadPairs),
+        nMols = sum(nMol),         
+        nMolTypes = sum(nMolTypes),
+        nJunctions = .N
+    ), by = .(junctionType)]
+})
+junctionTypesTableServer <- function(parentId, input, junctionTypes, selection = "multiple") bufferedTableServer(
+    "junctionsTypesTable",
+    parentId,
+    input,
+    tableData = reactive({ junctionTypes() }),
+    options = list(
+        paging = FALSE,
+        searching = FALSE
+    ),
+    selection = selection
+)
+junctionTypesJunctionsReactive <- function(junctions, junctionTypes, junctionTypesTable) reactive({
+    I <- junctionTypesTable$rows_selected()
+    x <- if(isTruthy(I)) junctions()[junctionType %in% junctionTypes()[I, junctionType]]
+         else junctions()  
+    x
+})
+junctionsTableServer <- function(parentId, input, junctionPlotData) bufferedTableServer(
+    "junctionsTable",
+    parentId,
+    input,
+    tableData = reactive({ junctionPlotData()$junctions[, .SD, .SDcols = c(
+        "sample",
+        "ampliconId",
+        # "nodePair",
+        "chrom1",
+        "strand1",
+        "pos1",
+        "chrom2",
+        "strand2",
+        "pos2",
+        "insSize", 
+        "nReadPairs", 
+        "nMol", 
+        "nMolTypes", 
+        "junctionType", 
+        "size"
+    )] }),
+    selection = "none"
+)
+
+    # # ampliconId
+    # # nodePair
+    # # insSize
+    # nReadPairs = sum(nReadPairs),
+    # nMol = length(unique(molKey)), # beware of possibility of rare molecules with a recurring junction
+    # nMolTypes = length(unique(molKey[isIndexMol])), 
+    # edgeClass = edgeClass[1],
+    # mergeLevel = max(mergeLevel),
+    # size = size[1],
+    # mapQ = max(mapQ),
+    # molTypeKeys = list(unique(molKey[isIndexMol]))
 
 
-
-# filteredMoleculeTypes <- reactive({
-#     moleculeTypes <- moleculeTypes()
-#     moleculeTypes[
-#         getAmpliconKeys(moleculeTypes) %in% getAmpliconKeys(selectedAmplicons()) & 
-#         mergeLevel > 0 & 
-#         grepl(CONSTANTS$svTypes$Deletion, jxnsKey, ignore.case = TRUE) # TODO: deploy dynamic SV type filtering
-#     ]
-# })
-# tableFilteredMoleculeTypes <- reactive({
-#     junctionI <- junctionsTable$rows_selected()
-#     if(!isTruthy(junctionI)) return(filteredMoleculeTypes())
-#     jxnKey <- filteredJunctions()[junctionI, jxnKey]
-#     filteredMoleculeTypes()[sapply(jxnKeys, function(x) jxnKey %in% x)]
-# })
-# junctions <- reactive({
-#     assembleDataTable("junctions", readRDS)
-# })
-# filteredJunctions <- reactive({
-#     junctions <- junctions()
-#     junctions[
-#         getAmpliconKeys(junctions) %in% getAmpliconKeys(selectedAmplicons()) &
-#         hasMerged == TRUE &
-#         svType == CONSTANTS$svTypes$Deletion &  # TODO: deploy dynamic SV type filtering
-#         TRUE
-#     ]
-# })
-
-# moleculeTypesTable <- bufferedTableServer(
-#     "moleculeTypesTable",
-#     id,
-#     input,
-#     tableData = reactive({
-#         tableFilteredMoleculeTypes()[, .SD, .SDcols = c(
-#             "sample",
-#             "amplicon","molTypeId",
-#             "nMols","nReadPairs",        
-#             "isRef","mergeLevel","overlap","tLen",
-#             "molClass","jxnsKey","avgQual","maxIntMapQ",
-#             "nAlns","nJxns"
-#         )]
-#     }),
-#     selection = 'single'
-# )
-# junctionsTable <- bufferedTableServer(
-#     "junctionsTable",
-#     id,
-#     input,
-#     tableData = reactive({
-#         filteredJunctions()[, .SD, .SDcols = c(
-#             "sample",
-#             "amplicon","nMolTypes","nMols","nReadPairs",
-#             "hasMerged","tLens","overlap","jxnBases","callTypes",
-#             "svType","svSize",
-#             "chrom1","side1","pos1",
-#             "chrom2","side2","pos2"
-#         )]
-#     }),
-#     selection = 'single'
-# )

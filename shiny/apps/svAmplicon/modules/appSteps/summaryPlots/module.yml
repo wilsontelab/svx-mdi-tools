@@ -1,7 +1,7 @@
 #----------------------------------------------------------------------
 # ui
 #----------------------------------------------------------------------
-shortLabel:       "Plot Density" # shown on dashboard menu 
+shortLabel:       "Summary Plots" # shown on dashboard menu 
 shortDescription: "Make filtered density plots by amplicon position and SV size." # shown on Overview page
 longLabel:        "Make filtered density plots" # shown at top of appStep page 
 
@@ -30,21 +30,21 @@ packages: # required R packages
 #----------------------------------------------------------------------
 # module-level settings
 #----------------------------------------------------------------------
-settings:
-    SV_Filters:
-        SV_Type:
-            type: selectInput
-            choices:
-                - Deletion
-                - Translocation
-            value: Deletion   
-        Has_Merged:
-            type: radioButtons
-            choices:
-                - "Yes"
-                - "No" 
-                - "All"
-            value: All  
+# settings:
+#     SV_Filters:
+#         SV_Type:
+#             type: selectInput
+#             choices:
+#                 - Deletion
+#                 - Translocation
+#             value: Deletion   
+#         Has_Merged:
+#             type: radioButtons
+#             choices:
+#                 - "Yes"
+#                 - "No" 
+#                 - "All"
+#             value: All  
 #         <settingName>:
 #             type: selectInput
 #             choices:
