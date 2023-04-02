@@ -183,9 +183,14 @@ renderAlignmentPlot <- function(xmax, mmd, i, ampliconic){
         ylab = chrom,
         xaxt = if(ampliconic) "s" else "n"
     )
+    if(mmd$isMerged){
+        len <-mmd$tLen
+        ovlp <- mmd$moleculeType$overlap
+        flank <- (len - ovlp) / 2
+        rect(max(0, flank), ylim[1], min(len, flank + ovlp), ylim[2], col = "grey90", lwd = NA) 
+    }    
     pts <- data.table(x = integer(), y = integer(), col = character(), operation = character())
     midx <- xmax / 2 
-
     pts <- plotReadAlns(pts, mmd, 1, chrom, midx)    
     if(!mmd$isMerged) pts <- plotReadAlns(pts, mmd, 2, chrom, midx)
     pts <- pts[order(unlist(dotStackOrder[pts$operation]))]
