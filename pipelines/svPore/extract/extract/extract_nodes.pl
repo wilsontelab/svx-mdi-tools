@@ -12,7 +12,9 @@ my ($nInputAlns, $nInputMols) = (0) x 20;
 my $perlUtilDir = "$ENV{GENOMEX_MODULES_DIR}/utilities/perl";
 map { require "$perlUtilDir/$_.pl" } qw(workflow numeric);
 map { require "$perlUtilDir/genome/$_.pl" } qw(chroms);
-map { require "$perlUtilDir/sequence/$_.pl" } qw(general); # faidx smith_waterman
+our ($matchScore, $mismatchPenalty, $gapOpenPenalty, $gapExtensionPenalty) = 
+    (1,           -1.5,             -1.5,            -2);
+map { require "$perlUtilDir/sequence/$_.pl" } qw(general smith_waterman); # faidx 
 resetCountFile();
 
 # environment variables
@@ -32,9 +34,9 @@ use vars qw(%chromIndex);
 setCanonicalChroms();
 
 # load additional dependencies
-# require "$GENOMEX_MODULES_DIR/align/dna-long-read/get_indexed_reads.pl";
+require "$GENOMEX_MODULES_DIR/align/dna-long-read/get_indexed_reads.pl";
 $perlUtilDir = "$ENV{MODULES_DIR}/utilities/perl/svPore";
-map { require "$ACTION_DIR/extract/$_.pl" } qw(initialize_windows parse_nodes check_junctions);
+map { require "$ACTION_DIR/extract/$_.pl" } qw(initialize_windows parse_nodes); # check_junctions
 $perlUtilDir = "$ENV{MODULES_DIR}/parse_nodes";
 map { require "$perlUtilDir/$_.pl" } qw(parse_nodes_support);
 initializeWindowCoverage();
@@ -103,7 +105,7 @@ sub parseMolecule {
 
         # process all alignments from one source molecule    
         if($aln[0] eq END_MOLECULE){
-            $molId = $aln[1]; # ($aln[1] * 100) + $childN;            
+            $molId = $aln[1]; # ($aln[1] * 100) + $childN;   
 
             # characterize the path of a single molecule
             @alns = sort { $$a[QSTART] <=> $$b[QSTART] } @alns; # sort alignments in query order (could be right to left on bottom strand)
@@ -130,12 +132,9 @@ sub parseMolecule {
                 push @outAlns,  @alnAlns;
             }
 
-            # examine SV junctions for evidence of chimeric reads
+            # examine SV junctions for evidence of duplex reads
             # adjusts the output arrays as needed
-            my $nEdges = @types;
-            my $nStrands = checkForDuplex($nEdges);
-            # $nEdges = @types; # since checkForDuplex may have modified the molecule data
-            # $nEdges > 1 and checkForChimericJunctions($nEdges); # TODO as needed
+            my $nStrands = checkForDuplex(scalar(@types));
 
             # set junction MAPQ as minimum MAPQ of the two flanking alignments
             fillJxnMapQs();

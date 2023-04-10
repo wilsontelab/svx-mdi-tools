@@ -47,39 +47,104 @@ use constant {
 };
 
 # working variables
-use vars qw($INPUT_DIR $molId @nodes @types @mapQs @sizes @insSizes @outAlns);   
+use vars qw($INPUT_DIR $molId @alns @nodes @types @mapQs @sizes @insSizes @outAlns);   
 # open our $faH, "<", $ENV{GENOME_FASTA} or die "could not open: $ENV{GENOME_FASTA}\n";
 # loadFaidx($ENV{GENOME_FASTA});
 
 # ONT adapter information (also see notes below)
-my $HEAD_ADAPTER = 'AATGTACTTCGTTCAGTTACGTATTGCT'; # TACTTCGTTCAGTTACGTATTGCT ~reproducible at QSTART, further 5' end increasingly variable
-my $TAIL_ADAPTER = 'GCAATACGTAACTGAACGAAGT';
-my $adapterTarget = $TAIL_ADAPTER.$HEAD_ADAPTER;
+my $ADAPTER_CORE = "ACTTCGTTCAGTTACGTATTGC"."T"; # duplex portion of the adapter; last T matches the one-base A-tail
+my $ADAPTER_CORE_RC = $ADAPTER_CORE;             # ADAPTER_CORE is fused to 5' genomic ends, ADAPTER_CORE_RC is fused to 3' ends
+rc(\$ADAPTER_CORE_RC);   
 
-# check whether the molecule is consistent with a duplex foldback inversion
-# if yes, keep first half only and mark molecules as duplex
-# is most sensitive and acceptable to reject any inversion with reverse-complement overlap between its flanking alignments
-#   ----->
-#         | V
-#   <-----
-# strictly speaking we expect symmetry, but cannot count on complete alignment of both flanks
-# per above, would expect adapters in the junction, but exploration says they are rarely there
-sub checkForDuplex {
-    my ($nEdges) = @_;
-    $nEdges > 1 or return 1;
-    for(my $i = 0; $i <= $#types; $i++){
-        $types[$i] eq INVERSION or next;     
-        if($outAlns[$i - 1][RSTART] <= $outAlns[$i + 1][REND] and
-           $outAlns[$i + 1][RSTART] <= $outAlns[$i - 1][REND]){
-            my $j = $i - 1;
-            @types = @types[0..$j]; # no need to splice @nodes, they'll never print
-            @mapQs = @mapQs[0..$j];
-            @sizes = @sizes[0..$j];
-            @insSizes = @insSizes[0..$j];
-            return 2;
-        }
-    }
-    return 1;
+my @ADAPTER_CORE = split("", $ADAPTER_CORE);
+my @ADAPTER_CORE_RC = split("", $ADAPTER_CORE_RC);
+
+my $CORE_LEN = length($ADAPTER_CORE);
+my $padding = 10;
+my $outsideLen = $CORE_LEN + $padding;
+my $maxCheckLen = $CORE_LEN + 2 * $padding;
+# my $HEAD_ADAPTER = 'AATGTACTTCGTTCAGTTACGTATTGCT'; # TACTTCGTTCAGTTACGTATTGC|T ~reproducible at QSTART, further 5' end increasingly variable
+# my $TAIL_ADAPTER = 'GCAATACGTAACTGAACGAAGT';
+# my $adapterTarget = $TAIL_ADAPTER.$HEAD_ADAPTER;
+
+sub trainAdapterClassifier {
+    # collect the read bases
+    my @read = getIndexedRead($molId); 
+    my $readLen = length($read[1]);
+
+    # collect reference coordinates in ref and query
+    my $i5 = 0;
+    my $i3 = $#outAlns;
+    # my $isTop1   = $outAlns[$i][STRAND] eq "+" ? 1 : 0;
+    # my $isTop2   = $outAlns[$j][STRAND] eq "+" ? 1 : 0;
+    my $qryPos5 = $outAlns[$i5][QSTART];
+    # my $qryPos12 = $outAlns[$i][QEND];
+    # my $qryPos21 = $outAlns[$j][QSTART];        
+    my $qryPos3 = $outAlns[$i3][QEND];     
+    # my $refPos1L = $outAlns[$i][RSTART]; 
+    # my $refPos1R = $outAlns[$i][REND];
+    # my $refPos2L = $outAlns[$j][RSTART];
+    # my $refPos2R = $outAlns[$j][REND];
+    # my $qry1 = substr($read[1], $qryPos11, $qryPos12 - $qryPos11);
+    # my $qry2 = substr($read[1], $qryPos21, $qryPos22 - $qryPos21);
+    # my $qry1 = substr($read[1], $qryPos11, $qryPos12 - $qryPos11);
+    # my $qry2 = substr($read[1], $qryPos21, $qryPos22 - $qryPos21);
+
+    my ($startPos5, $length5, $outsideLen5) = ($qryPos5 - $outsideLen, $maxCheckLen, $outsideLen);
+    $startPos5 < 0 and ($startPos5, $length5, $outsideLen5) = (0, $qryPos5 + $padding, $qryPos5);
+    my $check5 = substr($read[1], $startPos5, $length5);
+    my ($sw5, $score5, $qStart5, $qEnd5, $rStart5, $rEnd5) = smith_waterman($check5, $ADAPTER_CORE, undef, undef, 1);
+    my $start5C = $qryPos5 + $maxCheckLen;
+    my $check5C = substr($read[1], $start5C, $maxCheckLen);
+    my ($sw5C, $score5C, $qStart5C, $qEnd5C, $rStart5C, $rEnd5C) = smith_waterman($check5C, $ADAPTER_CORE, undef, undef, 1);
+    # print "\n\n"."$check5 ($qryPos5, $startPos5, $length5, $score5)\n";  
+    # if($score5){
+    #     my @map = (
+    #         (" ") x ($rStart5 || 0),
+    #         map { length($_) > 1 ? "*" : $_  } @$sw5
+    #     );
+    #     my @match = map { $map[$_] eq $ADAPTER_CORE[$_] ? "|" : " " } 0..$#map;
+    #     print "$ADAPTER_CORE\n".join("", @match)."\n".join("", @map)."\n";
+    # }
+
+    my $startPos3 = $qryPos3 - $padding;
+    my $endPos3 = min($readLen, $qryPos3 + $outsideLen);
+    my $length3 = $endPos3 - $startPos3; 
+    my $check3 = substr($read[1], $startPos3, $length3);
+    my ($sw3, $score3, $qStart3, $qEnd3, $rStart3, $rEnd3) = smith_waterman($check3, $ADAPTER_CORE_RC, undef, undef, 1);
+    my $start3C = $qryPos3 - $maxCheckLen * 2;
+    my $check3C = substr($read[1], $start3C, $maxCheckLen);
+    my ($sw3C, $score3C, $qStart3C, $qEnd3C, $rStart3C, $rEnd3C) = smith_waterman($check3C, $ADAPTER_CORE_RC, undef, undef, 1);
+    # print "...\n"."$check3 ($readLen, $qryPos3, $startPos3, $endPos3, $length3, $score3)\n";
+    # if($score3){
+    #     my @map = (
+    #         (" ") x ($rStart3 || 0),
+    #         map { length($_) > 1 ? "*" : $_  } @$sw3
+    #     );
+    #     my @match = map { $map[$_] eq $ADAPTER_CORE_RC[$_] ? "|" : " " } 0..$#map;
+    #     print "$ADAPTER_CORE_RC\n".join("", @match)."\n".join("", @map)."\n";
+    # }   
+
+    print join("\t", 
+        $alns[0][QSTART], 
+        $score5, 
+        scalar(@$sw5),
+        defined $qStart5  ? $qStart5  - $outsideLen5 : "NA",
+        defined $qEnd5    ? $qEnd5    - $outsideLen5 : "NA",
+        $score5C, 
+        scalar(@$sw5C),
+        defined $qStart5C ? $qStart5C - $outsideLen  : "NA",
+        defined $qEnd5C   ? $qEnd5C   - $outsideLen  : "NA",
+        $alns[0][QLEN] - $alns[0][QEND], 
+        $score3, 
+        scalar(@$sw3), 
+        defined $qStart3 ? $qStart3 - $padding : "NA",
+        defined $qEnd3   ? $qEnd3   - $padding : "NA",
+        $score3C, 
+        scalar(@$sw3C), 
+        defined $qStart3C ? $qStart3C - $padding : "NA",
+        defined $qEnd3C   ? $qEnd3C   - $padding : "NA"
+    ), "\n";
 }
 
 # check each junction for the potential that it is a chimera

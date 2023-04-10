@@ -7,7 +7,7 @@ use warnings;
 #   doesn't process outer clips, they are largely irrelevant and untrustworthy in being adapters and/or low quality bases
 #   tracks strands, not sides, to allow path tracking across multiple SV junctions in a single molecule
 #   has no sense of canonical strands, since an SV might occur in different parts/orientations of a path across multiple molecules
-#   reports insertions as a positive _insertion size_, microhomology as negative (as opposed to inserttion = negative _overlap size_ elsewhere)
+#   reports insertions as a positive _insertion size_, microhomology as negative (as opposed to insertion = negative _overlap size_ elsewhere)
 
 # constants
 use constant {
@@ -39,7 +39,9 @@ use constant {
 };
 
 # working variables
-use vars qw($MIN_SV_SIZE @alnNodes @alnTypes @alnMapQs @alnSizes @alnInsSizes @alnAlns);   
+use vars qw($MIN_SV_SIZE 
+            @alnNodes @alnTypes @alnMapQs @alnSizes @alnInsSizes @alnAlns
+            @nodes @types @mapQs @sizes @insSizes @outAlns);   
 my $minCigarSvDigits = length($MIN_SV_SIZE);
 
 #===================================================================================================
@@ -71,7 +73,7 @@ sub commitAlignmentNodes { # add continguous "A" alignment segment to molecule c
     push @alnTypes,    ALIGNMENT; 
     push @alnMapQs,    $$aln[MAPQ];
     push @alnSizes,    $$aln[REND] - $$aln[RSTART];
-    push @alnInsSizes, 0;
+    push @alnInsSizes, join("\t", 0, $$aln[QSTART], $$aln[QEND]);
     push @alnAlns,     $aln;
 }
 #---------------------------------------------------------------------------------------------------
@@ -83,7 +85,7 @@ sub processSplitJunction {
     {
         jxnType => $jxnType,
         svSize  => getSvSize($jxnType, $nodePos1, $nodePos2),
-        insSize => $$aln2[QSTART] - $$aln1[QEND] # i.e., microhomology is a negative number for svPore
+        insSize => join("\t", $$aln2[QSTART] - $$aln1[QEND], "NA", "NA") # i.e., microhomology is a negative number for svPore
     }
 }
 #===================================================================================================
@@ -113,6 +115,36 @@ sub getSvSize { # always a positive integer, zero if NA
      $jxnType eq UNKNOWN or 
      $jxnType eq ALIGNMENT) and return 0;
     abs($nodePos2 - $nodePos1);
+}
+#===================================================================================================
+
+#===================================================================================================
+# check whether a molecule is consistent with a duplex foldback inversion
+# if yes, keep first half only and mark molecules as duplex
+# is most sensitive and acceptable to reject any inversion with reverse-complement overlap between its flanking alignments
+#   ----->
+#         | V
+#   <-----
+# strictly speaking we expect symmetry, but cannot count on complete alignment of both flanks
+# we might expect adapters in the junction, but exploration says they may not be there
+# and foldback inversions as so supsect as artifacts that we maintain high sensivitiy for purging them
+#---------------------------------------------------------------------------------------------------
+sub checkForDuplex {
+    my ($nEdges) = @_;
+    $nEdges > 1 or return 1;
+    for(my $i = 0; $i <= $#types; $i++){
+        $types[$i] eq INVERSION or next;     
+        if($outAlns[$i - 1][RSTART] <= $outAlns[$i + 1][REND] and
+           $outAlns[$i + 1][RSTART] <= $outAlns[$i - 1][REND]){
+            my $j = $i - 1;
+            @types = @types[0..$j]; # no need to splice @nodes, they'll never print
+            @mapQs = @mapQs[0..$j];
+            @sizes = @sizes[0..$j];
+            @insSizes = @insSizes[0..$j];
+            return 2; # i.e., two strands = duplex
+        }
+    }
+    return 1; # i.e., one strand = simplex
 }
 #===================================================================================================
 

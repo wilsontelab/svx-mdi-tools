@@ -12,6 +12,7 @@ actions:
             - genomex-mdi-tools//base
             - genomex-mdi-tools//genome
             - r-4.2
+            - adapterTrimming
         optionFamilies:
             - genomex-mdi-tools//genome
     download:
@@ -37,11 +38,15 @@ actions:
                 total-ram: 16G
             recommended: 
                 n-cpu: 8
-                ram-per-cpu: 2G
+                ram-per-cpu: 4G
         job-manager:
             recommended:
                 time-limit: 4:00:00
         description: "pull molecules that support an SV junction and create a coverage map"
+condaFamilies:
+    adapterTrimming:
+        dependencies:
+            - r-e1071
 optionFamilies:
     sv-finding:
         options:
