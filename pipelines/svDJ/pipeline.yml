@@ -1,0 +1,68 @@
+---
+pipeline:
+    name: svDJ
+    description: "Analysis of V(D)J recombination via nanopore sequencing of long PCR amplicons"
+    version: v0.0.0
+suiteVersions:
+    genomex-mdi-tools: main 
+actions:
+    _global:  
+        environment: svDJ  
+        condaFamilies:
+            - genomex-mdi-tools//base
+            - genomex-mdi-tools//genome
+            - r-4.2
+        optionFamilies:
+            - genomex-mdi-tools//genome
+            - genomex-mdi-tools//name-bam-file
+            - genomex-mdi-tools//bam-format
+    # align: # TODO: extend dna-long-read to do simple alignment to BAM
+    #     order: 1
+    #     module: genomex-mdi-tools//align/dna-long-read
+    extract:
+        order: 2
+        optionFamilies:
+            # - genomex-mdi-tools//fastq-dir
+            # - genomex-mdi-tools//read-filtering
+            # - sv-finding
+        resources:
+            required:
+                total-ram: 16G
+            recommended: 
+                n-cpu: 8
+                ram-per-cpu: 4G
+        job-manager:
+            recommended:
+                time-limit: 4:00:00
+        description: "analyze and group molecules representing unique V(D)J junctions"
+condaFamilies:
+optionFamilies:
+    # sv-finding:
+    #     options:
+    #         window-power:
+    #             order: 1
+    #             short: P
+    #             type: integer
+    #             required: false
+    #             default: 2
+    #             description: "scan for SVs at a window size resolution of 10^--window-power bp"   
+    #         sv-size-power:
+    #             order: 2
+    #             short: Z
+    #             type: integer
+    #             required: false
+    #             default: 3
+    #             description: "only report SVs >= 10^--sv-size-power bp; smaller indels hide within A segments" 
+# package:
+#     collate: # the pipeline action after which a data package should assembled
+#         uploadType: svAmplicon # a signal to the Stage 2 framework regarding the package contents
+#         files:
+#             manifestFile:
+#                 type: comma-delimited
+#                 manifestType: simple
+#                 file: $COLLATE_PREFIX.manifest.csv
+# container:
+#     supported: false    # set to true if you maintain a container registry for this pipeline [false]
+#     registry:  ghcr.io  # domain name of your OCI-compatible, oras-accessible, container registry [ghcr.io]
+#     owner:     wilsontelab # REQUIRED: the name of the owner, e.g., user or organization, at 'registry'
+#     installer: apt-get  # the installer program used by the container OS, typically apt-get or yum [apt-get]

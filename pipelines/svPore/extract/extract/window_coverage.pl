@@ -18,8 +18,8 @@ use constant {
     # _MAPQ => 4,
     # SV_SIZE => 5,
     # INSERT_SIZE => 6,
-    # QSTART => 7,
-    # QEND => 8,
+    # XSTART => 7,
+    # XEND => 8,
     # N_STRANDS => 9,
     #-------------
     ALIGNMENT     => "A", # the single type for a contiguous aligned segment

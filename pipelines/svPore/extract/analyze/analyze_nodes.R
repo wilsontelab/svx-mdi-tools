@@ -22,7 +22,8 @@ checkEnvVars(list(
         'NODES_FILE',
         'SEQUENCES_FILE',
         'COVERAGE_FILE',
-        'PLOT_PREFIX'
+        'PLOT_PREFIX',
+        'PLOTS_DIR'
     ),
     integer = c(
         'N_CPU'
@@ -33,9 +34,9 @@ checkEnvVars(list(
 sourceScripts(rUtilDir, 'utilities')
 rUtilDir <- file.path(env$GENOMEX_MODULES_DIR, 'utilities', 'R')
 sourceScripts(file.path(rUtilDir, 'sequence'),   c('general', 'IUPAC', 'smith_waterman'))
-sourceScripts(file.path(env$ACTION_DIR, 'analyze'), c(
-    'svm'
-))
+sourceScripts(file.path(rUtilDir, 'genome'),   c('chroms'))
+sourceScripts(file.path(env$ACTION_DIR, 'analyze'), c('svm','plot'))
+setCanonicalChroms()
 #-------------------------------------------------------------------------------------
 # set some options
 setDTthreads(env$N_CPU)
@@ -59,16 +60,19 @@ getmode <- function(v) {
    uniqv <- unique(v)
    uniqv[which.max(tabulate(match(v, uniqv)))]
 }
-parseSignedWindow <- function(window) {
+parseSignedWindow <- function(window, side) {
     strand <- ifelse(window > 0, "+", "-")
     window <- abs(window)
     chromIndex <- bitwShiftR(window, 24)
-    data.table(
+    dt <- data.table(
         chromIndex  = chromIndex,
         # chrom       = chromIndex ? $revChromIndex{$chromIndex} : "?",
+        chrom       = unlist(revChromIndex[chromIndex]),
         windowIndex = bitwAnd(window, 2**24 - 1),
         strand      = strand
     )
+    names(dt) <- paste0(names(dt), side)
+    dt
 }
 edgeTypes <- list(
     ALIGNMENT     = "A", # the single type for a contiguous aligned segment
@@ -84,137 +88,193 @@ edgeTypes <- list(
     REJECTED_INDEL = "R",
     FUSED_MERGE_FAILURE_REJECTED_INDEL = "Q"
 )
-#=====================================================================================
+edgeTypeColors <- list(
+    "A" = rgb(0, 0, 0, 0.1), # the single type for a contiguous aligned segment
 
-#=====================================================================================
-message("  loading nodes")
-nodes <- fread(
-    env$NODES_FILE,
-    col.names = c(
-        "qName", # extract nodes fields
-        "node1",
-        "node2",
-        "edgeType",
-        "mapQ",
-        "eventSize",
-        "insertSize",
-        "qStart",
-        "qEnd",
-        "nStrands"
-    ),
-    colClasses = c(
-        "character", # PAF fields
-        "integer",
-        "integer",
-        "character",
-        "integer",
-        "integer",
-        "integer",
-        "integer",
-        "integer",
-        "integer"
-    )
-)
-message("  loading reads")
-reads <- fread(
-    env$SEQUENCES_FILE,
-    col.names = c(
-        "molType", # extract nodes fields
-        "qName",
-        "qSeq"
-    ),
-    colClasses = c(
-        "character", # PAF fields
-        "character",
-        "character"
-    )
+    "T" = rgb(1, 0, 0, 0.1), # edge/junction types (might be several per source molecule)
+    "V" = rgb(0, 1, 0, 0.1),
+    "U" = rgb(1, 1, 0, 0.1),
+    "D" = rgb(0, 0, 1, 0.1),
+
+    "?" = rgb(0, 0, 0, 0.1),
+    "I" = rgb(0, 0, 0, 0.1), 
+    "M" = rgb(0, 0, 0, 0.1),
+    "P" = rgb(0, 0, 0, 0.1),
+    "F" = rgb(0, 0, 0, 0.1),
+    "R" = rgb(0, 0, 0, 0.1),
+    "Q" = rgb(0, 0, 0, 0.1)
 )
 #=====================================================================================
 
 #=====================================================================================
-message("  grouping and counting candidate SV junctions")
-nodes[, ":="(
-    edge = 1:.N # number the edges in each molecule; alignments are odd, junctions are even
-), by = .(qName)]
-nodes[edgeType != edgeTypes$ALIGNMENT, junction := {
-    getPathSignature(c(node1, node2)) # oriented to the canonical strand for comparing molecules
-}, by = .(qName, edge)]
-nodes <- merge(
-    nodes, 
-    nodes[edgeType != edgeTypes$ALIGNMENT, .(
-        nInstances = .N, # how many times this junction was encountered in any path
-        nMolecules = length(unique(qName)) # how many unique molecules bore this junction (some may have crossed it more than once)
-    ), by = .(junction)], 
-    by = "junction", 
-    all.x = TRUE
-)
-setkey(nodes, qName, edge)
+# message("  loading nodes")
+# nodes <- fread(
+#     env$NODES_FILE,
+#     col.names = c(
+#         "qName", # extract nodes fields
+#         "node1",
+#         "node2",
+#         "edgeType",
+#         "mapQ",
+#         "eventSize",
+#         "insertSize",
+#         "qStart",
+#         "qEnd",
+#         "nStrands"
+#     ),
+#     colClasses = c(
+#         "character", # PAF fields
+#         "integer",
+#         "integer",
+#         "character",
+#         "integer",
+#         "integer",
+#         "integer",
+#         "integer",
+#         "integer",
+#         "integer"
+#     )
+# )
+# message("  loading reads")
+# reads <- fread(
+#     env$SEQUENCES_FILE,
+#     col.names = c(
+#         "molType", # extract nodes fields
+#         "qName",
+#         "qSeq"
+#     ),
+#     colClasses = c(
+#         "character", # PAF fields
+#         "character",
+#         "character"
+#     )
+# )
 #=====================================================================================
 
 #=====================================================================================
-message("  running adapter splitting using support vector machines")
-trainingSet <- extractSvmTrainingSet(nodes, reads)
-svms <- trainAdapterClassifiers(trainingSet)
-jxnParameters <- extractJunctionSvmParameters(nodes, reads)
+# message("  grouping and counting candidate SV junctions")
+# nodes[, ":="(
+#     edge = 1:.N # number the edges in each molecule; alignments are odd, junctions are even
+# ), by = .(qName)]
+# nodes[edgeType != edgeTypes$ALIGNMENT, junction := {
+#     getPathSignature(c(node1, node2)) # oriented to the canonical strand for comparing molecules
+# }, by = .(qName, edge)]
+# nodes <- merge(
+#     nodes, 
+#     nodes[edgeType != edgeTypes$ALIGNMENT, .(
+#         nInstances = .N, # how many times this junction was encountered in any path
+#         nMolecules = length(unique(qName)) # how many unique molecules bore this junction (some may have crossed it more than once)
+#     ), by = .(junction)], 
+#     by = "junction", 
+#     all.x = TRUE
+# )
+# setkey(nodes, qName, edge)
+#=====================================================================================
+
+#=====================================================================================
+
+dir <- "/nfs/turbo/path-wilsonte-turbo/mdi/wilsontelab/greatlakes/data-scripts/glover/svPore"
+trainingSetRds      <- file.path(dir, "debug.trainingSet.rds")
+svmsRds             <- file.path(dir, "debug.svms.rds")
+jxnParametersRds    <- file.path(dir, "debug.jxnParameters.rds")
+nodesRds            <- file.path(dir, "debug.nodes.rds")
+
+# message("  running adapter splitting using support vector machines")
+# trainingSet <- extractSvmTrainingSet(nodes, reads)
+# svms <- trainAdapterClassifiers(trainingSet)
+# jxnParameters <- extractJunctionSvmParameters(nodes, reads)
+
+# saveRDS(trainingSet,    trainingSetRds)
+# saveRDS(svms,           svmsRds)
+# saveRDS(jxnParameters,  jxnParametersRds)
+# saveRDS(nodes,          nodesRds)
+trainingSet     <- readRDS(trainingSetRds)
+svms            <- readRDS(svmsRds)
+jxnParameters   <- readRDS(jxnParametersRds)
+nodes           <- readRDS(nodesRds)
+
+expanded1 <- nodes[, parseSignedWindow(node1, 1)]
+expanded2 <- nodes[, parseSignedWindow(node2, 2)]
+nodes <- cbind(nodes, expanded1, expanded2)
+
 adapterCheck <- checkJunctionsForAdapters(svms, jxnParameters)
+
+dropCols <- names(adapterCheck)[!(names(adapterCheck) %in% c("qName","edge"))]
+nodes <- nodes[, .SD, .SDcols = names(nodes)[!(names(nodes) %in% dropCols)]]
+
 nodes <- merge(nodes, adapterCheck, by = c("qName","edge"), all.x = TRUE)
 nodes[, isChimeric := hasAdapter3 | hasAdapter5]
 
-dir <- "/nfs/turbo/path-wilsonte-turbo/mdi/wilsontelab/greatlakes/data-scripts/glover/svPore"
-nodesRds <- file.path(dir, "debug.nodes.rds")
-trainingRds <- file.path(dir, "debug.training.rds")
-saveRDS(nodes, nodesRds)
-saveRDS(trainingSet, trainingRds)
-nodes <- readRDS(nodesRds)
-trainingSet <- readRDS(trainingRds)
+# saveRDS(nodes,          nodesRds)
+# nodes           <- readRDS(nodesRds)
 
-plotAdapterMatches(trainingSet, nodes, 5, "end")
-plotAdapterMatches(trainingSet, nodes, 3, "start")
+sizeThreshold <- 10000
 
-rm(reads, trainingSet, jxnParameters, adapterCheck)
+highQualitySvNodes <- nodes[edgeType != edgeTypes$ALIGNMENT & mapQ >= 50]
+trueSvs <- highQualitySvNodes[(edgeType == edgeTypes$TRANSLOCATION | eventSize - abs(insertSize) >= 1000) & 
+                               chrom1 != "chrM" & chrom2 != "chrM"]
+notChimericSvs <- trueSvs[isChimeric == FALSE]
+largeSvs <- trueSvs[edgeType == edgeTypes$TRANSLOCATION | abs(eventSize) >= sizeThreshold]
+largeSingletons <- largeSvs[nInstances == 1]
+largeMultiples  <- largeSvs[nInstances >= 3]
+junctions <- trueSvs[, .(
+    nInstances = .N, # how many times this junction was encountered in any path
+    fractionChimeric = sum(isChimeric) / .N, # how many of those times it was chimeric, i.e., has at least one found adapter
+    edgeType = edgeType[1]
+), by = .(junction)]
+largeJunctions <- largeSvs[, .(
+    nInstances = .N, # how many times this junction was encountered in any path
+    fractionChimeric = sum(isChimeric) / .N, # how many of those times it was chimeric, i.e., has at least one found adapter
+    edgeType = edgeType[1]
+), by = .(junction)]
 
+renderPlot("insertSize_vs_eventSize", highQualitySvNodes, suffix = "All")
+renderPlot("insertSize_vs_eventSize", trueSvs, suffix = "True")
+renderPlot("insertSize_vs_eventSize", notChimericSvs, suffix = "Achimeric")
+renderPlot("eventSizeDistribution", highQualitySvNodes, suffix = "All")
+renderPlot("eventSizeDistribution", trueSvs, suffix = "True")
+renderPlot("eventSizeDistribution", notChimericSvs, suffix = "Achimeric")
 
-# print(nodes[edgeType != edgeTypes$ALIGNMENT & mapQ == 60, .N, by = .(isChimeric)][order(isChimeric)])
-# print(nodes[edgeType != edgeTypes$ALIGNMENT & mapQ == 60 & nInstances == 1, .N, by = .(isChimeric)][order(isChimeric)])
-# print(nodes[edgeType != edgeTypes$ALIGNMENT & mapQ == 60 & nInstances == 2, .N, by = .(isChimeric)][order(isChimeric)])
-# print(nodes[edgeType != edgeTypes$ALIGNMENT & mapQ == 60 & nInstances == 3, .N, by = .(isChimeric)][order(isChimeric)])
-# print(nodes[edgeType != edgeTypes$ALIGNMENT & mapQ == 60 & nInstances == 4, .N, by = .(isChimeric)][order(isChimeric)])
+renderPlot("fractionChimeric_vs_eventSize", highQualitySvNodes, suffix = "All")
+renderPlot("fractionChimeric_vs_eventSize", trueSvs, suffix = "True")
 
+renderPlot("fractionChimeric_vs_insertSize", highQualitySvNodes, suffix = "All")
+renderPlot("fractionChimeric_vs_insertSize", trueSvs, suffix = "True")
+renderPlot("fractionChimeric_vs_insertSize", largeSingletons, suffix = "Large-Singleton")
 
-# nodes[, , by = .(junction)]
+stop("XXXXXXXXXXXXXXX")
 
-# junctions <- nodes[edgeType != edgeTypes$ALIGNMENT & mapQ >= 50, .(
-#     nInstances = .N, # how many times this junction was encountered in any path
-#     fractionChimeric = sum(isChimeric) / .N # how many of those times it was chimeric, i.e., has at least one found adapter
-# ), by = .(junction)]
-# junctionCounts <- junctions[nInstances >= 3 & nInstances <= 15, .(
-#     nJunctions = .N,
-#     nInstances = mean(nInstances)
-# ), by = .(fractionChimeric)]
-# print(junctionCounts[order(fractionChimeric)])
-# print(junctions[fractionChimeric == 0, .N, by = .(nInstances)][order(nInstances)])
+renderPlot("fractionChimeric_vs_nInstances", junctions, suffix = "True")
+renderPlot("fractionChimeric_vs_nInstances", largeJunctions, suffix = "Large")
 
-# junctionCounts <- junctions[, .(
-#     nJunctions = .N,
-#     fractionChimeric = mean(fractionChimeric)
-# ), by = .(nInstances)]
-# # print(junctionCounts[order(nInstances)])
+renderPlot("adapterScore_vs_position", suffix = "end5",   trainingSet, highQualitySvNodes, 5)
+renderPlot("adapterScore_vs_position", suffix = "start3", trainingSet, highQualitySvNodes, 3)
 
+noInsert.notChimeric <- largeSingletons[insertSize < 5  & isChimeric == FALSE]
+noInsert.chimeric    <- largeSingletons[insertSize < 5  & isChimeric == TRUE]
+insert.chimeric      <- largeSingletons[insertSize >= 5 & isChimeric == TRUE]
+multiple.notChimeric <- largeMultiples[isChimeric == FALSE]
+multiple.chimeric    <- largeMultiples[isChimeric == TRUE]
 
-# pngFile <- file.path(dir, "debug.test.png")
-# png(pngFile, width = 3, height = 3, units = "in", pointsize = 7, res = 600, type = "cairo")
-# plot(
-#     jitter(junctions$nInstances, amount = 0.5), 
-#     jitter(junctions$fractionChimeric, amount = 0.1), 
-#     xlab = "nInstances",
-#     ylab = "fractionChimeric",
-#     xlim = c(0, 30),
-#     ylim = c(-0.1, 1.1),
-#     pch = 19, cex = 0.25, 
-#     col = rgb(0, 0, 1, 0.1)
-# )
-# dev.off()
+print(nrow(nodes))
+print(nrow(highQualitySvNodes))
+print(nrow(largeMultiples))
+print(nrow(multiple.notChimeric))
+print(nrow(multiple.chimeric))
 
+renderPlot("adapterScore_vs_position", suffix = "end5.noInsert.notChimeric",   trainingSet, noInsert.notChimeric, 5)
+renderPlot("adapterScore_vs_position", suffix = "end5.noInsert.chimeric",      trainingSet, noInsert.chimeric,    5)
+renderPlot("adapterScore_vs_position", suffix = "end5.insert.chimeric",        trainingSet, insert.chimeric,      5)
+renderPlot("adapterScore_vs_position", suffix = "end5.multiple.notChimeric",   trainingSet, multiple.notChimeric, 5)
+renderPlot("adapterScore_vs_position", suffix = "end5.multiple.chimeric",      trainingSet, multiple.chimeric,    5)
+
+renderPlot("adapterScore_vs_position", suffix = "start3.noInsert.notChimeric", trainingSet, noInsert.notChimeric, 3)
+renderPlot("adapterScore_vs_position", suffix = "start3.noInsert.chimeric",    trainingSet, noInsert.chimeric,    3)
+renderPlot("adapterScore_vs_position", suffix = "start3.insert.chimeric",      trainingSet, insert.chimeric,      3)
+renderPlot("adapterScore_vs_position", suffix = "start3.multiple.notChimeric",   trainingSet, multiple.notChimeric, 3)
+renderPlot("adapterScore_vs_position", suffix = "start3.multiple.chimeric",      trainingSet, multiple.chimeric,    3)
+
+# rm(reads, trainingSet, jxnParameters, adapterCheck)
 
 # nodes <- merge(
 #     nodes, 
@@ -241,9 +301,6 @@ rm(reads, trainingSet, jxnParameters, adapterCheck)
 #     }
 # }, by = .(qName)]
 
-# str(nodes)
-# str(nodes[edgeType != "A"])
-# str(nodes[!is.na(isChimeric)])
 #=====================================================================================
 
 

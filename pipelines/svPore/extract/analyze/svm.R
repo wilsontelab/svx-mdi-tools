@@ -11,11 +11,14 @@
 #       the quality of the best match of the sequence to the adapter, e.g., an alignment score
 #       the location/position of the match within the sequence
 #       together, these allow partial matches but require that they be in a reasonable postion
-# use the SVMS to predict adapter sequences at clips, where
-#   5'Adapter/----------/3'Adapter...SV_junction...5'Adapter/----------/3'Adapter
-#   the alignment query-proximal to the candidate SV junction might clip at a 3' adapter
-#   the alignment query-distal   to the candidate SV junction might clip at a 5' adapter
-# reject a junction if either adapter matches by removing it from the nodes list
+#   use the SVMs to predict adapter sequences at clips, where
+#       5'Adapter/----------/3'Adapter...SV_junction...5'Adapter/----------/3'Adapter
+#       the alignment query-proximal to the candidate SV junction might clip at a 3' adapter
+#       the alignment query-distal   to the candidate SV junction might clip at a 5' adapter
+#   to call a junction as having an adapter, require that it have an SVM hit plus either:
+#       a minimal unaligned insertion size, or
+#       an unambiguously high SW score
+#   reject a junction if either adapter matches at or near the unaligned insertion
 
 # ONT adapter information
 ADAPTER_CORE <- "ACTTCGTTCAGTTACGTATTGCT" # duplex portion of the adapter; last T matches the one-base A-tail
@@ -170,8 +173,9 @@ extractJunctionSvmParameters <- function(nodes, reads){
         x3 <- runAdapterSW(x3, read, ADAPTER_CORE_RC) 
         data.table(
             # unique identifier for this junction (could be more than one per qName)
-            qName = node[, qName],
-            edge  = node[, edge],
+            qName      = node[, qName],
+            edge       = node[, edge],
+            insertSize = node[, insertSize],
             # downstream of the junction, expected match to adapter
             score5      = x5$sw$bestScore, 
             nBases5     = length(x5$sw$qryOnRef),
@@ -189,6 +193,10 @@ extractJunctionSvmParameters <- function(nodes, reads){
 # use the SVMs to determine whether SV adapter alignments are sufficient evidence to call as an adapter
 checkJunctionsForAdapters <- function(svms, d){
     message("    running adapter predictions on SV junctions")
+    predictAdapter <- function(endN, insertSize, dd){
+        scoreThreshold <- if(endN == "3") 7 else 8 # determined empirically based on ligation kit adapters
+        predict(svms[[endN]], dd) == TRUE & (insertSize >= 5 | dd$score > scoreThreshold)
+    }
     data.table(
         qName  = d$qName,
         edge   = d$edge,
@@ -196,37 +204,7 @@ checkJunctionsForAdapters <- function(svms, d){
         score5 = d$score5,
         start3 = d$start3,
         end5   = d$end5,
-        hasAdapter3 = predict(svms[["3"]], d[, .(score = score3, nBases = nBases3, start = start3, end = end3)]) == TRUE,        
-        hasAdapter5 = predict(svms[["5"]], d[, .(score = score5, nBases = nBases5, start = start5, end = end5)]) == TRUE
+        hasAdapter3 = predictAdapter("3", d$insertSize, d[, .(score = score3, nBases = nBases3, start = start3, end = end3)]),        
+        hasAdapter5 = predictAdapter("5", d$insertSize, d[, .(score = score5, nBases = nBases5, start = start5, end = end5)])
     )
-}
-
-# create two plots for visualizing the results of adapter splitting
-plotAdapterMatches <- function(trainingSet, nodes, endN, xcol){
-    trainCol    <- paste0("trainable",  endN)
-    xcol        <- paste0(xcol,         endN)
-    ycol        <- paste0("score",      endN)
-    predictCol  <- paste0("hasAdapter", endN)
-    trainingSet <- trainingSet[trainingSet[[trainCol]] == TRUE]
-
-    nodes <- nodes[sample(.N, min(500, .N))]
-
-    pngFile <- paste(env$PLOT_PREFIX, "adapters", endN, "png", sep = ".")
-    png(pngFile, width = 3, height = 3, units = "in", pointsize = 7, res = 600, type = "cairo")
-    plot(
-        jitter(trainingSet[[xcol]], amount = 0.5), 
-        jitter(trainingSet[[ycol]], amount = 0.5), 
-        main = "Training set plus 500 SV junctions",
-        xlab = xcol,
-        ylab = ycol,
-        pch = 19, cex = 0.25, 
-        col = "grey"
-    )
-    points(
-        jitter(nodes[[xcol]], amount = 0.5), 
-        jitter(nodes[[ycol]], amount = 0.5), 
-        pch = 19, cex = 0.25, 
-        col = ifelse(nodes[[predictCol]] == TRUE, "red3", "blue")
-    )
-    dev.off()
 }

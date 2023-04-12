@@ -73,7 +73,11 @@ sub commitAlignmentNodes { # add continguous "A" alignment segment to molecule c
     push @alnTypes,    ALIGNMENT; 
     push @alnMapQs,    $$aln[MAPQ];
     push @alnSizes,    $$aln[REND] - $$aln[RSTART];
-    push @alnInsSizes, join("\t", 0, $$aln[QSTART], $$aln[QEND]);
+    push @alnInsSizes, join(
+        "\t", 
+        0,                         # insSize not applicable for alignments
+        $$aln[QSTART], $$aln[QEND] # alignments carry query positions in xStart and xEnd
+    );
     push @alnAlns,     $aln;
 }
 #---------------------------------------------------------------------------------------------------
@@ -85,7 +89,11 @@ sub processSplitJunction {
     {
         jxnType => $jxnType,
         svSize  => getSvSize($jxnType, $nodePos1, $nodePos2),
-        insSize => join("\t", $$aln2[QSTART] - $$aln1[QEND], "NA", "NA") # i.e., microhomology is a negative number for svPore
+        insSize => join(
+            "\t", 
+            $$aln2[QSTART] - $$aln1[QEND],  # i.e., microhomology is a negative number for svPore
+            $nodePos1, $nodePos2            # junctions carry reference positions in xStart and xEnd
+        )
     }
 }
 #===================================================================================================

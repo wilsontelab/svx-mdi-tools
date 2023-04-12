@@ -31,7 +31,7 @@ perl $ACTION_DIR/extract/extract_nodes.pl |
 # adjust the segment type when an insertion is present
 #   large del + any ins = D 
 #   short/no del + large ins = I
-# pad out any missing QSTART and QEND with NA
+# pad out any missing XSTART and XEND with NA (TODO: get proper values here)
 awk 'BEGIN{OFS="\t"}{ 
     if($7 > 0 && ($4 == "D" || $4 == "I")){ 
         $4 = $6 >= '$MIN_SV_SIZE' ? "D" : "I";
@@ -55,8 +55,9 @@ echo "indexing window coverage map"
 tabix -s 1 -b 2 -e 2 $COVERAGE_FILE
 checkPipe
 
-# extract read sequences for adapter discovery
 export N_CPU=$N_CPU_HOLD
+
+# extract read sequences for adapter discovery
 echo "extracting read sequences for adapter discovery"
 zcat $NODES_FILE | 
 perl $ACTION_DIR/extract/extract_reads.pl | 

@@ -11,8 +11,8 @@ source $MODULES_DIR/utilities/shell/create_temp_dir.sh
 export SORT_RAM_PER_CPU_INT=$(($RAM_PER_CPU_INT - 1000000000))
 export MAX_SORT_RAM_INT=$(($TOTAL_RAM_INT - 4000000000))
 
-# # pull SV evidence from aligned long reads
-# runWorkflowStep 1 extract extract/extract.sh
+# pull SV evidence from aligned long reads
+runWorkflowStep 1 extract extract/extract.sh
 
 # analyze SV junctions and molecule paths
 runWorkflowStep 2 analyze analyze/analyze.sh
