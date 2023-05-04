@@ -47,7 +47,7 @@ fractionChimeric_vs_eventSize <- function(nodes, suffix, ...){
     eS <- nodes[, log10(ifelse(eventSize == 0, 250 * 1e6, eventSize))]
     plot(
         eS, 
-        jitter(as.integer(nodes$isChimeric), amount = 0.1), 
+        jitter(as.integer(nodes$hasAdapter), amount = 0.1), 
         main = paste(suffix, "High-Quality Junctions"), 
         xlab = "Event Size (log10(bp))",
         ylab = "Fraction with an Adapter",
@@ -61,7 +61,7 @@ fractionChimeric_vs_eventSize <- function(nodes, suffix, ...){
 fractionChimeric_vs_insertSize <- function(nodes, suffix, ...){
     plot(
         jitter(nodes$insertSize,       amount = 0.5), 
-        jitter(as.integer(nodes$isChimeric), amount = 0.1), 
+        jitter(as.integer(nodes$hasAdapter), amount = 0.1), 
         main = paste(suffix, "High-Quality Junctions"), 
         xlab = "Insertion Size (bp)",
         ylab = "Fraction with an Adapter",

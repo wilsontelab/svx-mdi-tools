@@ -30,21 +30,21 @@ maxCheckLen <- coreLen + 2 * adapterPadding
 
 # SVM shared support functions
 getCandidate5 <- function(x){
-    if(x$qStart >= outsideLen) list(
-        startPos = x$qStart - outsideLen + 1,
+    if(x$xStart >= outsideLen) list(
+        startPos = x$xStart - outsideLen + 1,
         length = maxCheckLen,
         outsideLen = outsideLen
     ) else list(
         startPos = 1,
-        length = x$qStart + adapterPadding,
-        outsideLen = x$qStart
+        length = x$xStart + adapterPadding,
+        outsideLen = x$xStart
     )
 }
 getCandidate3 <- function(x, readLen){
-    endPos <- x$qEnd + outsideLen
+    endPos <- x$xEnd + outsideLen
     overrun <- endPos - readLen
     list(
-        startPos = x$qEnd - adapterPadding + 1,
+        startPos = x$xEnd - adapterPadding + 1,
         length = if(overrun <= 0) maxCheckLen else maxCheckLen - overrun
     )
 }
@@ -69,7 +69,7 @@ extractSvmTrainingSet <- function(nodes, reads){
         x5 <- runAdapterSW(x5, aln$qSeq, ADAPTER_CORE)
         # paired control internal sequence
         x5C <- list(
-            startPos = node$qStart + maxCheckLen,
+            startPos = node$xStart + maxCheckLen,
             length = maxCheckLen,
             outsideLen = outsideLen
         )
@@ -81,7 +81,7 @@ extractSvmTrainingSet <- function(nodes, reads){
         x3 <- runAdapterSW(x3, aln$qSeq, ADAPTER_CORE_RC)
         # paired control internal sequence
         x3C <- list(
-            startPos = node$qEnd - 2 * maxCheckLen,
+            startPos = node$xEnd - 2 * maxCheckLen,
             length = maxCheckLen
         )
         x3C <- runAdapterSW(x3C, aln$qSeq, ADAPTER_CORE_RC)
@@ -90,7 +90,7 @@ extractSvmTrainingSet <- function(nodes, reads){
         data.table(
             # 5' side/start of read, expected match to adapter
             # candidate clip sequence
-            clip5       = node$qStart, 
+            clip5       = node$xStart, 
             score5      = x5$sw$bestScore, 
             nBases5     = length(x5$sw$qryOnRef),
             start5      = if(x5$sw$bestScore > 0)  x5$sw$qryStart  - x5$outsideLen  - 1 else as.integer(NA),
@@ -102,7 +102,7 @@ extractSvmTrainingSet <- function(nodes, reads){
             end5C       = if(x5C$sw$bestScore > 0) x5C$sw$qryEnd   - x5C$outsideLen - 1 else as.integer(NA),
             # 3' side/start of read, expected match to rc(adapter)
             # candidate clip sequence
-            clip3       = readLen - node$qEnd, 
+            clip3       = readLen - node$xEnd, 
             score3      = x3$sw$bestScore, 
             nBases3     = length(x3$sw$qryOnRef),
             start3      = if(x3$sw$bestScore > 0)  x3$sw$qryStart  - adapterPadding else as.integer(NA),
@@ -113,7 +113,7 @@ extractSvmTrainingSet <- function(nodes, reads){
             start3C     = if(x3C$sw$bestScore > 0) x3C$sw$qryStart - adapterPadding else as.integer(NA),
             end3C       = if(x3C$sw$bestScore > 0) x3C$sw$qryEnd   - adapterPadding else as.integer(NA)
         )   
-    }, mc.cores = env$N_CPU))
+    }, mc.cores = env$N_CPU)) # 
 
     # refactor to create the svm table
     rbind(d[, .( # the true clipped ends of reference alignments, for fitting adapter matches
@@ -186,8 +186,8 @@ extractJunctionSvmParameters <- function(nodes, reads){
             nBases3     = length(x3$sw$qryOnRef),
             start3      = if(x3$sw$bestScore > 0)  x3$sw$qryStart  - adapterPadding else as.integer(NA),
             end3        = if(x3$sw$bestScore > 0)  x3$sw$qryEnd    - adapterPadding else as.integer(NA)
-        )  
-    }, mc.cores = env$N_CPU)) #
+        )
+    }, mc.cores = env$N_CPU))
 }
 
 # use the SVMs to determine whether SV adapter alignments are sufficient evidence to call as an adapter
@@ -207,4 +207,45 @@ checkJunctionsForAdapters <- function(svms, d){
         hasAdapter3 = predictAdapter("3", d$insertSize, d[, .(score = score3, nBases = nBases3, start = start3, end = end3)]),        
         hasAdapter5 = predictAdapter("5", d$insertSize, d[, .(score = score5, nBases = nBases5, start = start5, end = end5)])
     )
+}
+
+# update nodes with adapter splitting
+updateNodesForAdapters <- function(nodes, adapterCheck){
+    message("    updating nodes")
+    dropCols <- names(adapterCheck)[!(names(adapterCheck) %in% c("qName","edge"))]
+    nodes <- nodes[, .SD, .SDcols = names(nodes)[!(names(nodes) %in% dropCols)]]
+    nodes <- merge(nodes, adapterCheck, by = c("qName","edge"), all.x = TRUE)
+    nodes[, hasAdapter := hasAdapter3 | hasAdapter5]
+    nodes <- merge(
+        nodes, 
+        nodes[edgeType != edgeTypes$ALIGNMENT, .(
+            fractionChimeric = sum(hasAdapter) / .N # how frequently among nInstances this junction was chimeric, i.e., had at least one found adapter
+        ), by = .(junction)], 
+        by = "junction", 
+        all.x = TRUE
+    )
+    setkey(nodes, qName, edge)
+    nodes
+}
+
+# update nodes with adapter splitting
+splitChimericMolecules <- function(nodes){
+    message("    splitting chimeric molecules")
+    nodes[, segment := {
+        if(.N == 1 || !any(na.omit(hasAdapter))) 1 # a molecule with one segment of however many junctions
+        else if(.N == 3) c(1, NA, 2) # a simple chimeric molecule split on one junction with adapters
+        else {
+            segments <- 1
+            for(i in seq(2, .N, 2)){
+                segments <- c(
+                    segments, 
+                    if(hasAdapter[i]) c(NA, segments[i - 1] + 1)
+                    else rep(segments[i - 1], 2)
+                )
+            }
+            segments
+        }
+    }, by = .(qName)]
+    nodes[, segmentName := paste(qName, segment, sep = "-")]
+    nodes[!is.na(segment)]
 }

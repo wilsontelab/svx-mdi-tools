@@ -11,6 +11,9 @@ source $MODULES_DIR/utilities/shell/create_temp_dir.sh
 export SORT_RAM_PER_CPU_INT=$(($RAM_PER_CPU_INT - 1000000000))
 export MAX_SORT_RAM_INT=$(($TOTAL_RAM_INT - 4000000000))
 
+# set the size units and thresholds
+export USE_CHR_M=1
+
 # pull SV evidence from aligned long reads
 runWorkflowStep 1 extract extract/extract.sh
 

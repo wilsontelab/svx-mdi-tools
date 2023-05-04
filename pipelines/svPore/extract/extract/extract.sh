@@ -29,22 +29,17 @@ slurp -s 10M gunzip -c $NAME_PAF_FILE |
 perl $ACTION_DIR/extract/extract_nodes.pl | 
 
 # adjust the segment type when an insertion is present
-#   large del + any ins = D 
-#   short/no del + large ins = I
-# pad out any missing XSTART and XEND with NA (TODO: get proper values here)
+#   any del + any ins = D 
+#   no del + large ins = I
 awk 'BEGIN{OFS="\t"}{ 
     if($7 > 0 && ($4 == "D" || $4 == "I")){ 
-        $4 = $6 >= '$MIN_SV_SIZE' ? "D" : "I";
-    }
-    if(NF == 8){
-        $10 = $8;
-        $8 = "NA";
-        $9 = "NA";
+        $4 = $6 > 0 ? "D" : "I";
     }
     print $0;
 }' | 
 
 # finalize a fragment coverage map over all aggregated molecules
+sed 's/ZZ/\t/g' | 
 perl $ACTION_DIR/extract/window_coverage.pl | # repeats nodes to stream
 pigz -p $N_CPU -c | 
 slurp -s 10M -o $NODES_FILE
@@ -63,6 +58,13 @@ zcat $NODES_FILE |
 perl $ACTION_DIR/extract/extract_reads.pl | 
 pigz -p $N_CPU -c | 
 slurp -s 10M -o $SEQUENCES_FILE
+checkPipe
+
+# extract read sequences for adapter discovery
+echo "indexing extracted reads"
+zcat $SEQUENCES_FILE | 
+perl $ACTION_DIR/extract/index_extracted_reads.pl | 
+slurp -s 10M -o $SEQUENCES_FILE.index
 checkPipe
 
 echo "done"

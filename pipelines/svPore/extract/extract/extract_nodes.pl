@@ -23,7 +23,6 @@ fillEnvVar(\our $ACTION_DIR,       'ACTION_DIR');
 fillEnvVar(\our $INPUT_DIR,        'INPUT_DIR');
 fillEnvVar(\our $GENOMEX_MODULES_DIR, 'GENOMEX_MODULES_DIR');
 fillEnvVar(\our $N_CPU,            'N_CPU'); # user options, or derived from them
-fillEnvVar(\our $WINDOW_POWER,     'WINDOW_POWER');
 fillEnvVar(\our $WINDOW_SIZE,      'WINDOW_SIZE');
 fillEnvVar(\our $MIN_SV_SIZE,      'MIN_SV_SIZE');
 fillEnvVar(\our $GENOME_FASTA,     'GENOME_FASTA');
@@ -58,7 +57,10 @@ use constant {
     N_BASES => 10,
     MAPQ => 11,
     PAF_TAGS => 12,
-    RNAME_INDEX => 13  # added by us 
+    RNAME_INDEX => 13,  # added by us 
+    #-------------
+    FROM_SPLIT => 2,
+    FROM_CIGAR => 1
 };
 
 # process data by molecule over multiple parallel threads
@@ -78,7 +80,7 @@ while(my $line = <STDIN>){
     $threadName = $qName;
 }
 $nInputMols++;
-print $writeH END_MOLECULE, "\t$nInputMols\n";      
+print $writeH END_MOLECULE, "\t$threadName\n";      
 finishChildThreads();
 
 # print summary information
@@ -128,7 +130,14 @@ sub parseMolecule {
                 push @types,    @alnTypes;
                 push @mapQs,    @alnMapQs;
                 push @sizes,    @alnSizes;
-                push @insSizes, @alnInsSizes;
+                push @insSizes, map { 
+                    if($alnInsSizes[$_] !~ m/\t/){ # add query positions in xStart and xEnd in CIGAR junctions (hopefully will be few of these)
+                        my $nodePos1 = $alnAlns[$_ - 1]         eq "+" ? $alnAlns[$_ - 1][REND] : $alnAlns[$_ - 1][RSTART] + 1;
+                        my $nodePos2 = $alnAlns[$_ + 1][STRAND] eq "-" ? $alnAlns[$_ + 1][REND] : $alnAlns[$_ + 1][RSTART] + 1;
+                        $alnInsSizes[$_] = join("\t", $alnInsSizes[$_], $nodePos1, $nodePos2, FROM_CIGAR);
+                    }
+                    $alnInsSizes[$_];
+                } 0..$#alnInsSizes;
                 push @outAlns,  @alnAlns;
             }
 
@@ -146,7 +155,7 @@ sub parseMolecule {
             (@alns, @nodes, @types, @mapQs, @sizes, @insSizes, @outAlns) = ();
 
         # add new alignment to growing source molecule    
-        } else{
+        } else {
             $aln[RNAME_INDEX] = $chromIndex{$aln[RNAME]} || 0; # unknown sequences places into chrom/window zero 
             push @alns, \@aln;
         }

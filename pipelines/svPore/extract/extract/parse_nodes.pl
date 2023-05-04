@@ -35,7 +35,10 @@ use constant {
     INSERTION     => "I", 
     #-------------
     MATCH_OP      => "M",
-    NULL_OP       => "X"
+    NULL_OP       => "X",
+    #-------------
+    FROM_SPLIT => 2,
+    FROM_CIGAR => 1
 };
 
 # working variables
@@ -65,18 +68,19 @@ sub processAlignedSegment {
     }
 }
 sub commitAlignmentNodes { # add continguous "A" alignment segment to molecule chain
-    my ($aln) = @_;        # often includes small indels in the alignment span
+    my ($aln, $cigar) = @_;        # often includes small indels in the alignment span
     push @alnNodes, (
-        getSignedWindow(@$aln[RNAME_INDEX, RSTART, STRAND], 1),
-        getSignedWindow(@$aln[RNAME_INDEX, REND,   STRAND], 0)
+        join("ZZ", getSignedWindow(@$aln[RNAME_INDEX, RSTART, STRAND], 1), $cigar), # CIGAR is not reversed, i.e., matches rc of read if - strand
+        join("ZZ", getSignedWindow(@$aln[RNAME_INDEX, REND,   STRAND], 0), $cigar)
     );   
     push @alnTypes,    ALIGNMENT; 
     push @alnMapQs,    $$aln[MAPQ];
-    push @alnSizes,    $$aln[REND] - $$aln[RSTART];
+    push @alnSizes,    $$aln[REND] - $$aln[RSTART]; # alignments carry nRefBases in eventSize
     push @alnInsSizes, join(
         "\t", 
-        0,                         # insSize not applicable for alignments
-        $$aln[QSTART], $$aln[QEND] # alignments carry query positions in xStart and xEnd
+        0,                          # insSize not applicable for alignments
+        $$aln[QSTART], $$aln[QEND], # alignments carry query positions in xStart and xEnd
+        "NA"                        # edgeClass not applicable to alignments
     );
     push @alnAlns,     $aln;
 }
@@ -92,7 +96,8 @@ sub processSplitJunction {
         insSize => join(
             "\t", 
             $$aln2[QSTART] - $$aln1[QEND],  # i.e., microhomology is a negative number for svPore
-            $nodePos1, $nodePos2            # junctions carry reference positions in xStart and xEnd
+            $nodePos1, $nodePos2,           # junctions carry reference positions in xStart and xEnd
+            FROM_SPLIT
         )
     }
 }

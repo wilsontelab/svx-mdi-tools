@@ -13,14 +13,17 @@ map { require "$perlUtilDir/sequence/$_.pl" } qw(general);
 use constant {
     QNAME => 0, # PAF fields
     NODE1 => 1,
-    NODE2 => 2,
-    EDGE_TYPE => 3,
-    # _MAPQ => 4,
-    # SV_SIZE => 5,
-    # INSERT_SIZE => 6,
-    # XSTART => 7,
-    # XEND => 8,
-    # N_STRANDS => 9,
+    CIGAR1 => 2,
+    NODE2 => 3,
+    CIGAR2 => 4,
+    EDGE_TYPE => 5,
+    # _MAPQ => 6,
+    # SV_SIZE => 7,
+    # INSERT_SIZE => 8,
+    # XSTART => 9,
+    # XEND => 10,
+    # EDGE_CLASS => 11,
+    # N_STRANDS => 12,
     #-------------
     ALIGNMENT     => "A", # the single type for a contiguous aligned segment
     TRANSLOCATION => "T", # edge/junction types (might be several per source molecule)
@@ -35,7 +38,6 @@ use constant {
 fillEnvVar(\our $EXTRACT_PREFIX,   'EXTRACT_PREFIX');
 fillEnvVar(\our $ACTION_DIR,       'ACTION_DIR');
 fillEnvVar(\our $N_CPU,            'N_CPU'); # user options, or derived from them
-fillEnvVar(\our $WINDOW_POWER,     'WINDOW_POWER');
 fillEnvVar(\our $WINDOW_SIZE,      'WINDOW_SIZE');
 fillEnvVar(\our $MIN_SV_SIZE,      'MIN_SV_SIZE');
 fillEnvVar(\our $GENOME_FASTA,     'GENOME_FASTA');

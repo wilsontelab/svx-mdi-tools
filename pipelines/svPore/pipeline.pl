@@ -16,8 +16,5 @@ use warnings;
 
 # set options for read alignment
 $ENV{DEFAULT_ALIGNMENT_MODE} = "map-ont";
-defined $ENV{WINDOW_POWER} and $ENV{WINDOW_SIZE} = 10 ** $ENV{WINDOW_POWER};
-defined $ENV{SV_SIZE_POWER} and $ENV{MIN_SV_SIZE} = 10 ** $ENV{SV_SIZE_POWER};
-$ENV{USE_CHR_M} = 1;
 
 1;

@@ -7,16 +7,19 @@ use warnings;
 
 # constants
 use constant {
-    QNAME => 0, 
+    QNAME => 0,
     NODE1 => 1,
-    NODE2 => 2,
-    EDGE_TYPE => 3,
-    _MAPQ => 4,
-    SV_SIZE => 5,
-    INSERT_SIZE => 6,
-    XSTART => 7,
-    XEND => 8,
-    N_STRANDS => 9,
+    CIGAR1 => 2,
+    NODE2 => 3,
+    CIGAR2 => 4,
+    EDGE_TYPE => 5,
+    _MAPQ => 6,
+    SV_SIZE => 7,
+    INSERT_SIZE => 8,
+    XSTART => 9,
+    XEND => 10,
+    EDGE_CLASS => 11,
+    N_STRANDS => 12,
     #-------------
     ALIGNMENT => "A",
     JUNCTION  => "J"
@@ -48,9 +51,10 @@ my $fastqFiles = "$ENV{INPUT_DIR}/*.fastq.gz";
 open my $inH,  "-|", "zcat $fastqFiles" or die "could not open: $fastqFiles\n";
 while(my $qName = <$inH>){
     my $seq = <$inH>;
+    chomp $seq;
     my $discard = <$inH>;
     my $qual = <$inH>;
     $qName =~ m/^\@(\S+)/;
-    $qNames{$1} and print join("\t", $qNames{$1}, $1, $seq); # $seq still has newline
+    $qNames{$1} and print join("\t", $qNames{$1}, $1, $seq, $qual); # $qual still has newline
 }
 close $inH;

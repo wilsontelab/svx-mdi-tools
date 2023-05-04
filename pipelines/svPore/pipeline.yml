@@ -50,28 +50,31 @@ condaFamilies:
 optionFamilies:
     sv-finding:
         options:
-            window-power:
+            window-size:
                 order: 1
                 short: P
                 type: integer
                 required: false
-                default: 2
-                description: "scan for SVs at a window size resolution of 10^--window-power bp"   
-            sv-size-power:
+                default: 1000
+                description: "group SV endpoints and make coverage maps at a resolution of --window-size bp"   
+            min-sv-size:
                 order: 2
                 short: Z
                 type: integer
                 required: false
-                default: 3
-                description: "only report SVs >= 10^--sv-size-power bp; smaller indels hide within A segments" 
-# package:
-#     collate: # the pipeline action after which a data package should assembled
-#         uploadType: svAmplicon # a signal to the Stage 2 framework regarding the package contents
-#         files:
-#             manifestFile:
-#                 type: comma-delimited
-#                 manifestType: simple
-#                 file: $COLLATE_PREFIX.manifest.csv
+                default: 10000
+                description: "only report SVs >= --min-sv-size bp (ideally, match --min-sv-size to align --bandwidth)" 
+package:
+    extract: # the pipeline action after which a data package should assembled
+        uploadType: svPore # a signal to the Stage 2 framework regarding the package contents
+        files:
+            # manifestFile:
+            #     type: comma-delimited
+            #     manifestType: simple
+            #     file: $COLLATE_PREFIX.manifest.csv
+            svNodesFile:
+                type: rds
+                file: $DATA_FILE_PREFIX.svNodes.rds
 # container:
 #     supported: false    # set to true if you maintain a container registry for this pipeline [false]
 #     registry:  ghcr.io  # domain name of your OCI-compatible, oras-accessible, container registry [ghcr.io]
