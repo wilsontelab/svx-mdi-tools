@@ -57,7 +57,7 @@ sub parseSvsInCigar {
                 $partial[$refEndI] = $isSmallDLargeI ? $refPos - $prevSize : $refPos;
                 &$commitAlnFn(\@partial, $alnCigar, @extra);
 
-                # commit the required nodes and junctions for this large indel
+                # commit the required edges for this large indel
                 if($operation eq INSERTION){
                     push @alnTypes,    $operation; 
                     push @alnMapQs,    0;

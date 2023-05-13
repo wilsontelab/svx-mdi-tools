@@ -40,7 +40,7 @@ summaryPlotServer <- function(plotNodes, input) mdiInteractivePlotServer(
             ),
             layout = list(
                 width = 800,
-                height = 600,
+                height = 800,
                 pointsize = 8, # defaults to 8
                 dpi = 96, # defaults to 96
                 mai = c(0.75, 0.75, 0.1, 0.1),

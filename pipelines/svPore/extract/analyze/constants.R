@@ -1,12 +1,16 @@
 #-------------------------------------------------------------------------------------
-# svPore analyzeNodes constants
+# svPore analyze constants
 #-------------------------------------------------------------------------------------
-nodesCols <- c(
-    "qName", # extract nodes fields
+edgesCols <- c( 
+    "qName",
     "node1",
-    "cigar1",
+    "cigar", # omit "1" suffix since will purge the redudancy to a single entry per alignment
+    "blastIdentity",
+    "gapCompressedIdentity",
     "node2",
     "cigar2",
+    "blastIdentity2",
+    "gapCompressedIdentity2",
     "edgeType",
     "mapQ",
     "eventSize",
@@ -16,12 +20,16 @@ nodesCols <- c(
     "edgeClass",
     "nStrands"
 )
-nodesColClasses <- c(
-    "character", # PAF fields
-    "integer",
+edgesColClasses <- c(
     "character",
     "integer",
     "character",
+    "numeric",
+    "numeric",
+    "integer",
+    "character",
+    "numeric",
+    "numeric",
     "character",
     "integer",
     "integer",
@@ -32,16 +40,18 @@ nodesColClasses <- c(
     "integer"
 )
 readsCols = c(
-    "molType", # extract nodes fields
+    "molType", 
     "qName",
-    "qSeq",
-    "qQual"
+    "qSeq"
+    # ,
+    # "qQual"
 )
 readsColClasses = c(
-    "character", # PAF fields
     "character",
     "character",
     "character"
+    # ,
+    # "character"
 )
 
 edgeTypes <- list(
@@ -56,6 +66,7 @@ edgeTypes <- list(
 )
 inlineSvTypes <- c(edgeTypes$DELETION, edgeTypes$INSERTION)
 incrementRefTypes <- c(edgeTypes$ALIGNMENT, edgeTypes$DELETION)
+splitTypes <- c(edgeTypes$TRANSLOCATION, edgeTypes$INVERSION)
 
 edgeClasses <- list(
     FROM_SPLIT = 2, # thus, the value implies the number of alignments 

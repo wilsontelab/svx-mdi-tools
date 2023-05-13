@@ -54,8 +54,15 @@ sub processAlignedSegment {
     my ($aln) = @_;
 
     # run the CIGAR string
+    # base error rate reference: https://lh3.github.io/2018/11/25/on-the-definition-of-sequence-identity
+    #   In the PAF format, column 10 divided by column 11 gives the BLAST identity, which compounds the difference for every base of each indel.
+    #   The latest minimap2 at github outputs Gap-compressed identity at a new de:f tag, which counts each indel as one difference. 
+    #   NM:i:203        ms:i:18312      AS:i:18200      nn:i:0  tp:A:P  cm:i:1514       s1:i:8735       s2:i:59 de:f:0.0119     rl:i:465
+    # from https://lh3.github.io/minimap2/minimap2.html
+    #   de	f	Gap-compressed per-base sequence divergence
     my ($cigar) = ($$aln[PAF_TAGS] =~ m/cg:Z:(\S+)/);
-    parseSvsInCigar($aln, RSTART, REND, $cigar, \&commitAlignmentNodes);
+    my ($gapCompressedError) = ($$aln[PAF_TAGS] =~ m/de:f:(\S+)/); 
+    parseSvsInCigar($aln, RSTART, REND, $cigar, \&commitAlignmentEdges, $$aln[N_MATCHES] / $$aln[N_BASES], 1 - $gapCompressedError);
 
     # maintain proper 5'-3' node order on bottom strand, since svPore tracks genome paths
     if($$aln[STRAND] eq "-"){
@@ -67,11 +74,11 @@ sub processAlignedSegment {
         @alnAlns     = reverse @alnAlns;
     }
 }
-sub commitAlignmentNodes { # add continguous "A" alignment segment to molecule chain
-    my ($aln, $cigar) = @_;        # often includes small indels in the alignment span
-    push @alnNodes, (
-        join("ZZ", getSignedWindow(@$aln[RNAME_INDEX, RSTART, STRAND], 1), $cigar), # CIGAR is not reversed, i.e., matches rc of read if - strand
-        join("ZZ", getSignedWindow(@$aln[RNAME_INDEX, REND,   STRAND], 0), $cigar)
+sub commitAlignmentEdges {  # add continguous "A" alignment edge to molecule chain
+    my ($aln, $cigar, $blastIdentity, $gapCompressedIdentity) = @_; # often includes small indels in the alignment span
+    push @alnNodes, ( # CIGAR is not reversed, i.e., matches rc of read if - strand
+        join("ZZ", getSignedWindow(@$aln[RNAME_INDEX, RSTART, STRAND], 1), $cigar, $blastIdentity, $gapCompressedIdentity),
+        join("ZZ", getSignedWindow(@$aln[RNAME_INDEX, REND,   STRAND], 0), "NA",   $blastIdentity, $gapCompressedIdentity)
     );   
     push @alnTypes,    ALIGNMENT; 
     push @alnMapQs,    $$aln[MAPQ];
@@ -96,7 +103,7 @@ sub processSplitJunction {
         insSize => join(
             "\t", 
             $$aln2[QSTART] - $$aln1[QEND],  # i.e., microhomology is a negative number for svPore
-            $nodePos1, $nodePos2,           # junctions carry reference positions in xStart and xEnd
+            $nodePos1, $nodePos2,           # junctions carry flanking reference positions in xStart and xEnd
             FROM_SPLIT
         )
     }
@@ -132,7 +139,7 @@ sub getSvSize { # always a positive integer, zero if NA
 #===================================================================================================
 
 #===================================================================================================
-# check whether a molecule is consistent with a duplex foldback inversion
+# check whether a molecule is consistent with a duplex molecule read as a single-molecule foldback inversion
 # if yes, keep first half only and mark molecules as duplex
 # is most sensitive and acceptable to reject any inversion with reverse-complement overlap between its flanking alignments
 #   ----->
@@ -140,7 +147,8 @@ sub getSvSize { # always a positive integer, zero if NA
 #   <-----
 # strictly speaking we expect symmetry, but cannot count on complete alignment of both flanks
 # we might expect adapters in the junction, but exploration says they may not be there
-# and foldback inversions as so supsect as artifacts that we maintain high sensivitiy for purging them
+# and foldback inversions are so supsect as artifacts that we maintain high sensivitiy for purging them
+# finally, some duplex molecule reads are reads as two molecules; these are handled later, not here
 #---------------------------------------------------------------------------------------------------
 sub checkForDuplex {
     my ($nEdges) = @_;

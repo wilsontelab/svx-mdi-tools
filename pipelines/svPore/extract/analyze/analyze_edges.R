@@ -3,10 +3,11 @@
 #=====================================================================================
 # script initialization
 #-------------------------------------------------------------------------------------
-message("  initializing")
+message("initializing")
 library(data.table)
 library(e1071) # provides the svm classifier
 library(parallel)
+library(igraph)
 #-------------------------------------------------------------------------------------
 # load, parse and save environment variables
 env <- as.list(Sys.getenv())
@@ -19,7 +20,8 @@ checkEnvVars(list(
         'TMP_DIR_WRK',
         'OUTPUT_DIR',
         'DATA_NAME',
-        'NODES_FILE',
+        'EDGES_TMP_FILE',
+        'EDGES_SV_FILE',
         'SEQUENCES_FILE',
         'COVERAGE_FILE',
         'PLOT_PREFIX',
@@ -27,7 +29,12 @@ checkEnvVars(list(
     ),
     integer = c(
         'N_CPU',
-        'MIN_SV_SIZE'
+        'MIN_SV_SIZE',
+        'MIN_MAPQ',
+        'MIN_ALIGNMENT_SIZE'
+    ),
+    double = c(
+        'MIN_ALIGNMENT_IDENTITY'
     )
 ))
 #-------------------------------------------------------------------------------------
@@ -47,130 +54,266 @@ options(warn = 2)
 
 ##############################
 dir <- "/nfs/turbo/path-wilsonte-turbo/mdi/wilsontelab/greatlakes/data-scripts/glover/svPore"
-nodesRds            <- file.path(dir, "debug.nodes.rds")
+edgesRds            <- file.path(dir, "debug.edges.rds")
 trainingSetRds      <- file.path(dir, "debug.trainingSet.rds")
 svmsRds             <- file.path(dir, "debug.svms.rds")
 jxnParametersRds    <- file.path(dir, "debug.jxnParameters.rds")
+pathTypesTable      <- file.path(dir, "debug.pathTypes.txt")
 
 #=====================================================================================
-message("  loading nodes")
-nodes <- fread(
-    env$NODES_FILE,
-    col.names = nodesCols,
-    colClasses = nodesColClasses,
-    sep = "\t",
-    quote = ""
-)
-nodes <- cbind(nodes, nodes[, parseSignedWindow(node1, 1)], nodes[, parseSignedWindow(node2, 2)])
-#=====================================================================================
+# initial loading and parsing of edges
+#-------------------------------------------------------------------------------------
+# edges <- loadEdges("sv")
 
-#=====================================================================================
-message("  grouping and counting candidate SV junctions")
-nodes[, ":="(
-    edge = 1:.N # number the edges in each molecule; alignments are odd, junctions are even
-), by = .(qName)]
-nodes[edgeType != edgeTypes$ALIGNMENT, junction := {
-    getPathSignature(c(node1, node2)) # oriented to the canonical strand for comparing molecules
-}, by = .(qName, edge)]
-nodes <- merge(
-    nodes, 
-    nodes[edgeType != edgeTypes$ALIGNMENT, .(
-        nInstances = .N, # how many times this junction was encountered in any path
-        nMolecules = length(unique(qName)) # how many unique molecules bore this junction (some may have crossed it more than once)
-    ), by = .(junction)], 
-    by = "junction", 
-    all.x = TRUE
-)
-setkey(nodes, qName, edge)
+# message("expanding edge metadata")
+# edges <- cbind(edges, edges[, parseSignedWindow(node1, 1)], edges[, parseSignedWindow(node2, 2)])
+# setkey(edges, qName)
 
-# saveRDS(nodes,          nodesRds)
-# nodes           <- readRDS(nodesRds)
-# =====================================================================================
+# message("numbering edges and alignment blocks")
+# edges[, ":="(
+#     blockN = if(.N == 3){
+#         if(edgeType[2] %in% splitTypes) 1:3 else 1
+#     } else {
+#         blocks <- rle(sapply(edgeType, "%in%", splitTypes))$lengths
+#         unlist(sapply(1:length(blocks), function(i) rep(i, blocks[i]), simplify = FALSE))
+#     },
+#     edgeN = 1:.N, # number the edges in each molecule; alignments are odd, junctions are even
+#     nEdges = .N,    
+#     cigar = ifelse(is.na(cigar), cigar2, cigar),
+#     passedFlankCheck = { # this DOES mask internal junctions, even if outermost molecule alignments are high quality
+#         passed <- rep(FALSE, .N)
+#         ai <- seq(1, .N, 2)
+#         passed[ai] <- .SD[ai, 
+#             mapQ >= env$MIN_MAPQ & 
+#             eventSize >= env$MIN_ALIGNMENT_SIZE &
+#             gapCompressedIdentity >= env$MIN_ALIGNMENT_IDENTITY
+#         ]
+#         ji <- seq(2, .N, 2)
+#         passed[ji] <- sapply(ji, function(i) passed[i - 1] && passed[i + 1])
+#         passed
+#     }
+# ), by = .(qName)]
+# for(col in c("cigar2","blastIdentity2","gapCompressedIdentity2")) edges[[col]] <- NULL
+# setkey(edges, qName, blockN, edgeN)
 
-# =====================================================================================
-message("  checking indel bandwith to identify false, low quality SV segments")
-checkBW <- function(xStart, xEnd, eventSize, firstJ, lastJ){
-    nQryBases <- xEnd[lastJ] - xStart[firstJ]
-    nRefBases <- sum(eventSize) # [edgeType %in% incrementRefTypes]
-    abs(nQryBases - nRefBases) >= env$MIN_SV_SIZE # TRUE if segment passes bandwith check   
-}
-checkBandwidth <- function(nodes, firstI, lastI, results){
-    x <- if(firstI == lastI) TRUE else nodes[firstI:lastI, { # simple alignments pass, e.g., in ATATA
-        passedOuter <- checkBW(xStart, xEnd, eventSize, 1, .N)
-        if(.N == 3 || !passedOuter) rep(passedOuter, .N) else { # if a complex junction sequence passed on outermost aligns, check for false sub-segments
-            alnJ <- seq(1, .N, 2)
-            subSegments <- as.data.table(expand.grid(fJ = alnJ, lJ = alnJ))[lJ > fJ & !(fJ == 1 & lJ == .N)]
-            failedSubSegmentsK <- which(!apply(subSegments, 1, function(J) checkBW(xStart, xEnd, eventSize, J[1], J[2])))
-            p <- rep(TRUE, .N)
-            for(k in failedSubSegmentsK) p[subSegments[k, fJ:lJ]] <- FALSE
-            p
-        }    
-    }]
-    c(results, x)
-}
-nodes[, passedBandwidth := {
-    if(.N == 1) TRUE else {
-        firstI <- 1
-        lastI <- 0
-        results <- logical()
-        for(i in 1:.N){
-            if(edgeType[i] == edgeTypes$ALIGNMENT){ # segments are chains of D|I junctions ending in flanking alignments
-                lastI <- i
-            } else if(!(edgeType[i] %in% inlineSvTypes)){ # skip over D and I operations
-                results <- c(checkBandwidth(.SD, firstI, lastI, results), TRUE) # T, V, U operations are always passed
-                firstI <- i + 1
-            }
-        }
-        checkBandwidth(.SD, firstI, lastI, results)
-    }
-}, by = "qName"]
+# ######### restrict tmp file size while developing
+# edges[, cigar := NULL]
 
-saveRDS(nodes,          nodesRds)
-# nodes           <- readRDS(nodesRds)
+# # renderPlot("qualityDistribution", edges, suffix = "blastIdentity")
+# # renderPlot("qualityDistribution", edges, suffix = "gapCompressedIdentity")
+# # renderPlot("gapCompressedIdentity_vs_mapq", edges)
+
+# message()
+# str(edges)
+# # print(edges[1:100])
+# message("SAVING EDGES")
+# saveRDS(edges, edgesRds)
+# stop("XXXXXXXXXXXXXXXXXXXXX")
+# message("reading RDS file")
+# edges <- readRDS(edgesRds)
 #=====================================================================================
 
 #=====================================================================================
-message("  running adapter splitting using support vector machines")
-message("    loading reads")
-reads <- fread(
-    env$SEQUENCES_FILE,
-    col.names = readsCols,
-    colClasses = readsColClasses,
-    sep = "\t",
-    quote = ""
-)
-trainingSet <- extractSvmTrainingSet(nodes, reads)
-svms <- trainAdapterClassifiers(trainingSet)
+# calculate and apply additional edge quality metrics
+#-------------------------------------------------------------------------------------
+# message("checking indel bandwith to identify low quality alignment blocks")
+# nodePairs <- list()
+# fillNodePairs <- function(N){
+#     i <- seq(2, N, 2)
+#     x <- as.data.table(expand.grid(leftmost = i, rightmost = i))
+#     x <- x[rightmost >= leftmost]
+#     x[, nNodes := rightmost - leftmost + 1]
+#     x[order(-nNodes)]
+# } 
+# checkBandwidth <- function(edges, i1, i2){
+#     nQryBases <- edges[i2 + 1, xStart] - edges[i1 - 1, xEnd]
+#     nRefBases <- edges[i2, xEnd] - edges[i1, xStart]
+#     abs(nQryBases - nRefBases) >= env$MIN_SV_SIZE
+# }
+# edges[, passedBandwidth := {
+#     if(.N == 1) TRUE # "A" blocks or "T|V" junctions 
+#     else if(.N == 3) c(TRUE, checkBandwidth(.SD, 2, 2), TRUE) # single "D|U|I" junctions
+#     else {
+#         passed <- rep(TRUE, .N) # "ADAIADA" and other complex block paths
+#         k <- as.character(.N)
+#         if(is.null(nodePairs[[k]])) nodePairs[[k]] <<- fillNodePairs(.N)
+#         for(j in 1:nrow(nodePairs[[k]])){
+#             i1 <- nodePairs[[k]][j]$leftmost
+#             i2 <- nodePairs[[k]][j]$rightmost
+#             failed <- !checkBandwidth(.SD, i1, i2)
+#             if(failed) passed[i1:i2] <- FALSE # don't write passes to prevent overwriting prior failures over wider junction spans
+#         }
+#         passed
+#     }
+# }, by = .(qName, blockN)]
+# rm(nodePairs)
 
-saveRDS(trainingSet,    trainingSetRds)
-saveRDS(svms,           svmsRds)
-# trainingSet     <- readRDS(trainingSetRds)
-# svms            <- readRDS(svmsRds)
+# message()
+# str(edges)
+# # print(edges[1:100])
+# message("SAVING EDGES")
+# saveRDS(edges, edgesRds)
+# stop("XXXXXXXXXXXXXXXXXXXXX")
+message("reading RDS file")
+edges <- readRDS(edgesRds)
 
-jxnParameters <- extractJunctionSvmParameters(nodes, reads)
-rm(reads)
+edges[, ":="(
+    keptEdge = edgeType == edgeTypes$ALIGNMENT | (passedFlankCheck == TRUE & passedBandwidth == TRUE),
+    keptJunction = edgeType != edgeTypes$ALIGNMENT & passedFlankCheck == TRUE & passedBandwidth == TRUE
+)]
+#=====================================================================================
 
-saveRDS(jxnParameters,  jxnParametersRds)
-# jxnParameters   <- readRDS(jxnParametersRds)
+#=====================================================================================
+# perform adapter splitting
+#-------------------------------------------------------------------------------------
+# reads <- loadReads()
+# trainingSet <- extractSvmTrainingSet()
+# reads <- reads[molType == "J"]
+# svms <- trainAdapterClassifiers(trainingSet)
+# jxnParameters <- extractJunctionSvmParameters()
+# rm(reads)
+
+# saveRDS(trainingSet,    trainingSetRds)
+# saveRDS(svms,           svmsRds)
+# saveRDS(jxnParameters,  jxnParametersRds)
+
+trainingSet     <- readRDS(trainingSetRds)
+svms            <- readRDS(svmsRds)
+jxnParameters   <- readRDS(jxnParametersRds)
 
 adapterCheck <- checkJunctionsForAdapters(svms, jxnParameters)
-nodes <- updateNodesForAdapters(nodes, adapterCheck)
+edges <- updateEdgesForAdapters(edges, adapterCheck)
+rm(trainingSet, svms, jxnParameters, adapterCheck)
+#=====================================================================================
 
-######################
-# nodes <- splitChimericMolecules(nodes)
+#=====================================================================================
+message("scanning SV junctions for matching junctions in other molecules")
+junctionsToMatch <- edges[keptJunction == TRUE, .SD, .SDcols = c("segmentName","blockN","edgeN","edgeType","chromIndex1","chromIndex2","node1","node2")]
+junctionsToMatch[, chromPair := paste(sort(c(chromIndex1, chromIndex2)), collapse = ":"), by = c("segmentName","blockN","edgeN")]
+edges <- merge(
+    edges, 
+    do.call(rbind, mclapply(1:nrow(junctionsToMatch), function(i){
+        junctionsToMatch[i, getJunctionMatches(segmentName, blockN, edgeN, edgeType, chromPair, c(node1, node2))]
+    }, mc.cores = env$N_CPU)), #
+    by = c("segmentName","blockN","edgeN"), 
+    all.x = TRUE
+)
+edges[, nMatchingSegments := sapply(matchingSegments, function(x) length(unlist(x)))]
 
-rm(adapterCheck)
+message()
+str(edges)
+message()
+str(junctionsToMatch)
 
-# saveRDS(nodes,          nodesRds)
-# nodes           <- readRDS(nodesRds)
+# TODO: this had redundancy of IDENTICAL and DUPLEX
+# need to process segments, then loop back to cleaned up edges
+# ALSO: this doesn't obey the 1-window tolerance; must implement a shared name of matched nodes
+gData <- edges[
+    keptJunction == TRUE, 
+    {
+        isCanonical <- isCanonicalStrand(c(node1, node2))
+        .(
+            node1 = if(isCanonical) node1 else -node2,
+            node2 = if(isCanonical) node2 else -node1,
+            edgeType = edgeType
+        )
+    },
+    by = c("segmentName","blockN","edgeN")
+][, .(
+    edgeTypes = paste(unique(edgeType), collapse = ","),
+    nSegments = length(unique(segmentName))
+), by = .(node1, node2)]
+
+message()
+str(gData)
+message()
+str(gData[grepl(",", edgeTypes)])
+message()
+str(gData[edgeTypes != "T" | nSegments > 1]) # a useful filter that discards interchromosomal singletons
+
+# don't want to filter single edges for nSegments
+# filter molecules groups for max(nSegments) or similar
+# which means need to solve molecules groups
+
+g <- graph_from_data_frame(gData[nSegments > 2], directed = TRUE)
+message()
+print(summary(g))
+message()
+str(components(g))
+
+stop("XXXXXXXXXXXXXXXXXXXXXXX")
+
+message("collapsing edges into source molecule segments, i.e., after adapter splitting")
+segments <- edges[, .(
+    nJxns = sum(edgeType != edgeTypes$ALIGNMENT),
+    nKeptJxns = sum(keptJunction),
+    pathType = paste0(ifelse(edgeType == edgeTypes$ALIGNMENT | keptJunction, edgeType, tolower(edgeType)), collapse = ""),
+    isClosedPath = chromIndex1[1] == chromIndex2[.N] && strand1[1] == strand2[.N],
+    nodePath = list(c(
+        node1[1],
+        c(rbind(node1[keptJunction], node2[keptJunction])),
+        node2[.N]
+    )),
+    matchingSegmentsTmp = list(unique(unlist(matchingSegments)))
+), by = .(segmentName)]
+segments[, nMatchingSegments := sapply(matchingSegmentsTmp, function(x) length(unlist(x)))]
+
+message()
+str(segments)
+
+message("scanning source molecule segments for matching junction patterns in other molecules")
+segmentsToMatch <- segments[nMatchingSegments > 0]
+segments <- merge(
+    segments, 
+    do.call(rbind, mclapply(1:nrow(segmentsToMatch), function(i){
+        segmentsToMatch[i, getSegmentMatches(segmentName, unlist(matchingSegmentsTmp), unlist(nodePath))]
+    }, mc.cores = env$N_CPU)),
+    by = c("segmentName"), 
+    all.x = TRUE
+)
+segments[, matchingSegmentsTmp := NULL]
+
+# TODO: handle duplex and identical (collapse by removing replicates)
+# TODO: assess closure of a set of overlapping segments
+
+message()
+str(segments)
+message()
+str(segments[nKeptJxns > 1])
+# message()
+# print(segments[, .N, by = .(nMatchingSegments)])
+stop("XXXXXXXXXXXXXXXXXXXXX")
+
+
+message()
+str(edges)
+# message("SAVING EDGES")
+# saveRDS(edges, edgesRds)
+# stop("XXXXXXXXXXXXXXXXXXXXX")
+# message("reading RDS file")
+# edges <- readRDS(edgesR
+#=====================================================================================
+
+
+stop("XXXXXXXXXXXXXXXXXXXXX")
+
 
 qNames <- nodes[edgeType != edgeTypes$ALIGNMENT, unique(qName)]
-saveRDS(nodes[qName %in% qNames], paste(env$DATA_FILE_PREFIX, "svNodes", "rds", sep = "."))
+saveRDS(nodes[qName %in% qNames], paste(env$DATA_FILE_PREFIX, "edges", "rds", sep = "."))
+
+
+
+
+
+
+
+
+
+
+
 
 #=====================================================================================
-
-#=====================================================================================
-# message("  aggregating junction calls")
+# message("aggregating junction calls")
 # # TODO: apply SV filters prior to aggregating junctions?
 # junctions <- nodes[edgeType != edgeTypes$ALIGNMENT, .(
 #     nInstances = .N, # how many times this junction was encountered in any path
@@ -183,7 +326,7 @@ saveRDS(nodes[qName %in% qNames], paste(env$DATA_FILE_PREFIX, "svNodes", "rds", 
 
 # ), by = .(junction)]
 
-# message("  collapsing nodes into segments")
+# message("collapsing nodes into segments")
 # segments <- nodes[, .(
 #     nJxns = sum(edgeType != edgeTypes$ALIGNMENT),
 #     nKeptJxns = sum(edgeType != edgeTypes$ALIGNMENT & TRUE), # only count junctions that pass filters

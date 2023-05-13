@@ -47,6 +47,7 @@ condaFamilies:
     adapterTrimming:
         dependencies:
             - r-e1071
+            - r-igraph
 optionFamilies:
     sv-finding:
         options:
@@ -64,6 +65,20 @@ optionFamilies:
                 required: false
                 default: 10000
                 description: "only report SVs >= --min-sv-size bp (ideally, match --min-sv-size to align --bandwidth)" 
+            min-alignment-size:
+                order: 3
+                short: a
+                type: integer
+                required: false
+                default: 100
+                description: "ignore junctions if either flanking alignment is <a bp long"
+            min-alignment-identity:
+                order: 4
+                short: I
+                type: double
+                required: false
+                default: 0.9
+                description: "ignore junctions if either flanking alignment has <I gap-compressed match rate"              
 package:
     extract: # the pipeline action after which a data package should assembled
         uploadType: svPore # a signal to the Stage 2 framework regarding the package contents
@@ -74,7 +89,7 @@ package:
             #     file: $COLLATE_PREFIX.manifest.csv
             svNodesFile:
                 type: rds
-                file: $DATA_FILE_PREFIX.svNodes.rds
+                file: $DATA_FILE_PREFIX.edges.rds
 # container:
 #     supported: false    # set to true if you maintain a container registry for this pipeline [false]
 #     registry:  ghcr.io  # domain name of your OCI-compatible, oras-accessible, container registry [ghcr.io]

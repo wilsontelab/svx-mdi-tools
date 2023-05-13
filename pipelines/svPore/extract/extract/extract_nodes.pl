@@ -22,7 +22,6 @@ fillEnvVar(\our $EXTRACT_PREFIX,   'EXTRACT_PREFIX');
 fillEnvVar(\our $ACTION_DIR,       'ACTION_DIR');
 fillEnvVar(\our $INPUT_DIR,        'INPUT_DIR');
 fillEnvVar(\our $GENOMEX_MODULES_DIR, 'GENOMEX_MODULES_DIR');
-fillEnvVar(\our $N_CPU,            'N_CPU'); # user options, or derived from them
 fillEnvVar(\our $WINDOW_SIZE,      'WINDOW_SIZE');
 fillEnvVar(\our $MIN_SV_SIZE,      'MIN_SV_SIZE');
 fillEnvVar(\our $GENOME_FASTA,     'GENOME_FASTA');
@@ -42,8 +41,6 @@ initializeWindowCoverage();
 
 # constants
 use constant {
-    END_MOLECULE => '_ERM_',
-    #-------------
     QNAME => 0, # PAF fields
     QLEN => 1,
     QSTART => 2,
@@ -63,25 +60,25 @@ use constant {
     FROM_CIGAR => 1
 };
 
+# working variables
+our (@alns, $molId,
+        @nodes,    @types,    @mapQs,    @sizes,    @insSizes,    @outAlns,
+        @alnNodes, @alnTypes, @alnMapQs, @alnSizes, @alnInsSizes, @alnAlns) = ();
+
 # process data by molecule over multiple parallel threads
-launchChildThreads(\&parseMolecule);
-use vars qw(@readH @writeH);
-my $writeH = $writeH[1];
-my ($threadName);
+my ($prevQName);
+$| = 1;
 while(my $line = <STDIN>){
     $nInputAlns++;
-    my ($qName) = split("\t", $line, 2);  
-    if($threadName and $qName ne $threadName){
-        $nInputMols++;        
-        print $writeH END_MOLECULE, "\t$threadName\n";        
-        $writeH = $writeH[$nInputMols % $N_CPU + 1];
+    my @aln = split("\t", $line, 13);
+    $aln[RNAME_INDEX] = $chromIndex{$aln[RNAME]} || 0; # unknown sequences places into chrom/window zero 
+    if($prevQName and $aln[QNAME] ne $prevQName){
+        parseMolecule();
     }    
-    print $writeH $line; # commit to worker thread
-    $threadName = $qName;
+    push @alns, \@aln;
+    $prevQName = $aln[QNAME];
 }
-$nInputMols++;
-print $writeH END_MOLECULE, "\t$threadName\n";      
-finishChildThreads();
+parseMolecule(); 
 
 # print summary information
 printCount($nInputMols, 'nInputMols', 'input molecules');
@@ -89,75 +86,51 @@ printCount($nInputAlns, 'nInputAlns', 'input aligned segments over all molecules
 
 # child process to parse PAF molecules
 sub parseMolecule {
-    my ($childN) = @_;
-    
-    # auto-flush output to prevent buffering and ensure proper feed to sort
-    $| = 1;
+    $nInputMols++;
+    $molId = $alns[0][QNAME];   
 
-    # working variables
-    our (@alns, $molId,
-         @nodes,    @types,    @mapQs,    @sizes,    @insSizes,    @outAlns,
-         @alnNodes, @alnTypes, @alnMapQs, @alnSizes, @alnInsSizes, @alnAlns) = ();
-  
-    # run aligner output one alignment at a time
-    my $readH = $readH[$childN];
-    while(my $line = <$readH>){
-        chomp $line;
-        my @aln = split("\t", $line, 13); 
+    # characterize the path of a single molecule
+    @alns = sort { $$a[QSTART] <=> $$b[QSTART] } @alns; # sort alignments in query order (could be right to left on bottom strand)
+    foreach my $i(0..$#alns){
 
-        # process all alignments from one source molecule    
-        if($aln[0] eq END_MOLECULE){
-            $molId = $aln[1]; # ($aln[1] * 100) + $childN;   
+        # add information on the junction between two alignments
+        if($i > 0){
+            my $jxn = processSplitJunction($alns[$i-1], $alns[$i]);
+            push @types,    $$jxn{jxnType};
+            push @mapQs,    0;
+            push @sizes,    $$jxn{svSize};
+            push @insSizes, $$jxn{insSize};
+            push @outAlns,  [];
+        }         
 
-            # characterize the path of a single molecule
-            @alns = sort { $$a[QSTART] <=> $$b[QSTART] } @alns; # sort alignments in query order (could be right to left on bottom strand)
-            foreach my $i(0..$#alns){
-
-                # add information on the junction between two alignments
-                if($i > 0){
-                    my $jxn = processSplitJunction($alns[$i-1], $alns[$i]);
-                    push @types,    $$jxn{jxnType};
-                    push @mapQs,    0;
-                    push @sizes,    $$jxn{svSize};
-                    push @insSizes, $$jxn{insSize};
-                    push @outAlns,  [];
-                }         
-
-                # add each alignment    
-                (@alnNodes, @alnTypes, @alnMapQs, @alnSizes, @alnInsSizes, @alnAlns) = ();
-                processAlignedSegment($alns[$i]);
-                push @nodes,    @alnNodes;
-                push @types,    @alnTypes;
-                push @mapQs,    @alnMapQs;
-                push @sizes,    @alnSizes;
-                push @insSizes, map { 
-                    if($alnInsSizes[$_] !~ m/\t/){ # add query positions in xStart and xEnd in CIGAR junctions (hopefully will be few of these)
-                        my $nodePos1 = $alnAlns[$_ - 1]         eq "+" ? $alnAlns[$_ - 1][REND] : $alnAlns[$_ - 1][RSTART] + 1;
-                        my $nodePos2 = $alnAlns[$_ + 1][STRAND] eq "-" ? $alnAlns[$_ + 1][REND] : $alnAlns[$_ + 1][RSTART] + 1;
-                        $alnInsSizes[$_] = join("\t", $alnInsSizes[$_], $nodePos1, $nodePos2, FROM_CIGAR);
-                    }
-                    $alnInsSizes[$_];
-                } 0..$#alnInsSizes;
-                push @outAlns,  @alnAlns;
+        # add each alignment    
+        (@alnNodes, @alnTypes, @alnMapQs, @alnSizes, @alnInsSizes, @alnAlns) = ();
+        processAlignedSegment($alns[$i]);
+        push @nodes,    @alnNodes;
+        push @types,    @alnTypes;
+        push @mapQs,    @alnMapQs;
+        push @sizes,    @alnSizes;
+        push @insSizes, map { 
+            if($alnInsSizes[$_] !~ m/\t/){ # add query positions in xStart and xEnd in CIGAR junctions (hopefully will be few of these)
+                my $nodePos1 = $alnAlns[$_ - 1]         eq "+" ? $alnAlns[$_ - 1][REND] : $alnAlns[$_ - 1][RSTART] + 1;
+                my $nodePos2 = $alnAlns[$_ + 1][STRAND] eq "-" ? $alnAlns[$_ + 1][REND] : $alnAlns[$_ + 1][RSTART] + 1;
+                $alnInsSizes[$_] = join("\t", $alnInsSizes[$_], $nodePos1, $nodePos2, FROM_CIGAR);
             }
-
-            # examine SV junctions for evidence of duplex reads
-            # adjusts the output arrays as needed
-            my $nStrands = checkForDuplex(scalar(@types));
-
-            # set junction MAPQ as minimum MAPQ of the two flanking alignments
-            fillJxnMapQs();
-
-            # print one line per node pair in the collapsed molecule sequence
-            printMolecule($molId, $nStrands);
-
-            # reset for next molecule
-            (@alns, @nodes, @types, @mapQs, @sizes, @insSizes, @outAlns) = ();
-
-        # add new alignment to growing source molecule    
-        } else {
-            $aln[RNAME_INDEX] = $chromIndex{$aln[RNAME]} || 0; # unknown sequences places into chrom/window zero 
-            push @alns, \@aln;
-        }
+            $alnInsSizes[$_];
+        } 0..$#alnInsSizes;
+        push @outAlns,  @alnAlns;
     }
+
+    # examine SV junctions for evidence of duplex reads
+    # adjusts the output arrays as needed
+    my $nStrands = checkForDuplex(scalar(@types));
+
+    # set junction MAPQ as minimum MAPQ of the two flanking alignments
+    fillJxnMapQs();
+
+    # print one line per node pair, i.e., per edge, in the collapsed molecule sequence
+    printMolecule($molId, $nStrands);
+
+    # reset for next molecule
+    (@alns, @nodes, @types, @mapQs, @sizes, @insSizes, @outAlns) = ();
 }
