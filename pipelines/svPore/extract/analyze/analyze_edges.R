@@ -43,7 +43,11 @@ sourceScripts(rUtilDir, 'utilities')
 rUtilDir <- file.path(env$GENOMEX_MODULES_DIR, 'utilities', 'R')
 sourceScripts(file.path(rUtilDir, 'sequence'),   c('general', 'IUPAC', 'smith_waterman'))
 sourceScripts(file.path(rUtilDir, 'genome'),   c('chroms'))
-sourceScripts(file.path(env$ACTION_DIR, 'analyze'), c('constants','utilities','svm','plot'))
+sourceScripts(file.path(env$ACTION_DIR, 'analyze'), c(
+    'constants','utilities',
+    'svm','matching','junctions','segments',
+    'plot'
+))
 setCanonicalChroms()
 #-------------------------------------------------------------------------------------
 # set some options
@@ -187,101 +191,104 @@ rm(trainingSet, svms, jxnParameters, adapterCheck)
 #=====================================================================================
 
 #=====================================================================================
-message("scanning SV junctions for matching junctions in other molecules")
-junctionsToMatch <- edges[keptJunction == TRUE, .SD, .SDcols = c("segmentName","blockN","edgeN","edgeType","chromIndex1","chromIndex2","node1","node2")]
-junctionsToMatch[, chromPair := paste(sort(c(chromIndex1, chromIndex2)), collapse = ":"), by = c("segmentName","blockN","edgeN")]
-edges <- merge(
-    edges, 
-    do.call(rbind, mclapply(1:nrow(junctionsToMatch), function(i){
-        junctionsToMatch[i, getJunctionMatches(segmentName, blockN, edgeN, edgeType, chromPair, c(node1, node2))]
-    }, mc.cores = env$N_CPU)), #
-    by = c("segmentName","blockN","edgeN"), 
-    all.x = TRUE
-)
-edges[, nMatchingSegments := sapply(matchingSegments, function(x) length(unlist(x)))]
+message("scanning individual SV junctions for matching junctions in other molecules")
+edges <- cbind(edges, getCanonicalNodes(edges))
+junctionsToMatch <- getJunctionsToMatch(edges) # 20206 edges, (4325 excluding translocations)
+junctionCounts <- junctionsToMatch[, .(nInstances = .N), by = .(junctionKey)] # 15972 junctionKeys, max count 1315
+junctionMatches <- findMatchingJunctions(junctionsToMatch) # 44 rows (why so few? maybe that's correct, since only adjacencies are reported here...)
+junctionClusters <- analyzeJunctionNetwork(junctionMatches, junctionCounts)
+edges <- finalizeNodeClustering(edges, junctionClusters)
+setkey(edges, segmentName, blockN, edgeN)
+#=====================================================================================
 
-message()
-str(edges)
-message()
-str(junctionsToMatch)
-
-# TODO: this had redundancy of IDENTICAL and DUPLEX
-# need to process segments, then loop back to cleaned up edges
-# ALSO: this doesn't obey the 1-window tolerance; must implement a shared name of matched nodes
-gData <- edges[
-    keptJunction == TRUE, 
-    {
-        isCanonical <- isCanonicalStrand(c(node1, node2))
-        .(
-            node1 = if(isCanonical) node1 else -node2,
-            node2 = if(isCanonical) node2 else -node1,
-            edgeType = edgeType
-        )
-    },
-    by = c("segmentName","blockN","edgeN")
-][, .(
-    edgeTypes = paste(unique(edgeType), collapse = ","),
-    nSegments = length(unique(segmentName))
-), by = .(node1, node2)]
-
-message()
-str(gData)
-message()
-str(gData[grepl(",", edgeTypes)])
-message()
-str(gData[edgeTypes != "T" | nSegments > 1]) # a useful filter that discards interchromosomal singletons
-
-# don't want to filter single edges for nSegments
-# filter molecules groups for max(nSegments) or similar
-# which means need to solve molecules groups
-
-g <- graph_from_data_frame(gData[nSegments > 2], directed = TRUE)
-message()
-print(summary(g))
-message()
-str(components(g))
-
-stop("XXXXXXXXXXXXXXXXXXXXXXX")
-
+#=====================================================================================
 message("collapsing edges into source molecule segments, i.e., after adapter splitting")
-segments <- edges[, .(
-    nJxns = sum(edgeType != edgeTypes$ALIGNMENT),
-    nKeptJxns = sum(keptJunction),
-    pathType = paste0(ifelse(edgeType == edgeTypes$ALIGNMENT | keptJunction, edgeType, tolower(edgeType)), collapse = ""),
-    isClosedPath = chromIndex1[1] == chromIndex2[.N] && strand1[1] == strand2[.N],
-    nodePath = list(c(
-        node1[1],
-        c(rbind(node1[keptJunction], node2[keptJunction])),
-        node2[.N]
-    )),
-    matchingSegmentsTmp = list(unique(unlist(matchingSegments)))
-), by = .(segmentName)]
-segments[, nMatchingSegments := sapply(matchingSegmentsTmp, function(x) length(unlist(x)))]
+segments <- collapseSegments(edges)
+segmentMatches <- findMatchingSegments(segments)
+segmentGroups <- analyzeSegmentsNetwork(segments, segmentMatches)
+
+message("finding and purging duplex and identical segments")
+segmentsToMatch <- segments[nKeptJxns > 0 & nMatchingSegments > 0]
+segmentMatches <- scoreSegmentMatches(segments)
+
+message()
+str(segmentMatches)
+
+print(segmentMatches[, .N, by = .(nodePathMatchType, outerEndpointMatchType)])
+
+# at this stage, goals of segments is to identify duplicate/identical molecules
+# to avoid having false elevation of nInstances
+
+# after identifying duplicates, remove them from edges, the assemble segments
+# again with a stricter criterion the refuses to merge alignments at a singleton junction
+# i.e., segments will not be fused across a junctions that was only sequenced once
+
+stop("XXXXXXXXXXXXXXXXXXXXXXXXX")
+segments[, matchingSegmentsTmp := NULL]
+
+#     merge(
+#         segments, 
+# , 
+#         by = c("segmentName"), 
+#         all.x = TRUE
+#     )
+# }
+
+message("scanning source molecule segments for matching junction patterns in other molecules")
+
 
 message()
 str(segments)
 
-message("scanning source molecule segments for matching junction patterns in other molecules")
-segmentsToMatch <- segments[nMatchingSegments > 0]
-segments <- merge(
-    segments, 
-    do.call(rbind, mclapply(1:nrow(segmentsToMatch), function(i){
-        segmentsToMatch[i, getSegmentMatches(segmentName, unlist(matchingSegmentsTmp), unlist(nodePath))]
-    }, mc.cores = env$N_CPU)),
-    by = c("segmentName"), 
-    all.x = TRUE
-)
-segments[, matchingSegmentsTmp := NULL]
+stop("XXXXXXXXXXXXXXXXXXXXXXX")
+
+
+
+
+# # junctionsToMatch <- edges[keptJunction == TRUE, .SD, .SDcols = c("segmentName","blockN","edgeN","edgeType","chromIndex1","chromIndex2","node1","node2")]
+# # junctionsToMatch[, chromPair := paste(sort(c(chromIndex1, chromIndex2)), collapse = ":"), by = c("segmentName","blockN","edgeN")]
+# edges <- merge(
+#     edges, 
+#     do.call(rbind, mclapply(1:nrow(junctionsToMatch), function(i){
+#         junctionsToMatch[i, getJunctionMatches(segmentName, blockN, edgeN, edgeType, chromPair, c(node1, node2))]
+#     }, mc.cores = env$N_CPU)), #
+#     by = c("segmentName","blockN","edgeN"), 
+#     all.x = TRUE
+# )
+# edges[, nMatchingSegments := sapply(matchingSegments, function(x) length(unlist(x)))]
+
+# # TODO: this had redundancy of IDENTICAL and DUPLEX
+# # need to process segments, then loop back to cleaned up edges
+# # ALSO: this doesn't obey the 1-window tolerance; must implement a shared name of matched nodes
+# gData <- edges[
+#     keptJunction == TRUE, 
+#     {
+#         isCanonical <- isCanonicalStrand(c(node1, node2))
+#         .(
+#             node1 = if(isCanonical) node1 else -node2,
+#             node2 = if(isCanonical) node2 else -node1,
+#             edgeType = edgeType
+#         )
+#     },
+#     by = c("segmentName","blockN","edgeN")
+# ][, .(
+#     edgeTypes = paste(unique(edgeType), collapse = ","),
+#     nSegments = length(unique(segmentName))
+# ), by = .(node1, node2)]
+# Data[edgeTypes != "T" | nSegments > 1]) # a useful filter that discards interchromosomal singletons
+# # don't want to filter single edges for nSegments
+# # filter molecules groups for max(nSegments) or similar
+# # which means need to solve molecules groups
+# g <- graph_from_data_frame(gData[nSegments > 2], directed = TRUE)
+
+
+stop("XXXXXXXXXXXXXXXXXXXXXXX")
+
+
 
 # TODO: handle duplex and identical (collapse by removing replicates)
 # TODO: assess closure of a set of overlapping segments
 
-message()
-str(segments)
-message()
-str(segments[nKeptJxns > 1])
-# message()
-# print(segments[, .N, by = .(nMatchingSegments)])
 stop("XXXXXXXXXXXXXXXXXXXXX")
 
 
@@ -325,13 +332,6 @@ saveRDS(nodes[qName %in% qNames], paste(env$DATA_FILE_PREFIX, "edges", "rds", se
 #     # lists of molecule and segment ids
 
 # ), by = .(junction)]
-
-# message("collapsing nodes into segments")
-# segments <- nodes[, .(
-#     nJxns = sum(edgeType != edgeTypes$ALIGNMENT),
-#     nKeptJxns = sum(edgeType != edgeTypes$ALIGNMENT & TRUE), # only count junctions that pass filters
-#     junctions = NULL 
-# ), by = .(segmentName)]
 
 
 # # molecules <- nodes[, .(
