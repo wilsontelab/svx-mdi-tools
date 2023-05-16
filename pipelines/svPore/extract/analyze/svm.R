@@ -1,5 +1,7 @@
-# implement support vector machines (SVMs) for splitting chimeric molecules
+#-------------------------------------------------------------------------------------
+# implement support vector machines (SVMs) for splitting chimeric reads
 # train the models using adapters from the outsides of simple alignments 
+#-------------------------------------------------------------------------------------
 # logic and workflow:
 #   explore the region immediately adjacent to the read outer clips as candidate adapters
 #   pad them to allow for sequencing errors and shared bases between adapter and genome
@@ -19,6 +21,7 @@
 #       a minimal unaligned insertion size, or
 #       an unambiguous SW score
 #   reject a junction if either adapter matches at or near the unaligned insertion
+#-------------------------------------------------------------------------------------
 
 # ONT adapter information
 ADAPTER_CORE <- "ACTTCGTTCAGTTACGTATTGCT" # duplex portion of the adapter; last T matches the one-base A-tail
@@ -57,7 +60,7 @@ runAdapterSW <- function(x, qSeq, ref){
 # retrieve a sufficient number of 5' and 3' adapter trims for SVM training
 extractSvmTrainingSet <- function(){
     edges <- loadEdges("tmp")[xEnd - xStart > 300 & gapCompressedIdentity > env$MIN_ALIGNMENT_IDENTITY]    
-    message("extracting a training set of molecule outer clips and random control sequences")
+    message("extracting a training set of read outer clips and random control sequences")
     reads <- reads[molType == "A" & qName %in% edges[, qName]]
     setkey(edges, qName)
     d <- do.call(rbind, mclapply(1:nrow(reads), function(i){   
@@ -219,37 +222,5 @@ updateEdgesForAdapters <- function(edges, adapterCheck){
     edges <- edges[, .SD, .SDcols = names(edges)[!(names(edges) %in% dropCols)]]
     edges <- merge(edges, adapterCheck, by = c("qName","edgeN"), all.x = TRUE)
     edges[, hasAdapter := hasAdapter3 | hasAdapter5]
-    setkey(edges, qName)
-
-    message("splitting chimeric molecules")
-    edges[, segmentN := {
-        if(!any(na.omit(hasAdapter))) 1 # a molecule with one segment of however many junctions
-        else if(.N == 3) c(1, NA, 2) # a simple chimeric molecule split on one junction with adapters
-        else {
-            segmentNs <- 1
-            for(i in seq(2, .N, 2)){
-                segmentNs <- c(
-                    segmentNs, 
-                    if(hasAdapter[i]) c(NA, segmentNs[i - 1] + 1)
-                    else rep(segmentNs[i - 1], 2)
-                )
-            }
-            segmentNs
-        }
-    }, by = .(qName)]
-    edges <- edges[!is.na(segmentN)] # drop the false chimeric junctions
-    setkey(edges, qName, segmentN)
-
-    # update blockN and edgeN within each split segment
-    edges[, ":="(
-        segmentName = paste(qName, segmentN, sep = "-"),   
-        blockN = blockN - min(blockN) + 1,
-        edgeN  = edgeN  - min(edgeN)  + 1
-    ), by = .(qName, segmentN)]
-
-    # remove simple alignments between split chimeras, e.g., in ATATA or AdATA (where "d" was rejected but not split)
-    x <- edges[, .(keptSegment = any(keptJunction)), by = .(segmentName)]
-    edges <- edges[segmentName %in% x[keptSegment == TRUE, segmentName]]
-    setkey(edges, segmentName, blockN, edgeN)
-    edges
+    setkey(edges, qName, blockN, edgeN)
 }

@@ -1,13 +1,43 @@
-# parse long-read molecules into validated and grouped SV paths
+#=====================================================================================
+# definition of terms used in svPore analyze scripts
+#-------------------------------------------------------------------------------------
+# read          a single, contiguous DNA molecule sequenced by a nanopore, as assessed by the basecaller (could be chimeric!)
+# node          a specific numbered position on a genome strand; two outer nodes define an alignment or SV junction
+# edge          the connection between two nodes, either an alignment or an SV junction
+# alignment     an edge that corresponds to a portion of a read aligned to the genome by minimap2
+# junction      an edge that nominates an SV by connecting two distant alignments
+#                   each read has a series of edges as: alignment[-junction-alignment...]
+# nodePath      a sequence of nodes that completely describe the alignments and junctions of one read (or segment thereof)
+#                   a nodePath always conforms to: node-alignmentEdge[-node-junctionEdge-node-alignmentEdge...]-node
+# flank         the two alignments on either side of a junction
+#                   reads are split into segments at junctions flanked by low quality alignments (among other reasons)
+# block         a subset of a read aligned to a single strand of a single chromosome
+#                   blocks may contain deletion, duplication and insertion junctions, but never inversions or translocations
+# bandwidth     a block's base offset on the reference genome strand minus the offset on the read
+#                   no SVs are called in a block with bandwidth < MIN_SV_SIZE as they likely arise from misalignment of low quality sequences
+#                   junctions in a block that failed bandwidth never split a read into segments
+# segment       a subset of a read's nodePath considered to be non-chimeric, arising from a single source DNA molecule
+#                   unlike blocks, which are retained in a single segment row, segments are split from each other into separate rows
+#                   a segment may contain SV junctions if they could be confirmed by multiple molecules
+# canonical     the strand orientation agreed to represent a given junction to allow comparison across strands 
+#-------------------------------------------------------------------------------------
+# in total, in decreasing order of hierarchy:
+#   all reads analyzed here contain at least two alignment edges and one junction edge (maybe more)
+#   reads may be split to multiple segments at chimeric, low-quality, or unconfirmed junctions
+#   a segment may contain one or more blocks separated by inversion or translocation junctions
+#   a block may contain one or more alignments separated by insertion/deletion/duplication junctions
+#=====================================================================================
 
 #=====================================================================================
 # script initialization
 #-------------------------------------------------------------------------------------
 message("initializing")
-library(data.table)
-library(e1071) # provides the svm classifier
-library(parallel)
-library(igraph)
+suppressPackageStartupMessages(suppressWarnings({
+    library(data.table)
+    library(e1071) # provides the svm classifier
+    library(parallel)
+    library(igraph)    
+}))
 #-------------------------------------------------------------------------------------
 # load, parse and save environment variables
 env <- as.list(Sys.getenv())
@@ -44,8 +74,8 @@ rUtilDir <- file.path(env$GENOMEX_MODULES_DIR, 'utilities', 'R')
 sourceScripts(file.path(rUtilDir, 'sequence'),   c('general', 'IUPAC', 'smith_waterman'))
 sourceScripts(file.path(rUtilDir, 'genome'),   c('chroms'))
 sourceScripts(file.path(env$ACTION_DIR, 'analyze'), c(
-    'constants','utilities',
-    'svm','matching','junctions','segments',
+    'constants','utilities','matching','filters',
+    'edges','svm','junctions','segments',
     'plot'
 ))
 setCanonicalChroms()
@@ -58,117 +88,29 @@ options(warn = 2)
 
 ##############################
 dir <- "/nfs/turbo/path-wilsonte-turbo/mdi/wilsontelab/greatlakes/data-scripts/glover/svPore"
-edgesRds            <- file.path(dir, "debug.edges.rds")
+edges1Rds            <- file.path(dir, "debug.edges1.rds")
 trainingSetRds      <- file.path(dir, "debug.trainingSet.rds")
 svmsRds             <- file.path(dir, "debug.svms.rds")
 jxnParametersRds    <- file.path(dir, "debug.jxnParameters.rds")
-pathTypesTable      <- file.path(dir, "debug.pathTypes.txt")
+edges2Rds            <- file.path(dir, "debug.edges2.rds")
+edges3Rds            <- file.path(dir, "debug.edges3.rds")
 
-#=====================================================================================
-# initial loading and parsing of edges
-#-------------------------------------------------------------------------------------
+# =====================================================================================
+# initial loading and parsing of edges and associated quality metrics
+# -------------------------------------------------------------------------------------
 # edges <- loadEdges("sv")
+# edges <- parseEdgeMetadata(edges)
+# edges <- checkIndelBandwidth(edges)
 
-# message("expanding edge metadata")
-# edges <- cbind(edges, edges[, parseSignedWindow(node1, 1)], edges[, parseSignedWindow(node2, 2)])
-# setkey(edges, qName)
-
-# message("numbering edges and alignment blocks")
-# edges[, ":="(
-#     blockN = if(.N == 3){
-#         if(edgeType[2] %in% splitTypes) 1:3 else 1
-#     } else {
-#         blocks <- rle(sapply(edgeType, "%in%", splitTypes))$lengths
-#         unlist(sapply(1:length(blocks), function(i) rep(i, blocks[i]), simplify = FALSE))
-#     },
-#     edgeN = 1:.N, # number the edges in each molecule; alignments are odd, junctions are even
-#     nEdges = .N,    
-#     cigar = ifelse(is.na(cigar), cigar2, cigar),
-#     passedFlankCheck = { # this DOES mask internal junctions, even if outermost molecule alignments are high quality
-#         passed <- rep(FALSE, .N)
-#         ai <- seq(1, .N, 2)
-#         passed[ai] <- .SD[ai, 
-#             mapQ >= env$MIN_MAPQ & 
-#             eventSize >= env$MIN_ALIGNMENT_SIZE &
-#             gapCompressedIdentity >= env$MIN_ALIGNMENT_IDENTITY
-#         ]
-#         ji <- seq(2, .N, 2)
-#         passed[ji] <- sapply(ji, function(i) passed[i - 1] && passed[i + 1])
-#         passed
-#     }
-# ), by = .(qName)]
-# for(col in c("cigar2","blastIdentity2","gapCompressedIdentity2")) edges[[col]] <- NULL
-# setkey(edges, qName, blockN, edgeN)
-
-# ######### restrict tmp file size while developing
-# edges[, cigar := NULL]
-
-# # renderPlot("qualityDistribution", edges, suffix = "blastIdentity")
-# # renderPlot("qualityDistribution", edges, suffix = "gapCompressedIdentity")
-# # renderPlot("gapCompressedIdentity_vs_mapq", edges)
-
-# message()
-# str(edges)
-# # print(edges[1:100])
-# message("SAVING EDGES")
-# saveRDS(edges, edgesRds)
-# stop("XXXXXXXXXXXXXXXXXXXXX")
-# message("reading RDS file")
-# edges <- readRDS(edgesRds)
+# message("saving edges1 RDS file")
+# saveRDS(edges, edges1Rds)
+# message("reading edges1 RDS file")
+# edges <- readRDS(edges1Rds)
 #=====================================================================================
 
 #=====================================================================================
-# calculate and apply additional edge quality metrics
-#-------------------------------------------------------------------------------------
-# message("checking indel bandwith to identify low quality alignment blocks")
-# nodePairs <- list()
-# fillNodePairs <- function(N){
-#     i <- seq(2, N, 2)
-#     x <- as.data.table(expand.grid(leftmost = i, rightmost = i))
-#     x <- x[rightmost >= leftmost]
-#     x[, nNodes := rightmost - leftmost + 1]
-#     x[order(-nNodes)]
-# } 
-# checkBandwidth <- function(edges, i1, i2){
-#     nQryBases <- edges[i2 + 1, xStart] - edges[i1 - 1, xEnd]
-#     nRefBases <- edges[i2, xEnd] - edges[i1, xStart]
-#     abs(nQryBases - nRefBases) >= env$MIN_SV_SIZE
-# }
-# edges[, passedBandwidth := {
-#     if(.N == 1) TRUE # "A" blocks or "T|V" junctions 
-#     else if(.N == 3) c(TRUE, checkBandwidth(.SD, 2, 2), TRUE) # single "D|U|I" junctions
-#     else {
-#         passed <- rep(TRUE, .N) # "ADAIADA" and other complex block paths
-#         k <- as.character(.N)
-#         if(is.null(nodePairs[[k]])) nodePairs[[k]] <<- fillNodePairs(.N)
-#         for(j in 1:nrow(nodePairs[[k]])){
-#             i1 <- nodePairs[[k]][j]$leftmost
-#             i2 <- nodePairs[[k]][j]$rightmost
-#             failed <- !checkBandwidth(.SD, i1, i2)
-#             if(failed) passed[i1:i2] <- FALSE # don't write passes to prevent overwriting prior failures over wider junction spans
-#         }
-#         passed
-#     }
-# }, by = .(qName, blockN)]
-# rm(nodePairs)
-
-# message()
-# str(edges)
-# # print(edges[1:100])
-# message("SAVING EDGES")
-# saveRDS(edges, edgesRds)
-# stop("XXXXXXXXXXXXXXXXXXXXX")
-message("reading RDS file")
-edges <- readRDS(edgesRds)
-
-edges[, ":="(
-    keptEdge = edgeType == edgeTypes$ALIGNMENT | (passedFlankCheck == TRUE & passedBandwidth == TRUE),
-    keptJunction = edgeType != edgeTypes$ALIGNMENT & passedFlankCheck == TRUE & passedBandwidth == TRUE
-)]
-#=====================================================================================
-
-#=====================================================================================
-# perform adapter splitting
+# adapter splitting of chimeric molecules that derive from failure of the 
+# basecaller to recognize that a new molecule had entered the pore
 #-------------------------------------------------------------------------------------
 # reads <- loadReads()
 # trainingSet <- extractSvmTrainingSet()
@@ -177,145 +119,93 @@ edges[, ":="(
 # jxnParameters <- extractJunctionSvmParameters()
 # rm(reads)
 
+# message("saving SVM RDS files")
 # saveRDS(trainingSet,    trainingSetRds)
 # saveRDS(svms,           svmsRds)
 # saveRDS(jxnParameters,  jxnParametersRds)
+# message("reading SVM RDS files")
+# trainingSet     <- readRDS(trainingSetRds)
+# svms            <- readRDS(svmsRds)
+# jxnParameters   <- readRDS(jxnParametersRds)
 
-trainingSet     <- readRDS(trainingSetRds)
-svms            <- readRDS(svmsRds)
-jxnParameters   <- readRDS(jxnParametersRds)
+# adapterCheck <- checkJunctionsForAdapters(svms, jxnParameters)
+# edges <- updateEdgesForAdapters(edges, adapterCheck)
+# rm(trainingSet, svms, jxnParameters, adapterCheck)
 
-adapterCheck <- checkJunctionsForAdapters(svms, jxnParameters)
-edges <- updateEdgesForAdapters(edges, adapterCheck)
-rm(trainingSet, svms, jxnParameters, adapterCheck)
+# message("saving edges2 RDS file")
+# saveRDS(edges, edges2Rds)
+# message("reading edges2 RDS file")
+# edges <- readRDS(edges2Rds)
 #=====================================================================================
 
 #=====================================================================================
-message("scanning individual SV junctions for matching junctions in other molecules")
-edges <- cbind(edges, getCanonicalNodes(edges))
-junctionsToMatch <- getJunctionsToMatch(edges) # 20206 edges, (4325 excluding translocations)
-junctionCounts <- junctionsToMatch[, .(nInstances = .N), by = .(junctionKey)] # 15972 junctionKeys, max count 1315
-junctionMatches <- findMatchingJunctions(junctionsToMatch) # 44 rows (why so few? maybe that's correct, since only adjacencies are reported here...)
-junctionClusters <- analyzeJunctionNetwork(junctionMatches, junctionCounts)
-edges <- finalizeNodeClustering(edges, junctionClusters)
-setkey(edges, segmentName, blockN, edgeN)
+# matching individual SV junctions between molecules
+# -------------------------------------------------------------------------------------
+# message("scanning individual SV junctions for matching junctions in other molecules, with adjacency tolerance")
+# edges <- cbind(edges, getCanonicalNodes(edges))
+# junctionsToMatch <- getJunctionsToMatch(edges)
+# junctionHardCounts <- getJunctionHardCounts(junctionsToMatch)
+# junctionMatches <- findMatchingJunctions(junctionsToMatch) 
+# junctionClusters <- analyzeJunctionNetwork(junctionMatches, junctionHardCounts)
+# edges <- finalizeJunctionClustering(edges, junctionHardCounts, junctionClusters)
+# setkey(edges, qName, blockN, edgeN)
+# rm(junctionsToMatch, junctionHardCounts, junctionMatches, junctionClusters)
+
+# message("saving edges3 RDS file")
+# saveRDS(edges, edges3Rds)
+message("reading edges3 RDS file")
+edges <- readRDS(edges3Rds)
 #=====================================================================================
 
 #=====================================================================================
-message("collapsing edges into source molecule segments, i.e., after adapter splitting")
-segments <- collapseSegments(edges)
-segmentMatches <- findMatchingSegments(segments)
-segmentGroups <- analyzeSegmentsNetwork(segments, segmentMatches)
+# matching assembled segments to each other
+# -------------------------------------------------------------------------------------
+confirmedEdges <- splitReadsToSegments(edges)
+segments <- collapseSegments(confirmedEdges)
+genomeSegments <- segments[chroms != "chrM"]
+segmentMatches <- findMatchingSegments(genomeSegments)
+segmentGroups <- analyzeSegmentsNetwork(genomeSegments, segmentMatches)
+segmentPairs <- getSegmentPairs(segmentGroups)
+setkey(genomeSegments, segmentName)
+
+print(segmentGroups[, .N, by = .(refSegment)][, .N, by = .N])
+stop("XXXXXXXXXXXXXXXX")
+
 
 message("finding and purging duplex and identical segments")
-segmentsToMatch <- segments[nKeptJxns > 0 & nMatchingSegments > 0]
-segmentMatches <- scoreSegmentMatches(segments)
+segmentMatches <- scoreSegmentMatches(genomeSegments, segmentPairs)
 
 message()
 str(segmentMatches)
-
+message()
 print(segmentMatches[, .N, by = .(nodePathMatchType, outerEndpointMatchType)])
+
+#    nodePathMatchType outerEndpointMatchType    N
+# 4:                 0                      0  689    inferred to arise from multi-SV regions where molecules only share a subset of junctions, useful for haplotype assembly
+
+# 2:                 1                      0 2433    one or more junctions crossed by non-identical molecules, a preferred outcome for SV confirmation
+# 3:                 2                      0 2389
+
+# 1:                 2                      2  343    duplex read pairs split by the nanopore/basecaller; mask on segment of each pair
+
+# 5:                 1                      1  176    a suprisingly large number of apparent identity collisions; where do these come from? (maybe window collisions)
+
+# 6:                 0                      2    1    rare, and should be rare
+# 7:                 0                      1    1
+# 8:                 2                      1    1
+
 
 # at this stage, goals of segments is to identify duplicate/identical molecules
 # to avoid having false elevation of nInstances
 
-# after identifying duplicates, remove them from edges, the assemble segments
-# again with a stricter criterion the refuses to merge alignments at a singleton junction
-# i.e., segments will not be fused across a junctions that was only sequenced once
+# after identifying duplicates, remove/mask them from edges and segments
 
 stop("XXXXXXXXXXXXXXXXXXXXXXXXX")
 segments[, matchingSegmentsTmp := NULL]
 
-#     merge(
-#         segments, 
-# , 
-#         by = c("segmentName"), 
-#         all.x = TRUE
-#     )
-# }
-
-message("scanning source molecule segments for matching junction patterns in other molecules")
-
-
-message()
-str(segments)
-
-stop("XXXXXXXXXXXXXXXXXXXXXXX")
-
-
-
-
-# # junctionsToMatch <- edges[keptJunction == TRUE, .SD, .SDcols = c("segmentName","blockN","edgeN","edgeType","chromIndex1","chromIndex2","node1","node2")]
-# # junctionsToMatch[, chromPair := paste(sort(c(chromIndex1, chromIndex2)), collapse = ":"), by = c("segmentName","blockN","edgeN")]
-# edges <- merge(
-#     edges, 
-#     do.call(rbind, mclapply(1:nrow(junctionsToMatch), function(i){
-#         junctionsToMatch[i, getJunctionMatches(segmentName, blockN, edgeN, edgeType, chromPair, c(node1, node2))]
-#     }, mc.cores = env$N_CPU)), #
-#     by = c("segmentName","blockN","edgeN"), 
-#     all.x = TRUE
-# )
-# edges[, nMatchingSegments := sapply(matchingSegments, function(x) length(unlist(x)))]
-
-# # TODO: this had redundancy of IDENTICAL and DUPLEX
-# # need to process segments, then loop back to cleaned up edges
-# # ALSO: this doesn't obey the 1-window tolerance; must implement a shared name of matched nodes
-# gData <- edges[
-#     keptJunction == TRUE, 
-#     {
-#         isCanonical <- isCanonicalStrand(c(node1, node2))
-#         .(
-#             node1 = if(isCanonical) node1 else -node2,
-#             node2 = if(isCanonical) node2 else -node1,
-#             edgeType = edgeType
-#         )
-#     },
-#     by = c("segmentName","blockN","edgeN")
-# ][, .(
-#     edgeTypes = paste(unique(edgeType), collapse = ","),
-#     nSegments = length(unique(segmentName))
-# ), by = .(node1, node2)]
-# Data[edgeTypes != "T" | nSegments > 1]) # a useful filter that discards interchromosomal singletons
-# # don't want to filter single edges for nSegments
-# # filter molecules groups for max(nSegments) or similar
-# # which means need to solve molecules groups
-# g <- graph_from_data_frame(gData[nSegments > 2], directed = TRUE)
-
-
-stop("XXXXXXXXXXXXXXXXXXXXXXX")
-
-
-
-# TODO: handle duplex and identical (collapse by removing replicates)
 # TODO: assess closure of a set of overlapping segments
 
-stop("XXXXXXXXXXXXXXXXXXXXX")
-
-
-message()
-str(edges)
-# message("SAVING EDGES")
-# saveRDS(edges, edgesRds)
-# stop("XXXXXXXXXXXXXXXXXXXXX")
-# message("reading RDS file")
-# edges <- readRDS(edgesR
 #=====================================================================================
-
-
-stop("XXXXXXXXXXXXXXXXXXXXX")
-
-
-qNames <- nodes[edgeType != edgeTypes$ALIGNMENT, unique(qName)]
-saveRDS(nodes[qName %in% qNames], paste(env$DATA_FILE_PREFIX, "edges", "rds", sep = "."))
-
-
-
-
-
-
-
-
-
 
 
 

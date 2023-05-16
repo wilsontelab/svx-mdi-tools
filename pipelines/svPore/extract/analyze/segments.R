@@ -1,57 +1,115 @@
+#-------------------------------------------------------------------------------------
 # segments are arbitrary length vectors of high quality nodes, including the outer molecule endpoints
-# that describe a single, continuous, non-chimeric read
+# that describe a single, contiguous, non-chimeric source DNA span
+#-------------------------------------------------------------------------------------
+
+# split reads into potentially multiple segments, breaking reads at any untrustworthy/unvalidated junctions
+getSplitSegmentN <- function(N, splitAt){
+    junctionI <- seq(2, N, 2)
+    if(!any(splitAt[junctionI])) 1 
+    else if(N == 3) c(1, NA, 2)
+    else {
+        segmentNs <- 1
+        for(i in junctionI){
+            segmentNs <- c(
+                segmentNs, 
+                if(splitAt[i]) c(NA, segmentNs[i - 1] + 1)
+                else rep(segmentNs[i - 1], 2)
+            )
+        }
+        segmentNs
+    }    
+}
+splitReadsToSegments <- function(edges){
+    message("splitting reads at low-quality, chimeric, or unconfirmed junctions")
+    fusable <- getFusableJunctions(edges)
+    edges[, segmentN := getSplitSegmentN(.N, !fusable[.I]), by = .(qName)]
+    edges <- edges[!is.na(segmentN)] # drop the false/untrusted junctions
+    setkey(edges, qName, segmentN)
+
+    # update blockN and edgeN within each split segment
+    edges[, ":="(
+        segmentName = paste(qName, segmentN, sep = "-"),   
+        blockN = blockN - min(blockN) + 1,
+        edgeN  = edgeN  - min(edgeN)  + 1
+    ), by = .(qName, segmentN)]
+
+    # remove split segments that do not contain any potential SV junctions
+    # e.g., in A[T]A[T]A or A[T]AdA[T]A (where "d" was rejected but not split)
+    # TODO: save these segments as alignments for haplotype assembly?
+    matchable <- getMatchableJunctions(edges)
+    x <- edges[, .(hasCandidateSvs = any(matchable[.I])), by = .(segmentName)]
+    edges <- edges[segmentName %in% x[hasCandidateSvs == TRUE, segmentName]]
+    setkey(edges, segmentName, blockN, edgeN)
+
+    # prepare for assembly segment matching
+    matchable <- getMatchableJunctions(edges)
+    edges[matchable, ":="( 
+        matchingSegments = list(unique(segmentName))
+        # ,
+        # nInstances = .N
+    ), by = .(refJunctionKey)]
+    edges
+}
 
 # concatenate nodes and edges into a single row per segment
 collapseSegments <- function(edges){
-    segments <- edges[, .(
-        segmentLength = sum(eventSize[edgeType == edgeTypes$ALIGNMENT]),
-        chroms = paste(unique(c(chrom1, chrom2)), collapse = ","),
-        nJxns = sum(edgeType != edgeTypes$ALIGNMENT),
-        nKeptJxns = sum(keptJunction),
-        pathType = paste0(ifelse(edgeType == edgeTypes$ALIGNMENT | keptJunction, edgeType, tolower(edgeType)), collapse = ""),
-        isClosedPath = chromIndex1[1] == chromIndex2[.N] && strand1[1] == strand2[.N],
-        outerNode1 = rNode1[1], # original nodes of outer molecule endpoints, on strand(s) as sequenced
-        nodePath = list(c(rbind(rNode1[keptJunction], rNode2[keptJunction]))), # reference junction node sequence, on strand(s) as sequenced
-        outerNode2 = rNode2[.N],
-        matchingSegmentsTmp = { # a matching segment has at least one fuzzy junction in common with the query segment
-            x <- unique(unlist(matchingSegments))
-            list(x[x != segmentName])
-        }
-    ), by = .(segmentName)]
+    message("collapsing edges into contiguous, trusted read segments")
+    isAlignment <- getAlignmentEdges(edges)
+    isMatchable <- getMatchableJunctions(edges)
+    segments <- edges[, {
+        alignment <- isAlignment[.I]
+        matchable <- isMatchable[.I]
+        .(
+            segmentLength = sum(eventSize[alignment]),
+            chroms = paste(unique(c(chrom1, chrom2)), collapse = ","),
+            nJxns = sum(!alignment),
+            nMatchableJxns = sum(matchable),
+            pathType = paste0(ifelse(alignment | matchable, edgeType, tolower(edgeType)), collapse = ""),
+            isClosedPath = chromIndex1[1] == chromIndex2[.N] && strand1[1] == strand2[.N],
+            outerNode1 = node1[1], # original nodes of outer molecule endpoints, on strand(s) as sequenced
+            nodePath = list(c(rbind(rNode1[matchable], rNode2[matchable]))), # reference junction node sequence, on strand(s) as sequenced
+            outerNode2 = node2[.N],
+            matchingSegmentsTmp = { # a matching segment has at least one fuzzy junction in common with the query segment
+                x <- unique(unlist(matchingSegments))
+                list(x[x != segmentName])
+            }
+        )
+    }, by = .(segmentName)]
     segments[, nMatchingSegments := sapply(matchingSegmentsTmp, function(x) length(unlist(x)))]
     segments
 }
+
+# assemble the networks of segments with shared junctions, i.e., overlapping segments on a haplotype
 findMatchingSegments <- function(segments){
-    I <- segments[, which(nKeptJxns > 0 & nMatchingSegments > 0)]
-    if(length(I) == 0) return(data.table(segment1 = character(), segment2 = character(), N = integer()))
-    x <- segments[I, .(
-        matchingSegment = unlist(matchingSegmentsTmp)
-    ), by = .(segmentName)]
-    if(nrow(x) == 0) return(data.table(segment1 = character(), segment2 = character()))
-    x[, {
-        x <- sort(c(segmentName[1], matchingSegment[1])) # order the segment identifiers (not the nodes within them)
-        .(
-            segment1 = x[1],
-            segment2 = x[2] 
-        )
-    }, by = .(segmentName, matchingSegment)][,
+    message("finding groups of overlapping segments by virtue of shared individual junctions")
+    matchable <- getMatchableSegments(segments)
+    nullTable <- data.table(segment1 = character(), segment2 = character(), N = integer())
+    if(sum(matchable) == 0) return(nullTable)
+    x <- segments[matchable, .(matchingSegment = unlist(matchingSegmentsTmp)), by = .(segmentName)]
+    if(nrow(x) == 0) return(nullTable)    
+    x[, i := 1:.N]
+    x[, .(
+        segment1 = min(segmentName, matchingSegment), # this paradigm for row-by-row reordering of two character columns is much faster
+        segment2 = max(segmentName, matchingSegment) 
+    ), keyby = .(i)][,
         .N,
-        by = .(segment1, segment2) # two segments found to share at least one junction in common, thus are overlapping
+        keyby = .(segment1, segment2) # two segments found to share at least one junction in common, thus are overlapping
     ]
 }
 analyzeSegmentsNetwork <- function(segments, segmentMatches){ # use igraph to identify and examine clusters of overlapping segments
     g <- graph_from_data_frame(segmentMatches, directed = FALSE)
     cmp <- components(g)
-    I <- segments[, which(nKeptJxns > 0 & nMatchingSegments > 0)]
+    matchable <- getMatchableSegments(segments)
     clusters <- merge( # scan the network of segment matches for clusters of molecules sharing junctions
         data.table(segmentName = names(cmp$membership), cluster = cmp$membership),
-        segments[I, segmentLength, by = .(segmentName)],
+        segments[matchable, segmentLength, by = .(segmentName)],
         by = "segmentName",
         all.x = TRUE
     )
     setkey(clusters, cluster, segmentLength)
-    clusters[, { # assign a reference segment for each cluster as the the longest read in the group
-        .(       # in the first round, that segment might well have an artifact junction that is inappropriately fusing two SV segments
+    clusters[, { # assign a reference segment for each cluster as the longest segment in the group
+        .(
             segmentName = segmentName,
             isReferenceSegment = segmentName == segmentName[.N],        
             refSegment = segmentName[.N],
@@ -61,6 +119,11 @@ analyzeSegmentsNetwork <- function(segments, segmentMatches){ # use igraph to id
         .SD,
         .SDcols = c("segmentName","isReferenceSegment","refSegment","refSegmentLength")
     ]
+}
+getSegmentPairs <- function(segmentGroups){ # work within the established segment groups to get potential overlap/identity pairs
+    x <- segmentGroups[, data.table(t(combn(segmentName, 2))), by = .(refSegment)] 
+    setnames(x, c("refSegment","segment1","segment2"))
+    x
 }
 
 # there is always an even number of nodes as passed to these functions (2 per junction, 2 outer alignment nodes)
@@ -109,8 +172,8 @@ getSegmentMatch <- function(segment1, segment2){ # segment must be c(outerNode, 
     } else getOverlapMatch(path1, path2)
 }
 
-# examine segment pairs for identity relationships, either on same or opposite strands
-getOuterEndpointMatch <- function(outerNodes1, outerNodes2){ # these junction nodes are reference nodes, support exact matching
+# examine segment pairs for duplex and identity relationships
+getOuterEndpointMatch <- function(outerNodes1, outerNodes2){ # these junction nodes are original nodes, use fuzzy matching
     if(outerNodes1 %is_fuzzy_rev_match% outerNodes2) return(pathMatchTypes$DUPLEX)
     if(outerNodes1 %is_fuzzy_match% outerNodes2)     return(pathMatchTypes$IDENTICAL)
     pathMatchTypes$NONE
@@ -121,28 +184,18 @@ getNodePathMatch <- function(nodePath1, nodePath2){ # these junction nodes are r
     if(nodePath1 %is_exact_match% nodePath2)     return(pathMatchTypes$IDENTICAL)
     pathMatchTypes$NONE
 }
-getSegmentMatchTypes <- function(segmentName1, nodePath1, outerNodes1, matchingSegmentNames){
-    if(is.null(matchingSegmentNames)) return(
-        data.table(segmentName1 = character(), segmentName2 = character(), 
-                   nodePathMatchType = integer(), outerEndpointMatchType = integer())
-    )
-    segmentsToMatch[
-        segmentName %in% matchingSegmentNames, # the list of segments identified above as having >=1 junction match to segment1
-        .( 
-            nodePathMatchType = getNodePathMatch(nodePath1, unlist(nodePath)),
-            outerEndpointMatchType = getOuterEndpointMatch(outerNodes1, c(outerNode1, outerNode2))
-        ), 
-        by = .(segmentName)
-    ][, .(
-        segmentName1 = segmentName1,
-        segmentName2 = segmentName,
-        nodePathMatchType = nodePathMatchType,
-        outerEndpointMatchType = outerEndpointMatchType
-        # matchingSegments = list(paste(segmentName, matchType, sep = ":"))
-    )]
-}
-scoreSegmentMatches <- function(segments){
-    do.call(rbind, mclapply(1:nrow(segmentsToMatch), function(i){
-        segmentsToMatch[i, getSegmentMatchTypes(segmentName, unlist(nodePath), c(outerNode1, outerNode2), unlist(matchingSegmentsTmp))]
-    }, mc.cores = env$N_CPU))    
+scoreSegmentMatches <- function(segments, segmentPairs){
+    do.call(rbind, mclapply(1:nrow(segmentPairs), function(i){
+        segmentName1 <- segmentPairs[i, segment1]
+        segmentName2 <- segmentPairs[i, segment2]
+        segment1 <- segments[segmentName1]
+        segment2 <- segments[segmentName2]
+        data.table(
+            refSegmentName = segmentPairs[i, refSegment],
+            segmentName1 = segmentName1,
+            segmentName2 = segmentName2,
+            nodePathMatchType = getNodePathMatch(segment1[, unlist(nodePath)], segment2[, unlist(nodePath)]),
+            outerEndpointMatchType = getOuterEndpointMatch(segment1[, c(outerNode1, outerNode2)], segment2[, c(outerNode1, outerNode2)]) 
+        )
+    }, mc.cores = env$N_CPU))  
 }
