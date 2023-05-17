@@ -1,10 +1,20 @@
 #-------------------------------------------------------------------------------------
 # junction edges are pairs of nodes flanking a single junction
-# use to assign reference junction designations as the most frequently used node pair among an adjacency cluster 
 #-------------------------------------------------------------------------------------
+
+# drop reads with no matchable junctions
+dropReadsWithNoJunctions <- function(edges){
+    message("dropping reads with no matchable junctions")
+    matchable <- getMatchableJunctions(edges)
+    I <- edges[, rep(any(matchable[.I]), .N), by = .(qName)][[2]]
+    edges[I]
+}
+
+# perform fuzzy single-junction matching between reads
+# used to assign reference junction designations as the most frequently used node pair among an adjacency cluster 
 getJunctionsToMatch <- function(edges){
     matchable <- getMatchableJunctions(edges)
-    if(sum(matchable) == 0) stop("Sample has no apparent high-quality SV junctions")
+    if(nrow(edges) == 0 || sum(matchable) == 0) stop("Sample has no apparent high-quality SV junctions")
     x <- edges[matchable]
     x[, chromPairKey := paste(cChromIndex1, cChromIndex2, sep = ":")] # for more efficient adjacency searching
     x
@@ -36,6 +46,7 @@ getJunctionMatches <- function(junctions, junction_, junctionKey_){ # check a qu
     ]
 }
 findMatchingJunctions <- function(junctionsToMatch){ # top-level function to perform all required junction match queries with parallelization
+    message("matching junctions between reads, with adjacency tolerance")
     x <- junctionsToMatch[,
         {
             junctions <- .SD[, .(cNode1, cNode2, junctionKey)]
@@ -92,6 +103,7 @@ analyzeJunctionNetwork <- function(junctionMatches, junctionHardCounts){ # use i
     ]
 }
 finalizeJunctionClustering <- function(edges, junctionHardCounts, junctionClusters){ # assemble the final information for read matching
+    message("assigning reference junctions")
     edges <- merge(edges, junctionClusters, by = "junctionKey", all.x = TRUE)
     matchable <- getMatchableJunctions(edges)
     # fill in single-member junction clusters, i.e. with no adjancies (although junctionKey may hard-match multiple instances)

@@ -68,7 +68,7 @@ collapseSegments <- function(edges){
             pathType = paste0(ifelse(alignment | matchable, edgeType, tolower(edgeType)), collapse = ""),
             isClosedPath = chromIndex1[1] == chromIndex2[.N] && strand1[1] == strand2[.N],
             outerNode1 = node1[1], # original nodes of outer molecule endpoints, on strand(s) as sequenced
-            nodePath = list(c(rbind(rNode1[matchable], rNode2[matchable]))), # reference junction node sequence, on strand(s) as sequenced
+            rNodePath = list(c(rbind(rNode1[matchable], rNode2[matchable]))), # reference junction node sequence, on strand(s) as sequenced
             outerNode2 = node2[.N],
             matchingSegmentsTmp = { # a matching segment has at least one fuzzy junction in common with the query segment
                 x <- unique(unlist(matchingSegments))
@@ -76,7 +76,21 @@ collapseSegments <- function(edges){
             }
         )
     }, by = .(segmentName)]
-    segments[, nMatchingSegments := sapply(matchingSegmentsTmp, function(x) length(unlist(x)))]
+    segments[, ":="(
+        nMatchingSegments = sapply(matchingSegmentsTmp, function(x) length(unlist(x))),
+        i = 1:.N
+    )]
+    segments[, ":="( # strand orientation for segments is determined by the outermost alignments
+        isCanonical = isCanonicalStrand(c(outerNode1, outerNode2))
+    ), by = .(i)]
+    segments[, ":="(
+        cOuterNode1 = if(isCanonical) outerNode1 else -outerNode2,
+        rcNodePath  = if(isCanonical) rNodePath  else list(-rev(unlist(rNodePath))),
+        cOuterNode2 = if(isCanonical) outerNode2 else -outerNode1
+    ), by = .(i)]
+    segments[, ":="( # use exact matching on outer nodes for duplex purging
+        pathKey = paste(cOuterNode1, unlist(rcNodePath), cOuterNode2, sep = ":", collapse = ":")
+    ), by = .(i)]
     segments
 }
 

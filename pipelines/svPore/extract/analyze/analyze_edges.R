@@ -2,24 +2,24 @@
 # definition of terms used in svPore analyze scripts
 #-------------------------------------------------------------------------------------
 # read          a single, contiguous DNA molecule sequenced by a nanopore, as assessed by the basecaller (could be chimeric!)
-# node          a specific numbered position on a genome strand; two outer nodes define an alignment or SV junction
+# node          a specific numbered position on a genome strand; two nodes define an alignment or SV junction
 # edge          the connection between two nodes, either an alignment or an SV junction
 # alignment     an edge that corresponds to a portion of a read aligned to the genome by minimap2
 # junction      an edge that nominates an SV by connecting two distant alignments
 #                   each read has a series of edges as: alignment[-junction-alignment...]
-# nodePath      a sequence of nodes that completely describe the alignments and junctions of one read (or segment thereof)
-#                   a nodePath always conforms to: node-alignmentEdge[-node-junctionEdge-node-alignmentEdge...]-node
-# flank         the two alignments on either side of a junction
+# nodePath      a sequence of nodes that completely describes the alignments and junctions of one read (or segment thereof)
+#                   a nodePath conforms to: node-alignmentEdge[-node-junctionEdge-node-alignmentEdge...]-node
+# flanks        the two alignments on either side of a junction
 #                   reads are split into segments at junctions flanked by low quality alignments (among other reasons)
 # block         a subset of a read aligned to a single strand of a single chromosome
 #                   blocks may contain deletion, duplication and insertion junctions, but never inversions or translocations
-# bandwidth     a block's base offset on the reference genome strand minus the offset on the read
+# bandwidth     a block's base span on the reference genome strand minus the span on the read
 #                   no SVs are called in a block with bandwidth < MIN_SV_SIZE as they likely arise from misalignment of low quality sequences
-#                   junctions in a block that failed bandwidth never split a read into segments
+#                   junctions that failed bandwidth never split a read into segments
 # segment       a subset of a read's nodePath considered to be non-chimeric, arising from a single source DNA molecule
 #                   unlike blocks, which are retained in a single segment row, segments are split from each other into separate rows
 #                   a segment may contain SV junctions if they could be confirmed by multiple molecules
-# canonical     the strand orientation agreed to represent a given junction to allow comparison across strands 
+# canonical     the strand orientation agreed to represent a given junction or nodePath to allow comparison across read strands 
 #-------------------------------------------------------------------------------------
 # in total, in decreasing order of hierarchy:
 #   all reads analyzed here contain at least two alignment edges and one junction edge (maybe more)
@@ -75,7 +75,7 @@ sourceScripts(file.path(rUtilDir, 'sequence'),   c('general', 'IUPAC', 'smith_wa
 sourceScripts(file.path(rUtilDir, 'genome'),   c('chroms'))
 sourceScripts(file.path(env$ACTION_DIR, 'analyze'), c(
     'constants','utilities','matching','filters',
-    'edges','svm','junctions','segments',
+    'edges','svm','junctions','duplex','segments',
     'plot'
 ))
 setCanonicalChroms()
@@ -94,6 +94,7 @@ svmsRds             <- file.path(dir, "debug.svms.rds")
 jxnParametersRds    <- file.path(dir, "debug.jxnParameters.rds")
 edges2Rds            <- file.path(dir, "debug.edges2.rds")
 edges3Rds            <- file.path(dir, "debug.edges3.rds")
+edges4Rds            <- file.path(dir, "debug.edges4.rds")
 
 # =====================================================================================
 # initial loading and parsing of edges and associated quality metrics
@@ -141,7 +142,7 @@ edges3Rds            <- file.path(dir, "debug.edges3.rds")
 #=====================================================================================
 # matching individual SV junctions between molecules
 # -------------------------------------------------------------------------------------
-# message("scanning individual SV junctions for matching junctions in other molecules, with adjacency tolerance")
+# edges <- dropReadsWithNoJunctions(edges)
 # edges <- cbind(edges, getCanonicalNodes(edges))
 # junctionsToMatch <- getJunctionsToMatch(edges)
 # junctionHardCounts <- getJunctionHardCounts(junctionsToMatch)
@@ -153,8 +154,21 @@ edges3Rds            <- file.path(dir, "debug.edges3.rds")
 
 # message("saving edges3 RDS file")
 # saveRDS(edges, edges3Rds)
-message("reading edges3 RDS file")
-edges <- readRDS(edges3Rds)
+# message("reading edges3 RDS file")
+# edges <- readRDS(edges3Rds)
+#=====================================================================================
+
+#=====================================================================================
+# find and remove redundant duplex reads that were not fused during sequencing/basecalling
+# -------------------------------------------------------------------------------------
+# reads <- collapseReads(edges)
+# duplexStatus <- findDuplexReads(reads)
+# edges <- adjustEdgesForDuplex(edges, duplexStatus)
+# rm(reads, duplexStatus)
+# message("saving edges4 RDS file")
+# saveRDS(edges, edges4Rds)
+message("reading edges4 RDS file")
+edges <- readRDS(edges4Rds)
 #=====================================================================================
 
 #=====================================================================================
@@ -162,43 +176,35 @@ edges <- readRDS(edges3Rds)
 # -------------------------------------------------------------------------------------
 confirmedEdges <- splitReadsToSegments(edges)
 segments <- collapseSegments(confirmedEdges)
-genomeSegments <- segments[chroms != "chrM"]
-segmentMatches <- findMatchingSegments(genomeSegments)
-segmentGroups <- analyzeSegmentsNetwork(genomeSegments, segmentMatches)
-segmentPairs <- getSegmentPairs(segmentGroups)
-setkey(genomeSegments, segmentName)
+message("removing segments confined to chrM (only nuclear genome SVs are reported)")
+assemblySegments <- segments[chroms != "chrM"]
+setkey(x, segmentName)
 
-print(segmentGroups[, .N, by = .(refSegment)][, .N, by = .N])
+segmentMatches <- findMatchingSegments(assemblySegments)
+segmentGroups <- analyzeSegmentsNetwork(assemblySegments, segmentMatches)
+
+segmentPairs <- getSegmentPairs(segmentGroups)
+setkey(assemblySegments, segmentName)
+
+print(segmentGroups[, .(nSegments = .N), by = .(refSegment)][, .(nGroups = .N), by = .(nSegments)][order(nSegments)])
 stop("XXXXXXXXXXXXXXXX")
 
+message()
+str(segments)
 
-message("finding and purging duplex and identical segments")
-segmentMatches <- scoreSegmentMatches(genomeSegments, segmentPairs)
+
+
+segmentMatches <- scoreSegmentMatches(assemblySegments, segmentPairs)
 
 message()
 str(segmentMatches)
 message()
 print(segmentMatches[, .N, by = .(nodePathMatchType, outerEndpointMatchType)])
 
-#    nodePathMatchType outerEndpointMatchType    N
-# 4:                 0                      0  689    inferred to arise from multi-SV regions where molecules only share a subset of junctions, useful for haplotype assembly
-
-# 2:                 1                      0 2433    one or more junctions crossed by non-identical molecules, a preferred outcome for SV confirmation
-# 3:                 2                      0 2389
-
-# 1:                 2                      2  343    duplex read pairs split by the nanopore/basecaller; mask on segment of each pair
-
-# 5:                 1                      1  176    a suprisingly large number of apparent identity collisions; where do these come from? (maybe window collisions)
-
-# 6:                 0                      2    1    rare, and should be rare
-# 7:                 0                      1    1
-# 8:                 2                      1    1
 
 
-# at this stage, goals of segments is to identify duplicate/identical molecules
-# to avoid having false elevation of nInstances
 
-# after identifying duplicates, remove/mask them from edges and segments
+
 
 stop("XXXXXXXXXXXXXXXXXXXXXXXXX")
 segments[, matchingSegmentsTmp := NULL]

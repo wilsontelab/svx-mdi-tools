@@ -46,7 +46,7 @@ parseEdgeMetadata <- function(edges){
     edges[, blastIdentity2 := NULL]
     edges[, gapCompressedIdentity2 := NULL]
 
-    ######### restrict tmp file size while developing (or, make this deletion permanent?)
+    ######### restrict tmp file size while developing (make this deletion permanent?)
     edges[, cigar := NULL]
 
     setkey(edges, qName, blockN, edgeN)
@@ -79,8 +79,7 @@ checkIndelBandwidth <- function(edges){
             for(j in 1:nrow(nodePairs[[k]])){
                 i1 <- nodePairs[[k]][j]$leftmost
                 i2 <- nodePairs[[k]][j]$rightmost
-                failed <- !checkBlockBandwidth(.SD, i1, i2)
-                if(failed) passed[i1:i2] <- FALSE # don't write passes to prevent overwriting prior failures over wider junction spans
+                if(!checkBlockBandwidth(.SD, i1, i2)) passed[i1:i2] <- FALSE # don't write passes to prevent overwriting prior failures over wider junction spans
             }
             passed
         }

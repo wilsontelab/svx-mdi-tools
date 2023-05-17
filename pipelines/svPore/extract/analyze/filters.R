@@ -19,6 +19,17 @@ getMatchableJunctions <- function(edges){
     ]
 }
 
+# real junctions are compared across reads to find duplex repetition
+# they represent all true reference discontinuities, including low-quality and adapter-chimeric junctions,
+# but not including low-bandwidth junctions that we ignore as "unreal"
+getRealJunctions <- function(edges){
+    isJunction <- getJunctionEdges(edges)
+    edges[, 
+        isJunction & 
+        passedBandwidth == TRUE
+    ]
+}
+
 # fusable junctions are maintained in a single segment, thereby calling a _recurring_ SV
 # unfusable junctions split reads into segments
 getFusableJunctions <- function(edges){
@@ -30,10 +41,7 @@ getFusableJunctions <- function(edges){
             passedBandwidth == FALSE | # we don't consider these to be true junctions, they don't breaks segments and are ignored during segment matching
             (
                 passedFlankCheck == TRUE & # low-quality alignments can't be trusted to assemble paths
-                (
-                    nCanonical    > 1 | # two detections on one strand guarantee that a junction was observed in two independent DNA molecules
-                    nNonCanonical > 1
-                )
+                nJunctionInstances > 1 # junctions not validated by at least 2 non-duplex molecules are likely to be ligation artifacts
             )
         )
     ]

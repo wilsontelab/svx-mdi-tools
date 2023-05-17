@@ -9,6 +9,9 @@ isCanonicalStrand <- function(nodePair){
     o <- order(abs(nodePair))
     nodePair[o[1]] > 0 # always returns the same ordered nodes independent of strand (it is unimportant what that order is)
 }
+isCanonicalStrandPath <- function(nodePath){
+    isCanonicalStrand(c(nodePath[1], nodePath[length(nodePath)]))
+}
 getCanonicalNodes <- function(edges){
     isAlignment <- getAlignmentEdges(edges)
     x <- edges[, 
