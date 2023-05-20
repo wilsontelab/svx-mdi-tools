@@ -3,6 +3,10 @@
 # all functions return a logical vector of the same length as the provided data.table
 #-------------------------------------------------------------------------------------
 
+#-------------------------------------------------------------------------------------
+# edge filters
+#-------------------------------------------------------------------------------------
+
 # all alignment or junction edges
 getAlignmentEdges <- function(edges) edges[, edgeType == edgeTypes$ALIGNMENT]
 getJunctionEdges  <- function(edges) edges[, edgeType != edgeTypes$ALIGNMENT]  
@@ -13,7 +17,7 @@ getMatchableJunctions <- function(edges){
     isJunction <- getJunctionEdges(edges)
     edges[, 
         isJunction & 
-        passedFlankCheck == TRUE & # in other words, the junctions we are still willing to call after single-read analysis
+        passedFlankCheck == TRUE & # the junctions we are still willing to call after single-read analysis
         passedBandwidth == TRUE &
         hasAdapter == FALSE
     ]
@@ -38,21 +42,42 @@ getFusableJunctions <- function(edges){
         isJunction &  # these filters reject any read not suitable for assembling genome SV paths from multiple reads
         !hasAdapter & # adapters identify nanopore/basecaller artifacts
         (
-            passedBandwidth == FALSE | # we don't consider these to be true junctions, they don't breaks segments and are ignored during segment matching
+            passedBandwidth == FALSE |      # we don't consider these to be true junctions, they don't break segments and are ignored during segment matching
             (
-                passedFlankCheck == TRUE & # low-quality alignments can't be trusted to assemble paths
-                nJunctionInstances > 1 # junctions not validated by at least 2 non-duplex molecules are likely to be ligation artifacts
+                passedFlankCheck == TRUE &  # low-quality alignments can't be trusted to assemble paths
+                nJunctionInstances > 1      # junctions not validated by at least 2 non-duplex molecules are likely to be ligation artifacts
             )
         )
     ]
 }
 
+# singleton junctions are high quality junctions nominated as potential ultra-rare SVs
+# any junction found at least twice was already put into a segment
+# many singleton junctions are artifacts, e.g., due to ligation, but the list can be mined for true SVs
+getSingletonJunctions <- function(edges){
+    isJunction <- getJunctionEdges(edges)
+    edges[, 
+        isJunction & 
+        !hasAdapter & # adapters identify nanopore/basecaller artifacts
+        (
+            passedBandwidth == FALSE |      # we don't consider these to be true junctions, they don't breaks segments and are ignored during segment matching
+            (
+                passedFlankCheck == TRUE &  # low-quality alignments can't be trusted to assemble paths
+                nJunctionInstances == 1      # junctions not validated by at least 2 non-duplex molecules are likely to be ligation artifacts
+            )
+        )
+    ]
+}
+
+#-------------------------------------------------------------------------------------
+# segment filters
+#-------------------------------------------------------------------------------------
+
 # matchable segments have matchable junctions corresponding to two or more edges (usually in different reads)
-# they are thus segments useful for chaining SV junctions
+# they are thus segments useful for creating SV-driven allelic assemblies
 getMatchableSegments <- function(segments){
     segments[, 
         nMatchableJxns > 0 &  # this segment has at least one matchable junction (really, all of them must)
         nMatchingSegments > 0 # at least one other segment also had at least one of this segment's junctions
     ]
 }
-

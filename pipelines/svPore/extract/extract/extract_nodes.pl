@@ -34,7 +34,7 @@ setCanonicalChroms();
 # load additional dependencies
 require "$GENOMEX_MODULES_DIR/align/dna-long-read/get_indexed_reads.pl";
 $perlUtilDir = "$ENV{MODULES_DIR}/utilities/perl/svPore";
-map { require "$ACTION_DIR/extract/$_.pl" } qw(initialize_windows parse_nodes); # check_junctions
+map { require "$ACTION_DIR/extract/$_.pl" } qw(initialize_windows parse_nodes);
 $perlUtilDir = "$ENV{MODULES_DIR}/parse_nodes";
 map { require "$perlUtilDir/$_.pl" } qw(parse_nodes_support);
 initializeWindowCoverage();

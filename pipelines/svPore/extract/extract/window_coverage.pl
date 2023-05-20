@@ -88,7 +88,7 @@ close $nosvH;
 close $svH;
 close $tmpH;
 
-# print a molecule's edges to the appopriate file(s)
+# print a molecule's edges to the appropriate file(s)
 sub printMoleculeEdges {
     if(@lines == 1){
         my $line = join("\t", @{$lines[0]})."\n";

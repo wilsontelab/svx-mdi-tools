@@ -55,9 +55,7 @@ while(my $qName = <$inH>){
     if($qNames{$1}){
         # chomp $seq;
         # my $line = join("\t", $qNames{$1}, $1, $seq, $qual);  # $qual still has newline
-
         my $line = join("\t", $qNames{$1}, $1, $seq);  # $seq still has newline
-
         print $line;
         my $nChar = length($line);   
         print $idxH join("\t", $1, $offset, $nChar), "\n";

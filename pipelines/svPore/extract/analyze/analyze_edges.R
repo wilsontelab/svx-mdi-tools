@@ -1,31 +1,36 @@
 #=====================================================================================
-# definition of terms used in svPore analyze scripts
+# definition of terms used in svPore analyze
 #-------------------------------------------------------------------------------------
 # read          a single, contiguous DNA molecule sequenced by a nanopore, as assessed by the basecaller (could be chimeric!)
-# node          a specific numbered position on a genome strand; two nodes define an alignment or SV junction
+# node          a specific numbered position or window on a genome strand; two nodes define an alignment or SV junction
 # edge          the connection between two nodes, either an alignment or an SV junction
-# alignment     an edge that corresponds to a portion of a read aligned to the genome by minimap2
+# alignment     an edge that corresponds to a portion of a read aligned contiguously to the genome by minimap2
 # junction      an edge that nominates an SV by connecting two distant alignments
 #                   each read has a series of edges as: alignment[-junction-alignment...]
-# nodePath      a sequence of nodes that completely describes the alignments and junctions of one read (or segment thereof)
-#                   a nodePath conforms to: node-alignmentEdge[-node-junctionEdge-node-alignmentEdge...]-node
+# readPath      a sequence of nodes and junction properties that completely describes one read (or segment thereof)
+#                   a readPath conforms to: node-alignmentEdge-[-node-junctionEdge-node-alignmentEdge...]-node
+#                   where junctionEdge carries insertSize, i.e., information on the number of read/query bases at the junction
 # flanks        the two alignments on either side of a junction
 #                   reads are split into segments at junctions flanked by low quality alignments (among other reasons)
 # block         a subset of a read aligned to a single strand of a single chromosome
 #                   blocks may contain deletion, duplication and insertion junctions, but never inversions or translocations
 # bandwidth     a block's base span on the reference genome strand minus the span on the read
-#                   no SVs are called in a block with bandwidth < MIN_SV_SIZE as they likely arise from misalignment of low quality sequences
+#                   no SVs are called in a block with bandwidth < MIN_SV_SIZE as they likely arise from misaligned low quality bases
 #                   junctions that failed bandwidth never split a read into segments
-# segment       a subset of a read's nodePath considered to be non-chimeric, arising from a single source DNA molecule
+# segment       a subset of a readPath considered to be non-chimeric, arising from a single source DNA molecule
 #                   unlike blocks, which are retained in a single segment row, segments are split from each other into separate rows
-#                   a segment may contain SV junctions if they could be confirmed by multiple molecules
-# canonical     the strand orientation agreed to represent a given junction or nodePath to allow comparison across read strands 
+#                   a segment may contain SV junctions if they could be confirmed by multiple independent source molecules
+# canonical     the strand orientation agreed to represent a given junction or readPath to allow comparison across reads and strands 
+#                   junction canonicity is determined from the nodes flanking the junction
+#                   segment  canonicity is determined from the outermost alignment nodes
 #-------------------------------------------------------------------------------------
 # in total, in decreasing order of hierarchy:
 #   all reads analyzed here contain at least two alignment edges and one junction edge (maybe more)
+#   duplex reads, i.e., with the same readPath on opposite strands, are collapsed to single reads on just one strand
 #   reads may be split to multiple segments at chimeric, low-quality, or unconfirmed junctions
-#   a segment may contain one or more blocks separated by inversion or translocation junctions
-#   a block may contain one or more alignments separated by insertion/deletion/duplication junctions
+#   a segment may contain one or more blocks separated by inversion or translocation junctions that always call SVs
+#   a block may contain one or more alignments separated by insertion, deletion, or duplication junctions that may or may not call SVs
+#   an alignment may contain smaller indel operations in its CIGAR string that are never called as SVs
 #=====================================================================================
 
 #=====================================================================================
@@ -36,7 +41,8 @@ suppressPackageStartupMessages(suppressWarnings({
     library(data.table)
     library(e1071) # provides the svm classifier
     library(parallel)
-    library(igraph)    
+    library(igraph) 
+    library(bit64)
 }))
 #-------------------------------------------------------------------------------------
 # load, parse and save environment variables
@@ -46,6 +52,7 @@ source(file.path(rUtilDir, 'workflow.R'))
 checkEnvVars(list(
     string = c(
         'GENOMEX_MODULES_DIR',
+        'GENOME_FASTA',
         'DATA_FILE_PREFIX',
         'TMP_DIR_WRK',
         'OUTPUT_DIR',
@@ -59,9 +66,11 @@ checkEnvVars(list(
     ),
     integer = c(
         'N_CPU',
+        'WINDOW_SIZE',
         'MIN_SV_SIZE',
         'MIN_MAPQ',
-        'MIN_ALIGNMENT_SIZE'
+        'MIN_ALIGNMENT_SIZE',
+        'JUNCTION_BANDWIDTH'
     ),
     double = c(
         'MIN_ALIGNMENT_IDENTITY'
@@ -79,6 +88,8 @@ sourceScripts(file.path(env$ACTION_DIR, 'analyze'), c(
     'plot'
 ))
 setCanonicalChroms()
+chromSizes <- loadChromSizes(env$WINDOW_SIZE)
+chromWindows <- expandChromWindows(chromSizes)
 #-------------------------------------------------------------------------------------
 # set some options
 setDTthreads(env$N_CPU)
@@ -87,20 +98,20 @@ options(warn = 2)
 #=====================================================================================
 
 ##############################
-dir <- "/nfs/turbo/path-wilsonte-turbo/mdi/wilsontelab/greatlakes/data-scripts/glover/svPore"
+dir <- env$TASK_DIR
 edges1Rds            <- file.path(dir, "debug.edges1.rds")
-trainingSetRds      <- file.path(dir, "debug.trainingSet.rds")
-svmsRds             <- file.path(dir, "debug.svms.rds")
-jxnParametersRds    <- file.path(dir, "debug.jxnParameters.rds")
+trainingSetRds       <- file.path(dir, "debug.trainingSet.rds")
+svmsRds              <- file.path(dir, "debug.svms.rds")
+jxnParametersRds     <- file.path(dir, "debug.jxnParameters.rds")
 edges2Rds            <- file.path(dir, "debug.edges2.rds")
 edges3Rds            <- file.path(dir, "debug.edges3.rds")
 edges4Rds            <- file.path(dir, "debug.edges4.rds")
 
 # =====================================================================================
-# initial loading and parsing of edges and associated quality metrics
+# initial loading and parsing of edges and associated read and block-level quality metrics
 # -------------------------------------------------------------------------------------
 # edges <- loadEdges("sv")
-# edges <- parseEdgeMetadata(edges)
+# edges <- parseEdgeMetadata(edges, chromWindows)
 # edges <- checkIndelBandwidth(edges)
 
 # message("saving edges1 RDS file")
@@ -143,13 +154,12 @@ edges4Rds            <- file.path(dir, "debug.edges4.rds")
 # matching individual SV junctions between molecules
 # -------------------------------------------------------------------------------------
 # edges <- dropReadsWithNoJunctions(edges)
-# edges <- cbind(edges, getCanonicalNodes(edges))
+# edges <- setCanonicalNodes(edges)
 # junctionsToMatch <- getJunctionsToMatch(edges)
 # junctionHardCounts <- getJunctionHardCounts(junctionsToMatch)
 # junctionMatches <- findMatchingJunctions(junctionsToMatch) 
 # junctionClusters <- analyzeJunctionNetwork(junctionMatches, junctionHardCounts)
 # edges <- finalizeJunctionClustering(edges, junctionHardCounts, junctionClusters)
-# setkey(edges, qName, blockN, edgeN)
 # rm(junctionsToMatch, junctionHardCounts, junctionMatches, junctionClusters)
 
 # message("saving edges3 RDS file")
@@ -161,7 +171,7 @@ edges4Rds            <- file.path(dir, "debug.edges4.rds")
 #=====================================================================================
 # find and remove redundant duplex reads that were not fused during sequencing/basecalling
 # -------------------------------------------------------------------------------------
-# reads <- collapseReads(edges)
+# reads <- collapseReads(edges, chromSizes)
 # duplexStatus <- findDuplexReads(reads)
 # edges <- adjustEdgesForDuplex(edges, duplexStatus)
 # rm(reads, duplexStatus)
@@ -175,43 +185,50 @@ edges <- readRDS(edges4Rds)
 # matching assembled segments to each other
 # -------------------------------------------------------------------------------------
 confirmedEdges <- splitReadsToSegments(edges)
-segments <- collapseSegments(confirmedEdges)
-message("removing segments confined to chrM (only nuclear genome SVs are reported)")
-assemblySegments <- segments[chroms != "chrM"]
-setkey(x, segmentName)
-
-segmentMatches <- findMatchingSegments(assemblySegments)
-segmentGroups <- analyzeSegmentsNetwork(assemblySegments, segmentMatches)
-
-segmentPairs <- getSegmentPairs(segmentGroups)
-setkey(assemblySegments, segmentName)
-
-print(segmentGroups[, .(nSegments = .N), by = .(refSegment)][, .(nGroups = .N), by = .(nSegments)][order(nSegments)])
-stop("XXXXXXXXXXXXXXXX")
+segments <- collapseSegments(confirmedEdges, chromSizes)
+nuclearSegments <- getNuclearSegments(segments)
+segmentMatches <- findMatchingSegments(nuclearSegments)
+segmentClusters <- analyzeSegmentsNetwork(nuclearSegments, segmentMatches)
 
 message()
-str(segments)
-
-
-
-segmentMatches <- scoreSegmentMatches(assemblySegments, segmentPairs)
-
+str(segmentClusters)
 message()
-str(segmentMatches)
-message()
-print(segmentMatches[, .N, by = .(nodePathMatchType, outerEndpointMatchType)])
+print(segmentClusters[, .(nSegments = .N), by = .(indexSegment)][, .(nClusters = .N), by = .(nSegments)][order(nSegments)])
 
 
+saveRDS(
+    confirmedEdges, 
+    paste(env$DATA_FILE_PREFIX, "edges", "rds", sep = ".")
+)
+saveRDS(
+    nuclearSegments, 
+    paste(env$DATA_FILE_PREFIX, "segments", "rds", sep = ".")
+)
+saveRDS(
+    segmentClusters, 
+    paste(env$DATA_FILE_PREFIX, "clusters", "rds", sep = ".")
+)
+
+# stop("XXXXXXXXXXXXXXXX")
 
 
+# segmentPairs <- getSegmentPairs(segmentClusters)
 
-
-stop("XXXXXXXXXXXXXXXXXXXXXXXXX")
-segments[, matchingSegmentsTmp := NULL]
+# segments[, matchingSegmentsTmp := NULL]
 
 # TODO: assess closure of a set of overlapping segments
+#=====================================================================================
 
 #=====================================================================================
+# exploring single-instance junctions
+# -------------------------------------------------------------------------------------
+# singeltonJunctions <- pullSingletonJunctions(edges)
+# stop("XXXXXXXXXXXXXXXX")
+
+#=====================================================================================
+
+
+
 
 
 

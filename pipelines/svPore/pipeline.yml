@@ -64,7 +64,7 @@ optionFamilies:
                 type: integer
                 required: false
                 default: 10000
-                description: "only report SVs >= --min-sv-size bp (ideally, match --min-sv-size to align --bandwidth)" 
+                description: "only report SVs >= --min-sv-size bp (ideally, --min-sv-size ~ 3 * --bandwidth)" 
             min-alignment-size:
                 order: 3
                 short: a
@@ -78,7 +78,14 @@ optionFamilies:
                 type: double
                 required: false
                 default: 0.9
-                description: "ignore junctions if either flanking alignment has <I gap-compressed match rate"              
+                description: "ignore junctions if either flanking alignment has <I gap-compressed match rate"       
+            junction-bandwidth:
+                order: 5
+                short: b
+                type: integer
+                required: false
+                default: 20
+                description: "junction pairs with up to -b bp Euclidean distance are considered the same SV"                         
 package:
     extract: # the pipeline action after which a data package should assembled
         uploadType: svPore # a signal to the Stage 2 framework regarding the package contents
@@ -87,9 +94,15 @@ package:
             #     type: comma-delimited
             #     manifestType: simple
             #     file: $COLLATE_PREFIX.manifest.csv
-            svNodesFile:
+            svEdgesFile:
                 type: rds
                 file: $DATA_FILE_PREFIX.edges.rds
+            svSegmentsFile:
+                type: rds
+                file: $DATA_FILE_PREFIX.segments.rds
+            svClustersFile:
+                type: rds
+                file: $DATA_FILE_PREFIX.clusters.rds          
 # container:
 #     supported: false    # set to true if you maintain a container registry for this pipeline [false]
 #     registry:  ghcr.io  # domain name of your OCI-compatible, oras-accessible, container registry [ghcr.io]

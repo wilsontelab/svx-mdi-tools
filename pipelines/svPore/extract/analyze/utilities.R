@@ -1,13 +1,18 @@
 #-------------------------------------------------------------------------------------
 # svPore analyze general support functions
 #-------------------------------------------------------------------------------------
+
 # load input data
 loadEdges <- function(type) {
     message(paste("loading", type, "edges"))
     fread(
-        if(type == "sv") env$EDGES_SV_FILE else env$EDGES_TMP_FILE,
-        col.names = edgesCols,
-        colClasses = edgesColClasses,
+        switch(
+            type,
+            sv  = env$EDGES_SV_FILE,    # file with reads that had split alignments
+            tmp = env$EDGES_TMP_FILE    # file with ~10K reads that did not have split alignments
+        ),
+        col.names   = edgesCols,
+        colClasses  = edgesColClasses,
         sep = "\t",
         quote = ""
     )
@@ -15,25 +20,26 @@ loadEdges <- function(type) {
 loadReads <- function(){
     message("loading read sequences")
     fread(
-        env$SEQUENCES_FILE,
-        col.names = readsCols,
-        colClasses = readsColClasses,
+        env$SEQUENCES_FILE, # file with source base-level data for reads in env$EDGES_SV_FILE (J lines) + env$EDGES_TMP_FILE (A lines)
+        col.names   = readsCols,
+        colClasses  = readsColClasses,
         sep = "\t",
         quote = ""
     )
 }
 
-# expand integer nodes out to chrom/strand/pos
-parseSignedWindow <- function(window, side) {
-    strand <- ifelse(window > 0, "+", "-")
-    window <- abs(window)
-    chromIndex <- bitwShiftR(window, 24)
-    dt <- data.table(
-        chromIndex  = chromIndex,
-        chrom       = unlist(revChromIndex[chromIndex]),
-        windowIndex = bitwAnd(window, 2**24 - 1),
-        strand      = strand
-    )
+# nodes are codified into an integer for streamlined comparison
+# this function expands integer nodes out to chrom/strand/pos
+parseSignedWindow <- function(chromWindows, nodes, side) {
+    strands <- ifelse(nodes > 0, "+", "-")
+    genomeIndices <- abs(nodes)
+    dt <- cbind(
+        chromWindows[genomeIndices + 1, .(chrom, chromIndex, windowIndex)],        
+        data.table(
+            genomeIndex = genomeIndices,             
+            strand      = strands         
+        )
+    )        
     names(dt) <- paste0(names(dt), side)
     dt
 }

@@ -1,6 +1,6 @@
 #-------------------------------------------------------------------------------------
 # implement support vector machines (SVMs) for splitting chimeric reads
-# train the models using adapters from the outsides of simple alignments 
+# train the models using adapters from the outsides of simple, non-SV alignments 
 #-------------------------------------------------------------------------------------
 # logic and workflow:
 #   explore the region immediately adjacent to the read outer clips as candidate adapters
@@ -8,7 +8,7 @@
 #   use Smith-Waterman local alignment to find best match of clips to expected adapters
 #   as training negative controls, use sequences well internal to the clip point, expect to NOT match adapters
 #   train an SVM for each end separately, where 3' end clips are generally shorter with fewer bases matched to adapter
-#   require that simple alignments have a minimal clip for inclusion in training set
+#   require that simple alignments have a minimal clip length for inclusion in the training set
 #   provide the SVM with data that summarizes, for paired candidates and controls:
 #       the quality of the best match of the sequence to the adapter, e.g., an alignment score
 #       the location/position of the match within the sequence
@@ -24,6 +24,7 @@
 #-------------------------------------------------------------------------------------
 
 # ONT adapter information
+# TODO: implement support for mosaic ends in Tn5-based rapid kit
 ADAPTER_CORE <- "ACTTCGTTCAGTTACGTATTGCT" # duplex portion of the adapter; last T matches the one-base A-tail
 ADAPTER_CORE_RC <- rc(ADAPTER_CORE)      # ADAPTER_CORE is fused to 5' genomic ends, ADAPTER_CORE_RC is fused to 3' ends
 coreLen <- nchar(ADAPTER_CORE)
