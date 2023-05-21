@@ -29,20 +29,25 @@ settings <- activateMdiHeaderLinks( # uncomment as needed
 # get the sample data to plot
 #----------------------------------------------------------------------
 sourceId <- dataSourceTableServer("source", selection = "single") 
-svNodes <- svNodesReactive(sourceId, session)
-filteredNodes <- filteredNodesReactive(svNodes, input)
+svEdges <- svEdgesReactive(sourceId, session)
+filteredJunctions <- filteredJunctionsReactive(svEdges, input)
 
 #----------------------------------------------------------------------
 # construct the 2D plot of SV edge metrics for finding artifact classes
 #----------------------------------------------------------------------
-plotNodes <- plotNodesReactive(filteredNodes, input)
-summaryPlot <- summaryPlotServer(plotNodes, input)
+plotJunctions <- plotJunctionsReactive(filteredJunctions, input)
+summaryPlot <- summaryPlotServer(plotJunctions, input)
 
 #----------------------------------------------------------------------
 # construct a plot that profile the alignment of a single selected molecule
 #----------------------------------------------------------------------
-segments <- segmentsReactive(svNodes, plotNodes, summaryPlot)
+segments <- segmentsReactive(svEdges, filteredJunctions, plotJunctions, summaryPlot)
 moleculePlot <- moleculePlotServer(sourceId, segments, input, session)
+
+observeEvent(segments(),{
+    message()
+    str(segments())
+})
 
 #----------------------------------------------------------------------
 # define bookmarking actions

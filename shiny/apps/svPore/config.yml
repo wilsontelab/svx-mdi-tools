@@ -19,9 +19,12 @@ description: "Analyze structural variants in nanopore data"
 uploadTypes:
     svPore: 
         contentFileTypes: # anything not listed will not be available to the app
-            svNodesFile:  
+            svEdgesFile:  
                 required: true
-
+            svSegmentsFile:  
+                required: true
+            svClustersFile:  
+                required: true     
 #----------------------------------------------------------------------
 # labels and definitions for all sequential analysis steps shown in sidebar
 #----------------------------------------------------------------------

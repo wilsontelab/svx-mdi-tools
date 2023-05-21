@@ -116,24 +116,52 @@ analyzeSegmentsNetwork <- function(segments, segmentMatches){ # use igraph to id
     cmp <- components(g)
     matchable <- getMatchableSegments(segments)
     clusters <- merge( # scan the network of segment matches for clusters of molecules sharing junctions
-        data.table(segmentName = names(cmp$membership), cluster = cmp$membership),
-        segments[matchable, .(segmentLength, pathType), by = .(segmentName)],
+        data.table(
+            segmentName = names(cmp$membership), 
+            cluster = cmp$membership
+        ),
+        segments[matchable, .(
+            nMatchableJxns,
+            segmentLength, 
+            pathType
+        ), by = .(segmentName)],
         by = "segmentName",
         all.x = TRUE
     )
-    setkey(clusters, cluster, segmentLength)
-    clusters[, { # assign an index segment for each cluster as the longest segment in the group
+    setkey(clusters, cluster, nMatchableJxns, segmentLength)
+    clusters[, { # assign an index segment for each cluster as the longest segment in the group of segments with the most matchable junctions
         .(
             segmentName = segmentName,
             isIndexSegment = segmentName == segmentName[.N],        
             indexSegment = segmentName[.N],
+            indexNMatchableJxns = nMatchableJxns[.N],            
             indexSegmentLength = segmentLength[.N],
             pathTypes = paste(sort(unique(pathType)), collapse = " ")
         )
     }, by = .(cluster)][,
         .SD,
-        .SDcols = c("segmentName","isIndexSegment","indexSegment","indexSegmentLength","pathTypes")
+        .SDcols = c("segmentName","isIndexSegment","indexSegment","indexNMatchableJxns","indexSegmentLength","pathTypes")
     ]
+}
+collapseClusters <- function(confirmedEdges, expandedClusters){
+    setkey(confirmedEdges, segmentName)
+    clusters <- expandedClusters[, .(
+        nSegments = .N,
+        indexNMatchableJxns = indexNMatchableJxns[1],
+        indexSegmentLength = indexSegmentLength[1],
+        pathTypes = pathTypes[1],
+        segmentNames = list(unique(segmentName)),
+        junctionKeys = {
+            clusterSegmentsNames <- unique(segmentName)
+            clusterEdges <- confirmedEdges[clusterSegmentsNames]
+            isJunction <- getMatchableJunctions(clusterEdges)    
+            list( clusterEdges[isJunction, unique(indexJunctionKey)] )  
+        }
+    ), by = .(indexSegment)]
+    clusters[, nJunctionKeys := length(junctionKeys[[1]]), by = .(indexSegment)]
+    clusters[, indexIsComplete := (indexNMatchableJxns == nJunctionKeys)]
+    # TODO: determine: indexIsClosed, clusterIsClosed
+    clusters
 }
 # getSegmentPairs <- function(segmentClusters){ # work within the established segment clusters to get pairwise segments
 #     x <- segmentClusters[, data.table(t(combn(segmentName, 2))), by = .(refSegment)] 

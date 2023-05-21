@@ -92,8 +92,8 @@ buildLocus <- function(segments, minQStarts){
                 slope = strand
             )])
 
-            for(edge_ in xq[, edge]){
-                xe <- xq[edge == edge_]
+            for(edgeN_ in xq[, edgeN]){
+                xe <- xq[edgeN == edgeN_]
                 if(xe$edgeType == edgeTypes$ALIGNMENT){
                     qryPos <- xe[, qStart]
                     refPos <- xe[, min(rStart, rEnd)]
@@ -208,12 +208,14 @@ renderAlignmentPlot <- function(xlim, d){
         ylab = d$chrom,
         xaxt = "n"
     )  
-    for(i in 1:nrow(d$bandwidthLines)) abline(
-        d$bandwidthLines[i, intercept], 
-        d$bandwidthLines[i, slope],
-        col = CONSTANTS$plotlyColors$green,
-        lty = 2
-    )    
+    tryCatch({
+        for(i in 1:nrow(d$bandwidthLines)) abline(
+            d$bandwidthLines[i, intercept], 
+            d$bandwidthLines[i, slope],
+            col = CONSTANTS$plotlyColors$green,
+            lty = 2
+        )          
+    }, error = function(e) NULL)
     points(d$points$x, d$points$y, col = d$points$col, pch = 19, cex = 0.25)
     for(i in 1:nrow(d$labels)) d$labels[i, text(x, y, label)]
 }
@@ -252,8 +254,8 @@ renderReadQualPlot <- function(xlim, segments){
     )
     abline(h = 1:3, col = CONSTANTS$plotlyColors$grey)
     xq <- segments$dt[qName == segments$qNames[1]]
-    dt <- do.call(rbind, lapply(xq[edgeType == edgeTypes$ALIGNMENT, edge], function(edge_){
-        xe <- xq[edge == edge_]
+    dt <- do.call(rbind, lapply(xq[edgeType == edgeTypes$ALIGNMENT, edgeN], function(edgeN_){
+        xe <- xq[edgeN == edgeN_]
         qryPos <- xe[, qStart]
         refPos <- xe[, min(rStart, rEnd)]
         dp <- cigarDotPlot(xe[, cigar], qryPos, refPos, xe[, strand])
@@ -275,14 +277,15 @@ readQualHeight <- 0.19
 plotSegments <- function(sourceId, segments) {
     xlim <- range(segments$dt[, qStart], segments$dt[, qEnd], na.rm = TRUE)
 
-    # dprint(segments$qNames)
-
     # prepare for alignment to multiple genome windows, i.e., loci
-
-    qualRowHeightSum <- baseQualHeight + readQualHeight
-    alnRowHeight <- (1 - qualRowHeightSum) / segments$nLoci
-    heights <- c(rep(alnRowHeight, segments$nLoci), baseQualHeight, readQualHeight)
-    nPlotRows <- segments$nLoci + 2    
+    # qualRowHeightSum <- baseQualHeight + readQualHeight
+    # alnRowHeight <- (1 - qualRowHeightSum) / segments$nLoci
+    # heights <- c(rep(alnRowHeight, segments$nLoci), baseQualHeight, readQualHeight)
+    # nPlotRows <- segments$nLoci + 2    
+    # layout(matrix(1:nPlotRows, ncol = 1), heights = heights) 
+    alnRowHeight <- (1 - readQualHeight) / segments$nLoci
+    heights <- c(rep(alnRowHeight, segments$nLoci), readQualHeight)
+    nPlotRows <- segments$nLoci + 1   
     layout(matrix(1:nPlotRows, ncol = 1), heights = heights) 
 
     # plot alignments
@@ -290,7 +293,6 @@ plotSegments <- function(sourceId, segments) {
     plotData <- lapply(segments$uniqueLoci, function(locus_) buildLocus(segments$dt[locus1 == locus_ & locus2 == locus_], minQStarts) )
     names(plotData) <- as.character(segments$uniqueLoci)
     orderedLoci <- rev(sort(segments$uniqueLoci))
-
     if(segments$nLoci > 1) {
         pairs <- as.data.table(expand.grid(leftLocus = segments$uniqueLoci, rightLocus = segments$uniqueLoci))
         pairs <- pairs[leftLocus != rightLocus]
@@ -298,16 +300,12 @@ plotSegments <- function(sourceId, segments) {
             plotData <<- buildInterLocus(segments$dt[locus1 == pair[1] & locus2 == pair[2]], plotData)
         })
     }
-    # for(i in 1:segments$maxI) if(segments$dt[i, locus1 != locus2]){
-    #     leftLocus  <- segments$dt[i, locus1]
-    #     rightLocus <- segments$dt[i, locus2] 
-    # }
     for(locus_ in orderedLoci) renderAlignmentPlot(xlim, plotData[[as.character(locus_)]])
 
     # load read data from indexed file    
-    read <- getReadFromSequenceIndex(sourceId, segments$qNames[1])
+    # read <- getReadFromSequenceIndex(sourceId, segments$qNames[1])
 
     # plot QUAL
-    renderBaseQualPlot(xlim, read)
+    # renderBaseQualPlot(xlim, read)
     renderReadQualPlot(xlim, segments)
 }

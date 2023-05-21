@@ -9,7 +9,7 @@ getSummaryAxisLines <- function(input){
     getLines <- function(column){
         if(column %in% c("eventSize","insertSize")){
             -10:10
-        } else if(column %in% c("nInstances")) {
+        } else if(column %in% c("nJunctionInstances")) {
             seq(0, 100, 10)
         } else {
             0:1
@@ -21,11 +21,11 @@ getSummaryAxisLines <- function(input){
         col = rgb(0, 0, 0, 0.15)
     )
 }
-summaryPlotServer <- function(plotNodes, input) mdiInteractivePlotServer(
+summaryPlotServer <- function(plotJunctions, input) mdiInteractivePlotServer(
     "summaryPlot",      
     click = TRUE,
     contents = reactive({ 
-        d <- plotNodes()
+        d <- plotJunctions()
         list(
             plotArgs = list(
                 x = d$xj,

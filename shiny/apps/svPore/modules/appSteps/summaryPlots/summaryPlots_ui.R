@@ -11,20 +11,14 @@ summaryPlotsUI <- function(id, options) {
     # override missing options to module defaults
     options <- setDefaultOptions(options, stepModuleInfo$summaryPlots)
 
-    axisColumns <- c("eventSize", "insertSize","nInstances","hasAdapter")
-    colorColumns <- c("edgeType","passedBandwidth","hasAdapter","isChrM")
-    filterLabels <- c("passedBandwidth","hasAdapter","isChrM","invert")
+    axisColumns <- c("eventSize", "insertSize","nJunctionInstances","hasAdapter","blastIdentity","gapCompressedIdentity")
+    colorColumns <- c("edgeType","passedFlankCheck","passedBandwidth","hasAdapter")
+    filterTypes <- c("AllJunctions","RealJunctions","MatchableJunctions","FusableJunctions","SingletonJunctions")
+    filterLabels <- c("passedFlankCheck","passedBandwidth","hasAdapter","isChrM","invert")
+    filterLabelsSelected <- c("passedFlankCheck","passedBandwidth","hasAdapter","isChrM")
 
-    #  [1] "junction"         "qName"            "edge"             "node1"
-#  [5] "node2"            "edgeType"         "mapQ"             "eventSize"       
-#  [9] "insertSize"       "xStart"           "xEnd"             "edgeClass"       
-# [13] "nStrands"         "chromIndex1"      "chrom1"           "windowIndex1"    
-# [17] "strand1"          "chromIndex2"      "chrom2"           "windowIndex2"    
-# [21] "strand2"          "nInstances"       "nMolecules"       "passedBandwidth" 
-# [25] "score3"           "score5"           "start3"           "end5"
-# [29] "hasAdapter3"      "hasAdapter5"      "hasAdapter"       "fractionChimeric"
-# [33] "segment"          "segmentName"
-
+# mapQ
+# nStrands
 
     # return the UI contents
     standardSequentialTabItem(
@@ -46,17 +40,25 @@ summaryPlotsUI <- function(id, options) {
             dataSourceTableUI(ns("source"), "Sample", width = 8, collapsible = FALSE)
         ),
         fluidRow(
+            # column(width = 2, selectInput(ns("xAxisColumn"), "X Axis", choices = axisColumns, selected = "nJunctionInstances")),
+            # column(width = 2, selectInput(ns("yAxisColumn"), "Y Axis", choices = axisColumns, selected = "eventSize")),
             column(width = 2, selectInput(ns("xAxisColumn"), "X Axis", choices = axisColumns, selected = "eventSize")),
             column(width = 2, selectInput(ns("yAxisColumn"), "Y Axis", choices = axisColumns, selected = "insertSize")),
             column(width = 2, selectInput(ns("colorColumn"), "Color By", choices = colorColumns, selected = "edgeType")),
-            column(width = 2, numericInput(ns("opacity"), "Point Opacity", 0.1, min = 0.025, max = 1, step = 0.025)),
-            column(width = 2, numericInput(ns("minMapQ"), "Min MapQ", 55, min = 0, max = 60, step = 5)),
+            column(width = 2, numericInput(ns("opacity"), "Point Opacity", 0.5, min = 0.5, max = 1, step = 0.025)),
             column(width = 2, selectInput(ns("edgeType"), "Edge Type", choices = junctionTypes, selected = "All"))
+            # column(width = 2, numericInput(ns("minMapQ"), "Min MapQ", 55, min = 0, max = 60, step = 5)),
         ),
         fluidRow(
             style = "margin-bottom: 20px;",
-            column(width = 12, checkboxGroupInput(ns("filters"), "Filters", filterLabels, inline = TRUE)) 
+            column(width = 2, radioButtons(ns("showChrM"), "Show ChrM", c("No", "Yes"), inline = TRUE, selected = "No")),             
+            column(width = 10, radioButtons(ns("filterType"), "Filter Type", filterTypes, inline = TRUE, selected = "AllJunctions"))
+            # column(width = 12, checkboxGroupInput(ns("filters"), "Filters", filterLabels, inline = TRUE, selected = filterLabelsSelected)) 
         ),
+        # fluidRow(
+        #     style = "margin-bottom: 20px;",
+        #     column(width = 12, checkboxGroupInput(ns("filters"), "Filters", filterLabels, inline = TRUE, selected = filterLabelsSelected)) 
+        # ),
         fluidRow(
             box(
                 width = 12,
@@ -72,7 +74,6 @@ summaryPlotsUI <- function(id, options) {
                 mdiInteractivePlotUI(ns("moleculePlot"))
             )
         )
-
         # ,
         # fluidRow(
         #     bufferedTableUI (

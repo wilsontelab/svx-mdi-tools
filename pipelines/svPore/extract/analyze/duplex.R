@@ -17,6 +17,19 @@
 # update nStrands to 2 on remaining reads when dropping duplex partners to a read
 # count the number of instances, i.e., remaining unique source molecules, of each indexJunctionKey 
 # -------------------------------------------------------------------------------------
+# KNOWN LIMITATION - unfortunately, nanopore reads can often be partial spans, for reasons that
+# might include strand breaks, low quality stretches, etc. This appears to happen frequently
+# on paired duplex reads, e.g.:
+#       ----------------|------------>
+#       ~~~~<-----------|-------------
+# where ~~~~ denotes bases presumed to be in the parent duplex that were not sequenced.
+# Some insight into this situation can be inferred from having one shared endpoint, but even
+# this is probably not wholly reliable. As a consequence, some true duplex reads of chimeric 
+# molecules will persist and fail filtering here, which demands that all fusable junctions 
+# must have at least two detections _on the same strand_. Alternatively, could track and
+# require that two different physical pores, i.e., nanopore channels, reported the same junction;
+# that information is available in sequencing_summary.txt.
+# -------------------------------------------------------------------------------------
 
 # concatenate nodes and edges into a single row per read (not segment)
 collapseReads <- function(edges, chromSizes){
@@ -71,7 +84,11 @@ adjustEdgesForDuplex <- function(edges, duplexStatus){
     edges <- edges[retained == TRUE] # drops or keeps entire reads
     edges[isDuplex == TRUE, nStrands := 2] 
     isJunction <- getJunctionEdges(edges)
-    edges[isJunction, nJunctionInstances := .N, by = .(indexJunctionKey)] # this count now represents unique source molecules
+    edges[isJunction, ":="(
+        nJunctionInstances = .N,        
+        nCanonical    = sum( isCanonical), # recalculate canonicity for use by getFusableJunctions
+        nNonCanonical = sum(!isCanonical)
+    ), by = .(indexJunctionKey)] # this count now ~represents unique source molecules, but note LIMITATION above!
     setkey(edges, qName, blockN, edgeN)
     edges
 }

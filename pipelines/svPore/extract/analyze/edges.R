@@ -52,7 +52,7 @@ parseEdgeMetadata <- function(edges, chromWindows){
     edges[, gapCompressedIdentity2 := NULL]
 
     ######### restrict tmp file size while developing (make this deletion permanent?)
-    edges[, cigar := NULL]
+    # edges[, cigar := NULL]
 
     setkey(edges, qName, blockN, edgeN)
     edges

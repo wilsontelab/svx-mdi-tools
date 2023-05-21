@@ -188,16 +188,23 @@ confirmedEdges <- splitReadsToSegments(edges)
 segments <- collapseSegments(confirmedEdges, chromSizes)
 nuclearSegments <- getNuclearSegments(segments)
 segmentMatches <- findMatchingSegments(nuclearSegments)
-segmentClusters <- analyzeSegmentsNetwork(nuclearSegments, segmentMatches)
+expandedClusters <- analyzeSegmentsNetwork(segments, segmentMatches)
+segmentClusters <- collapseClusters(confirmedEdges, expandedClusters)
 
-message()
-str(segmentClusters)
-message()
-print(segmentClusters[, .(nSegments = .N), by = .(indexSegment)][, .(nClusters = .N), by = .(nSegments)][order(nSegments)])
-
+# message()
+# str(expandedClusters)
+# message()
+# str(segmentClusters)
+# message()
+# print(expandedClusters[, .(nSegments = .N), by = .(indexSegment)][, .(nClusters = .N), by = .(nSegments)][order(nSegments)])
+# # # print(dcast(segmentClusters, nSegments ~ nJunctionKeys, fun.aggregate = paste, value.var = "pathTypes", collapse = " "))
+# # # print(segmentClusters[, .N, by = .(nSegments, nJunctionKeys)])
+# # # print(segmentClusters[, .N, by = .(indexIsComplete)])
+# # # print(segmentClusters[, .N, by = .(pathTypes)][order(-N)])
+# stop("XXXXXXXXXXXXXXXXXX")
 
 saveRDS(
-    confirmedEdges, 
+    edges, 
     paste(env$DATA_FILE_PREFIX, "edges", "rds", sep = ".")
 )
 saveRDS(
