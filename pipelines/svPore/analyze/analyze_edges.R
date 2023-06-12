@@ -2,7 +2,7 @@
 # definition of terms used in svPore analyze
 #-------------------------------------------------------------------------------------
 # read          a single, contiguous DNA molecule sequenced by a nanopore, as assessed by the basecaller (could be chimeric!)
-# node          a specific numbered position or window on a genome strand; two nodes define an alignment or SV junction
+# node          a specific numbered position or window on a genome strand; two nodes define an edge
 # edge          the connection between two nodes, either an alignment or an SV junction
 # alignment     an edge that corresponds to a portion of a read aligned contiguously to the genome by minimap2
 # junction      an edge that nominates an SV by connecting two distant alignments
@@ -39,10 +39,10 @@
 message("initializing")
 suppressPackageStartupMessages(suppressWarnings({
     library(data.table)
-    library(e1071) # provides the svm classifier
-    library(parallel)
-    library(igraph) 
-    library(bit64)
+    library(parallel)    
+    library(e1071)  # provides the svm classifier
+    library(igraph) # provides graph/network analysis
+    library(bit64)  # provides support for 64-bit integers
 }))
 #-------------------------------------------------------------------------------------
 # load, parse and save environment variables
@@ -59,21 +59,14 @@ checkEnvVars(list(
         'DATA_NAME',
         'EDGES_TMP_FILE',
         'EDGES_SV_FILE',
-        'SEQUENCES_FILE',
-        'COVERAGE_FILE',
         'PLOT_PREFIX',
         'PLOTS_DIR'
     ),
     integer = c(
         'N_CPU',
         'WINDOW_SIZE',
-        'MIN_SV_SIZE',
-        'MIN_MAPQ',
-        'MIN_ALIGNMENT_SIZE',
+        'MIN_SV_SIZE'
         'JUNCTION_BANDWIDTH'
-    ),
-    double = c(
-        'MIN_ALIGNMENT_IDENTITY'
     )
 ))
 #-------------------------------------------------------------------------------------
@@ -82,14 +75,13 @@ sourceScripts(rUtilDir, 'utilities')
 rUtilDir <- file.path(env$GENOMEX_MODULES_DIR, 'utilities', 'R')
 sourceScripts(file.path(rUtilDir, 'sequence'),   c('general', 'IUPAC', 'smith_waterman'))
 sourceScripts(file.path(rUtilDir, 'genome'),   c('chroms'))
-sourceScripts(file.path(env$ACTION_DIR, 'analyze'), c(
+sourceScripts(env$ACTION_DIR, c(
     'constants','utilities','matching','filters',
     'edges','svm','junctions','duplex','segments',
     'plot'
 ))
 setCanonicalChroms()
 chromSizes <- loadChromSizes(env$WINDOW_SIZE)
-chromWindows <- expandChromWindows(chromSizes)
 #-------------------------------------------------------------------------------------
 # set some options
 setDTthreads(env$N_CPU)
@@ -110,62 +102,84 @@ edges4Rds            <- file.path(dir, "debug.edges4.rds")
 # =====================================================================================
 # initial loading and parsing of edges and associated read and block-level quality metrics
 # -------------------------------------------------------------------------------------
-# edges <- loadEdges("sv")
-# edges <- parseEdgeMetadata(edges, chromWindows)
-# edges <- checkIndelBandwidth(edges)
+edges <- loadEdges("sv")
 
-# message("saving edges1 RDS file")
-# saveRDS(edges, edges1Rds)
+######### restrict tmp file size while developing (make this deletion permanent?)
+edges[, cigar := NULL]
+
+setkey(edges, edgeSetN, blockN, edgeN)
+# edges <- parseEdgeMetadata(edges, chromSizes)
+edges <- checkIndelBandwidth(edges)
+message("saving edges1 RDS file")
+saveRDS(edges, edges1Rds)
 # message("reading edges1 RDS file")
 # edges <- readRDS(edges1Rds)
+
+message()
+str(edges)
+
+stop("XXXXXXXXXXXXXXXXXXX")
+
 #=====================================================================================
 
 #=====================================================================================
 # adapter splitting of chimeric molecules that derive from failure of the 
 # basecaller to recognize that a new molecule had entered the pore
 #-------------------------------------------------------------------------------------
-# reads <- loadReads()
-# trainingSet <- extractSvmTrainingSet()
-# reads <- reads[molType == "J"]
-# svms <- trainAdapterClassifiers(trainingSet)
-# jxnParameters <- extractJunctionSvmParameters()
-# rm(reads)
+# reads <- loadReads() # has both training and SV reads
+trainingEdges <- loadEdges("tmp")
+trainingSet <- extractSvmTrainingSet(trainingEdges)
+# reads <- reads[!(qName %in% trainingEdges[, qName])] # drop training reads, only SV reads remain
+svms <- trainAdapterClassifiers(trainingSet)
+# jxnParameters <- extractJunctionSvmParameters(edges, reads)
+rm(reads, trainingEdges)
 
-# message("saving SVM RDS files")
-# saveRDS(trainingSet,    trainingSetRds)
-# saveRDS(svms,           svmsRds)
+message("saving SVM RDS files")
+saveRDS(trainingSet,    trainingSetRds)
+saveRDS(svms,           svmsRds)
 # saveRDS(jxnParameters,  jxnParametersRds)
 # message("reading SVM RDS files")
 # trainingSet     <- readRDS(trainingSetRds)
 # svms            <- readRDS(svmsRds)
 # jxnParameters   <- readRDS(jxnParametersRds)
 
-# adapterCheck <- checkJunctionsForAdapters(svms, jxnParameters)
-# edges <- updateEdgesForAdapters(edges, adapterCheck)
-# rm(trainingSet, svms, jxnParameters, adapterCheck)
 
-# message("saving edges2 RDS file")
-# saveRDS(edges, edges2Rds)
+# TODO: filter so that this only applies to junctions still in play, i.e., that have adapter scoring
+adapterCheck <- checkJunctionsForAdapters(svms, jxnParameters)
+edges <- updateEdgesForAdapters(edges, adapterCheck)
+rm(trainingSet, svms, jxnParameters, adapterCheck)
+
+message()
+str(edges)
+
+message("saving edges2 RDS file")
+saveRDS(edges, edges2Rds)
 # message("reading edges2 RDS file")
 # edges <- readRDS(edges2Rds)
+
+stop("XXXXXXXXXXXXXXXXXXX")
+
+# !!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+# working here to update analyze code to use the newly reformatted execute table format, including base-level nodes as integer64
+
 #=====================================================================================
 
 #=====================================================================================
 # matching individual SV junctions between molecules
 # -------------------------------------------------------------------------------------
-# edges <- dropReadsWithNoJunctions(edges)
-# edges <- setCanonicalNodes(edges)
-# junctionsToMatch <- getJunctionsToMatch(edges)
-# junctionHardCounts <- getJunctionHardCounts(junctionsToMatch)
-# junctionMatches <- findMatchingJunctions(junctionsToMatch) 
-# junctionClusters <- analyzeJunctionNetwork(junctionMatches, junctionHardCounts)
-# edges <- finalizeJunctionClustering(edges, junctionHardCounts, junctionClusters)
-# rm(junctionsToMatch, junctionHardCounts, junctionMatches, junctionClusters)
+edges <- dropReadsWithNoJunctions(edges)
+edges <- setCanonicalNodes(edges)
+junctionsToMatch <- getJunctionsToMatch(edges)
+junctionHardCounts <- getJunctionHardCounts(junctionsToMatch)
+junctionMatches <- findMatchingJunctions(junctionsToMatch) 
+junctionClusters <- analyzeJunctionNetwork(junctionMatches, junctionHardCounts)
+edges <- finalizeJunctionClustering(edges, junctionHardCounts, junctionClusters)
+rm(junctionsToMatch, junctionHardCounts, junctionMatches, junctionClusters)
 
-# message("saving edges3 RDS file")
-# saveRDS(edges, edges3Rds)
-# message("reading edges3 RDS file")
-# edges <- readRDS(edges3Rds)
+message("saving edges3 RDS file")
+saveRDS(edges, edges3Rds)
+message("reading edges3 RDS file")
+edges <- readRDS(edges3Rds)
 #=====================================================================================
 
 #=====================================================================================

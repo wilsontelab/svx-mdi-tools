@@ -13,8 +13,8 @@ use constant {
 
 # working variables
 use vars qw($MIN_SV_SIZE 
-            @alnNodes @alnTypes @alnMapQs @alnSizes @alnInsSizes @alnAlns
-            @nodes @types @mapQs @sizes @insSizes @outAlns);  
+            @alnNodes @alnMapQs @alnCigars @alnAlnQs @alnTypes @alnSizes @alnInsSizes @alnAlns
+            @nodes    @mapQs    @cigars    @alnQs    @types    @sizes    @insSizes    @outAlns);  
 my $minCigarSvDigits = length($MIN_SV_SIZE);
 
 # step through a single alignment to find small SVs encoded in the CIGAR string
@@ -59,15 +59,19 @@ sub parseSvsInCigar {
 
                 # commit the required edges for this large indel
                 if($operation eq INSERTION){
-                    push @alnTypes,    $operation; 
                     push @alnMapQs,    0;
+                    push @alnCigars,   "NA";
+                    push @alnAlnQs,    0;
+                    push @alnTypes,    $operation; 
                     push @alnSizes,    $isSmallDLargeI ? $prevSize : 0;
                     push @alnInsSizes, $size; 
                     push @alnAlns,     [];
                 } else {
                     $refPos += $size;
-                    push @alnTypes,    $operation; 
                     push @alnMapQs,    0;
+                    push @alnCigars,   "NA";
+                    push @alnAlnQs,    0;
+                    push @alnTypes,    $operation; 
                     push @alnSizes,    $size;
                     push @alnInsSizes, $prevOp eq INSERTION ? $prevSize : 0; # handle smallI->largeD operations
                     push @alnAlns,     [];
@@ -102,10 +106,11 @@ sub parseSvsInCigar {
 }
 
 # set junction MAPQ as minimum MAPQ of the two flanking alignments
-sub fillJxnMapQs {
+sub fillJxnQs {
     if(@mapQs > 1){
         for (my $i = 1; $i <= $#mapQs - 1; $i += 2){
-            $mapQs[$i] = min($mapQs[$i - 1], $mapQs[$i + 1])
+            $mapQs[$i] = min($mapQs[$i - 1], $mapQs[$i + 1]);
+            $alnQs[$i] = min($alnQs[$i - 1], $alnQs[$i + 1]);
         }
     }
 }
@@ -120,8 +125,10 @@ sub printMolecule {
             $molId,
             $nodes[$i], 
             $nodes[$i + 1], 
-            $types[$i], 
             $mapQs[$i], 
+            $cigars[$i], 
+            $alnQs[$i], 
+            $types[$i], 
             $sizes[$i], 
             $insSizes[$i],
             @extraVals # nStrands for svPore, various for svAmplicon

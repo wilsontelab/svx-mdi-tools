@@ -52,6 +52,14 @@ sub getSignedWindow { # called by parse_nodes.pl
     my ($chromIndex, $coordinate, $strand, $add) = @_;
     getUnsignedWindow($chromIndex, $coordinate, $add) * ($strand eq "+" ? 1 : -1);
 }
+sub getUnsignedNode {
+    my ($chromIndex, $coordinate, $add) = @_;
+    $chromSizes[$chromIndex][N_BASES_BEFORE] + $coordinate + $add; # 1-referenced position in concatenated genome
+}
+sub getSignedNode {
+    my ($chromIndex, $coordinate, $strand, $add) = @_;
+    getUnsignedNode($chromIndex, $coordinate, $add) * ($strand eq "+" ? 1 : -1);
+}
 sub parseSignedWindow {
     my ($window) = @_;
     my $strand = $window > 0 ? "+" : "-";
@@ -80,7 +88,8 @@ sub initializeWindowCoverage {
         my $nChromWindows = coordinateToWindowIndex($nChromBases) + 1;     
         $chromSizes{$chrom} = $chromSizes[$chromIndex] = [
             $nChromBases,   $nBasesBefore,   $nChromBases   + $nBasesBefore,
-            $nChromWindows, $nWindowsBefore, $nChromWindows + $nWindowsBefore];
+            $nChromWindows, $nWindowsBefore, $nChromWindows + $nWindowsBefore
+        ];
         $nBasesBefore += $nChromBases;
         $nWindowsBefore += $nChromWindows;
     }
@@ -89,23 +98,22 @@ sub initializeWindowCoverage {
 }
 
 # functions for creating a window coverage map 
-# it's possible for short segments to disappear in the map if fully contained in a single window
 # these functions are called by window_coverage.pl to parse alignment edges
 sub incrementWindowCoverage { # place up/down marks in windows
-    my ($window1, $window2) = @_;
-    my $genomeIndex1 = abs($window1);
-    my $genomeIndex2 = abs($window2);
-    $genomeIndex1 > $genomeIndex2 and ($genomeIndex1, $genomeIndex2) = ($genomeIndex2, $genomeIndex1);
-    $windowCoverage[$genomeIndex1]     += 1; # up in the aln's first window
-    $windowCoverage[$genomeIndex2 + 1] -= 1; # down in the window AFTER this aln
+    my ($node1, $node2) = @_;
+    my $i1 = coordinateToWindowIndex(abs($node1)); # nodes are 1-referenced positions across the concatenated genome
+    my $i2 = coordinateToWindowIndex(abs($node2));
+    $i1 > $i2 and ($i1, $i2) = ($i2, $i1);
+    $windowCoverage[$i1]     += 1; # up in the aln's first window
+    $windowCoverage[$i2 + 1] -= 1; # down in the window AFTER this aln
 }
 sub printWindowCoverage {
     open my $outH, "|-", "bgzip -c | slurp -s 10M -o $ENV{COVERAGE_FILE}" or die "could not open: $ENV{COVERAGE_FILE}\n";
     my $coverage = 0;
-    foreach my $genomeIndex(0..($#windowCoverage - 1)){
-        $coverage += $windowCoverage[$genomeIndex];
-        my $window = parseSignedWindow($genomeIndex);
-        print $outH join("\t", $$window{chrom}, windowIndexToCoordinate($$window{windowIndex}), $genomeIndex, $coverage), "\n";
+    foreach my $i(0..($#windowCoverage - 1)){ # i are 0-referenced window indices across the concatenated genome
+        $coverage += $windowCoverage[$i];
+        my $window = parseSignedWindow($i);
+        print $outH join("\t", $$window{chrom}, windowIndexToCoordinate($$window{windowIndex}), $i, $coverage), "\n";
     }
     close $outH;
 }

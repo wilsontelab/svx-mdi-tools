@@ -9,10 +9,12 @@
 export COLLATE_PREFIX=$DATA_GENOME_PREFIX.collate
 export CONSENSUS_PREFIX=$DATA_GENOME_PREFIX.consensus
 
-# extract
+# extract/rextract
 export EXTRACT_PREFIX=$DATA_GENOME_PREFIX.extract
+export REEXTRACT_PREFIX=$DATA_GENOME_PREFIX.reextract
 export COMPILE_PREFIX=$DATA_GENOME_PREFIX.compile
 export EXTRACT_GLOB_PREFIX=$TASK_DIR/*/*.$GENOME.extract # for multi-sample find
+export REEXTRACT_GLOB_PREFIX=$TASK_DIR/*/*.$GENOME.reextract # for multi-sample find
 export COMPILE_GLOB_PREFIX=$TASK_DIR/*/*.$GENOME.compile
 
 # coverage 

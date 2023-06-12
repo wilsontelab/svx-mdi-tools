@@ -4,55 +4,117 @@
 edgesCols <- c( 
     "qName",
     "node1",
-    "cigar", # omit "1" suffix since will purge the redudancy to a single entry per alignment
-    "blastIdentity",
-    "gapCompressedIdentity",
+    "qStart",
     "node2",
-    "cigar2",
-    "blastIdentity2",
-    "gapCompressedIdentity2",
-    "edgeType",
+    "qEnd",
     "mapQ",
+    "cigar",
+    "gapCompressedIdentity",
+    "edgeType",
     "eventSize",
     "insertSize",
-    "xStart",
-    "xEnd",
-    "edgeClass",
-    "nStrands"
+    "nStrands",
+    #-------------,
+    "passedFlanks",
+    "baseQual",
+    "sStart",
+    "sEnd",
+    #-------------,
+    "clip5",
+    "score5",
+    "nBases5",
+    "start5",
+    "end5",
+    "clip3",
+    "score3",
+    "nBases3",
+    "start3",
+    "end3",
+    "score5C",
+    "nBases5C",
+    "start5C",
+    "end5C",
+    "score3C",
+    "nBases3C",
+    "start3C",
+    "end3C",
+    #-------------,
+    "channel",
+    "pod5File",
+    "blockN",
+    "edgeN",
+    "edgeSetN"
 )
 edgesColClasses <- c(
     "character",
+    "integer64",
+    "integer",
+    "integer64",
+    "integer",
     "integer",
     "character",
     "numeric",
-    "numeric",
-    "integer",
-    "character",
-    "numeric",
-    "numeric",
     "character",
     "integer",
     "integer",
+    "integer"
+    #-------------,
+    "logical",
+    "numeric",
     "integer",
     "integer",
+    #-------------,
+    "integer",
+    "integer",
+    "integer",
+    "integer",
+    "integer",
+    "integer",
+    "integer",
+    "integer",
+    "integer",
+    "integer",
+    "integer",
+    "integer",
+    "integer",
+    "integer",
+    "integer",
+    "integer",
+    "integer",
+    "integer",
+    #-------------,
+    "integer",
+    "character",
     "integer",
     "integer",
     "integer"
 )
-readsCols = c(
-    "molType", 
-    "qName",
-    "qSeq"
-    # ,
-    # "qQual"
-)
-readsColClasses = c(
-    "character",
-    "character",
-    "character"
-    # ,
-    # "character"
-)
+# readsCols = c(
+#     "qName",
+#     "qSeq",
+#     "moves",
+#     "downsampling",
+#     "nSamples",
+#     "nTrimmedSamples",
+#     "meanBaseQual",
+#     "channel",
+#     "pod5File"
+#     # ,
+#     # "qQual"
+# )
+# readsColClasses = c(
+#     "character",
+#     "character",
+#     "character",
+#     "integer",
+#     "integer",
+#     "integer",
+#     "integer",
+#     "integer",
+#     "character"
+#     # ,
+#     # "character"
+# )
 
 edgeTypes <- list(
     ALIGNMENT     = "A", # the single type for a contiguous aligned segment
@@ -62,16 +124,12 @@ edgeTypes <- list(
     DELETION      = "D",
     UNKNOWN       = "?",
     INSERTION     = "I", 
-    PROPER        = "P"
+    PROPER        = "P",
+    SPACER        = "S"
 )
 inlineSvTypes <- c(edgeTypes$DELETION, edgeTypes$INSERTION)
 incrementRefTypes <- c(edgeTypes$ALIGNMENT, edgeTypes$DELETION)
 splitTypes <- c(edgeTypes$TRANSLOCATION, edgeTypes$INVERSION)
-
-edgeClasses <- list(
-    FROM_SPLIT = 2, # thus, the value implies the number of alignments 
-    FROM_CIGAR = 1
-)
 
 plotlyColors <- list(
     blue    = '#1f77b4',  # muted blue

@@ -11,28 +11,41 @@ actions:
         condaFamilies:
             - genomex-mdi-tools//base
             - genomex-mdi-tools//genome
+            # - genomex-mdi-tools//nanopore
             - r-4.2
-            - adapterTrimming
+            - svPore
         optionFamilies:
             - genomex-mdi-tools//genome
+            # - genomex-mdi-tools//dorado
+            # - genomex-mdi-tools//pod5-dir
     download:
         order: 1
-        module: genomex-mdi-tools//nanopore/download             
+        module: genomex-mdi-tools//nanopore/download                   
     convert:
         order: 2
         module: genomex-mdi-tools//nanopore/convert
     basecall:
         order: 3
         module: genomex-mdi-tools//nanopore/basecall
+        override:
+            description: use Dorado to perform faster, lower-accuracy basecalling of all POD5 reads
+            ont-model:   dna_r10.4.1_e8.2_400bps_hac@v4.1.0 # the hac (high-accuracy) model is much faster than sup (super-accuracy) and recommended for first pass
+        env-vars:
+            dorado-output-type:   all_reads        
+            dorado-output-format: fastq
     align:
         order: 4
         module: genomex-mdi-tools//align/dna-long-read
+        override:
+            description: align all lower-accuracy long read fastqs to genome at low resolution using minimap2
+        env-vars:
+            input-file-type: all_reads
+            paf-file-type: all_reads        
+            minimap2-accuracy: low
     extract:
         order: 5
         optionFamilies:
-            - genomex-mdi-tools//fastq-dir
-            - genomex-mdi-tools//read-filtering
-            - sv-finding
+            - size-limits
         resources:
             required:
                 total-ram: 16G
@@ -42,14 +55,52 @@ actions:
         job-manager:
             recommended:
                 time-limit: 4:00:00
-        description: "pull molecules that support an SV junction and create a coverage map"
+        description: "pull molecules that provisionally nominate SV junctions and create a coverage map"
+    rebasecall:
+        order: 6
+        module: genomex-mdi-tools//nanopore/basecall
+        override:
+            description: use Dorado to perform slower, super-accuracy basecalling of target reads, mostly SV candidates
+            ont-model:   dna_r10.4.1_e8.2_400bps_sup@v4.1.0 # the sup (super-accuracy) is recommended for best base-level analysis of SV reads and adapters
+        env-vars:
+            dorado-output-type:   target_reads        
+            dorado-output-format: ubam # retain tags, including moves for correlating time-current squiggle traces to base and junction calls
+            dorado-emit-moves: true
+            dorado-read-ids: true # i.e., read QNAMES from extract.target.qNames.txt
+    realign:
+        order: 7
+        module: genomex-mdi-tools//align/dna-long-read
+        override:
+            description: align super-accuracy target long reads ubam to genome at high resolution using minimap2
+        env-vars:
+            input-file-type: target_reads
+            paf-file-type: target_reads        
+            minimap2-accuracy: high
+    analyze:
+        order: 8
+        optionFamilies:
+            - genomex-mdi-tools//fastq-dir
+            - genomex-mdi-tools//read-filtering               
+            - size-limits
+            - sv-finding   
+        resources:
+            required:
+                total-ram: 16G
+            recommended: 
+                n-cpu: 8
+                ram-per-cpu: 4G
+        job-manager:
+            recommended:
+                time-limit: 4:00:00
+        description: "apply read-level and molecule-level artifact filters and characterize novel SV paths"
+
 condaFamilies:
-    adapterTrimming:
+    svPore:
         dependencies:
-            - r-e1071
-            - r-igraph
+            - r-e1071  # provides support vector machines for adapter finding
+            - r-igraph # provies graph analysis for junction and read clustering
 optionFamilies:
-    sv-finding:
+    size-limits:
         options:
             window-size:
                 order: 1
@@ -64,7 +115,9 @@ optionFamilies:
                 type: integer
                 required: false
                 default: 10000
-                description: "only report SVs >= --min-sv-size bp (ideally, --min-sv-size ~ 3 * --bandwidth)" 
+                description: "only report SVs >= --min-sv-size bp (ideally, --min-sv-size ~ 3 * --bandwidth)"
+    sv-finding:
+        options:
             min-alignment-size:
                 order: 3
                 short: a
@@ -87,7 +140,7 @@ optionFamilies:
                 default: 20
                 description: "junction pairs with up to -b bp Euclidean distance are considered the same SV"                         
 package:
-    extract: # the pipeline action after which a data package should assembled
+    reextract: # the pipeline action after which a data package should assembled
         uploadType: svPore # a signal to the Stage 2 framework regarding the package contents
         files:
             # manifestFile:

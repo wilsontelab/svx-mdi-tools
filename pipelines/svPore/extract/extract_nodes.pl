@@ -18,14 +18,15 @@ map { require "$perlUtilDir/sequence/$_.pl" } qw(general smith_waterman); # faid
 resetCountFile();
 
 # environment variables
+fillEnvVar(\our $EXTRACT_PASS,     'EXTRACT_PASS');
 fillEnvVar(\our $EXTRACT_PREFIX,   'EXTRACT_PREFIX');
-fillEnvVar(\our $ACTION_DIR,       'ACTION_DIR');
-fillEnvVar(\our $INPUT_DIR,        'INPUT_DIR');
+fillEnvVar(\our $PIPELINE_DIR,     'PIPELINE_DIR');
 fillEnvVar(\our $GENOMEX_MODULES_DIR, 'GENOMEX_MODULES_DIR');
 fillEnvVar(\our $WINDOW_SIZE,      'WINDOW_SIZE');
 fillEnvVar(\our $MIN_SV_SIZE,      'MIN_SV_SIZE');
 fillEnvVar(\our $GENOME_FASTA,     'GENOME_FASTA');
-fillEnvVar(\our $USE_CHR_M,        'USE_CHR_M');
+our $USE_CHR_M = 1;
+our $IS_FIRST_PASS = ($EXTRACT_PASS == 1);
 
 # initialize the genome
 use vars qw(%chromIndex);
@@ -34,7 +35,7 @@ setCanonicalChroms();
 # load additional dependencies
 require "$GENOMEX_MODULES_DIR/align/dna-long-read/get_indexed_reads.pl";
 $perlUtilDir = "$ENV{MODULES_DIR}/utilities/perl/svPore";
-map { require "$ACTION_DIR/extract/$_.pl" } qw(initialize_windows parse_nodes);
+map { require "$PIPELINE_DIR/extract/$_.pl" } qw(initialize_windows parse_nodes);
 $perlUtilDir = "$ENV{MODULES_DIR}/parse_nodes";
 map { require "$perlUtilDir/$_.pl" } qw(parse_nodes_support);
 initializeWindowCoverage();
@@ -55,15 +56,12 @@ use constant {
     MAPQ => 11,
     PAF_TAGS => 12,
     RNAME_INDEX => 13,  # added by us 
-    #-------------
-    FROM_SPLIT => 2,
-    FROM_CIGAR => 1
 };
 
 # working variables
 our (@alns, $molId,
-        @nodes,    @types,    @mapQs,    @sizes,    @insSizes,    @outAlns,
-        @alnNodes, @alnTypes, @alnMapQs, @alnSizes, @alnInsSizes, @alnAlns) = ();
+     @nodes,    @mapQs,    @cigars,    @alnQs,    @types,    @sizes,    @insSizes,    @outAlns,
+     @alnNodes, @alnMapQs, @alnCigars, @alnAlnQs, @alnTypes, @alnSizes, @alnInsSizes, @alnAlns) = ();
 
 # process data by molecule over multiple parallel threads
 my ($prevQName);
@@ -96,41 +94,46 @@ sub parseMolecule {
         # add information on the junction between two alignments
         if($i > 0){
             my $jxn = processSplitJunction($alns[$i-1], $alns[$i]);
-            push @types,    $$jxn{jxnType};
             push @mapQs,    0;
+            push @cigars,   "NA";
+            push @alnQs,    0;
+            push @types,    $$jxn{jxnType};            
             push @sizes,    $$jxn{svSize};
             push @insSizes, $$jxn{insSize};
             push @outAlns,  [];
         }         
-
         # add each alignment    
-        (@alnNodes, @alnTypes, @alnMapQs, @alnSizes, @alnInsSizes, @alnAlns) = ();
+        (@alnNodes, @alnMapQs, @alnCigars, @alnAlnQs, @alnTypes, @alnSizes, @alnInsSizes, @alnAlns) = ();
         processAlignedSegment($alns[$i]);
         push @nodes,    @alnNodes;
-        push @types,    @alnTypes;
         push @mapQs,    @alnMapQs;
+        push @cigars,   @alnCigars;
+        push @alnQs,    @alnAlnQs;        
+        push @types,    @alnTypes;        
         push @sizes,    @alnSizes;
-        push @insSizes, map { 
-            if($alnInsSizes[$_] !~ m/\t/){ # add query positions in xStart and xEnd in CIGAR junctions (hopefully will be few of these)
-                my $nodePos1 = $alnAlns[$_ - 1]         eq "+" ? $alnAlns[$_ - 1][REND] : $alnAlns[$_ - 1][RSTART] + 1;
-                my $nodePos2 = $alnAlns[$_ + 1][STRAND] eq "-" ? $alnAlns[$_ + 1][REND] : $alnAlns[$_ + 1][RSTART] + 1;
-                $alnInsSizes[$_] = join("\t", $alnInsSizes[$_], $nodePos1, $nodePos2, FROM_CIGAR);
-            }
-            $alnInsSizes[$_];
-        } 0..$#alnInsSizes;
+        push @insSizes, @alnInsSizes;
+        # map { 
+        #     if($alnInsSizes[$_] !~ m/\t/){ # add query positions in xStart and xEnd in CIGAR junctions (hopefully will be few of these)
+        #         my $nodePos1 = $alnAlns[$_ - 1]         eq "+" ? $alnAlns[$_ - 1][REND] : $alnAlns[$_ - 1][RSTART] + 1;
+        #         my $nodePos2 = $alnAlns[$_ + 1][STRAND] eq "-" ? $alnAlns[$_ + 1][REND] : $alnAlns[$_ + 1][RSTART] + 1;
+        #         $alnInsSizes[$_] = join("\t", $alnInsSizes[$_], $nodePos1, $nodePos2, FROM_CIGAR);
+        #     }
+        #     $alnInsSizes[$_];
+        # } 0..$#alnInsSizes;
         push @outAlns,  @alnAlns;
     }
 
     # examine SV junctions for evidence of duplex reads
     # adjusts the output arrays as needed
-    my $nStrands = checkForDuplex(scalar(@types));
+    my $nStrands = $IS_FIRST_PASS ?  0 : checkForDuplex(scalar(@types));
 
     # set junction MAPQ as minimum MAPQ of the two flanking alignments
-    fillJxnMapQs();
+    !$IS_FIRST_PASS and fillJxnQs();
 
     # print one line per node pair, i.e., per edge, in the collapsed molecule sequence
     printMolecule($molId, $nStrands);
 
     # reset for next molecule
-    (@alns, @nodes, @types, @mapQs, @sizes, @insSizes, @outAlns) = ();
+    (@alns, 
+     @nodes,    @mapQs,    @cigars,    @alnQs,    @types,    @sizes,    @insSizes,    @outAlns) = ();
 }

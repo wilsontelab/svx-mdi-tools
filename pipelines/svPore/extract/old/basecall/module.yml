@@ -1,0 +1,21 @@
+---
+version: v0.0.0 # optional, for internal tracking
+action: # required
+    condaFamilies: 
+        - base
+        - nanopore
+    optionFamilies:
+        - dorado
+        - pod5-dir
+    resources:
+        required:
+            total-ram: 32G
+        recommended: 
+            n-cpu: 2
+            n-gpu: 1
+            ram-per-cpu: 16G
+    job-manager:
+        recommended:       
+            partition: gpu          
+            time-limit: 72:00:00            
+    description: "use Dorado to perform basecalling from ONT POD5 read file(s)"
