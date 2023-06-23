@@ -1,5 +1,84 @@
 include:
     - height
-# settings:
-#     Family:
-#         Option: 
+settings:
+    Points:
+        Size_By:
+            type:   selectInput
+            choices:
+                - fixed
+                - nSamples
+                - nInstances
+                - nSampleInstances
+            value: none
+        Color_By: 
+            type:   selectInput
+            choices:
+                - edgeType
+                - isSingleton
+                - isSingleSample
+                - sample
+            value: edgeType
+        Point_Size:
+            type:   numericInput
+            value:  0.25
+            min:    0.1
+            max:    2
+            step:   0.05   
+    SV_Filters:
+        Min_SV_Size:
+            type:   numericInput
+            value:  1
+            min:    0
+            max:    3100000000
+            step:   10000
+        Max_SV_Size:
+            type:   numericInput
+            value:  0 # i.e., no limit
+            min:    0
+            max:    3100000000
+            step:   10000
+        Min_Samples_With_SV:
+            type:   numericInput
+            value:  1
+            min:    1
+            max:    100
+            step:   1   
+        Max_Samples_With_SV:
+            type:   numericInput
+            value:  0 # i.e., no limit
+            min:    1
+            max:    100
+            step:   1  
+        Min_Source_Molecules:
+            type:   numericInput
+            value:  1
+            min:    1
+            max:    10000
+            step:   1    
+        Max_Source_Molecules:
+            type:   numericInput
+            value:  0 # i.e., no limit
+            min:    1
+            max:    10000
+            step:   1  
+        # SPACER_1:
+        #     type: spacer       
+        # Min_Map_Quality:
+        #     type:   numericInput
+        #     value:  50
+        #     min:    0
+        #     max:    60
+        #     step:   5    
+        SV_Type:
+            type:   checkboxGroupInput
+            choices:
+                - Del
+                - Dup
+                - Inv
+                - Trans
+                - Ins
+            value:
+                - Del
+                - Dup
+                - Inv
+            inline: TRUE
