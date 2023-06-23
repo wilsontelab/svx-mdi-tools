@@ -2,7 +2,7 @@
 #     assemble the node path of every target molecule from extract/rebasecall/realign
 # input:
 #     minimap2 PAF file with CIGAR string
-#     fastq files for sequence retrieval during junction analysis
+#     usam file for sequence retrieval during junction analysis
 # output:
 #     $REEXTRACT_PREFIX.edges.tmp.txt.gz # ~10K reads for adapter training only
 #     $REEXTRACT_PREFIX.edges.sv.txt.gz
@@ -40,16 +40,6 @@ echo "splitting edge groups for downstream analysis"
 zcat $EDGE_GLOB | 
 perl $PIPELINE_DIR/extract/split_edge_groups.pl 
 checkPipe
-
-# rm -f $EDGE_GLOB
-
-# exit 1
-
-# # reformat and index read sequences for adapter discovery
-# echo "indexing primary read data for adapter discovery and squiggle examination"
-# samtools view $DATA_FILE_PREFIX.target_reads.unaligned.bam | 
-# perl $PIPELINE_DIR/extract/index_reads.pl | 
-# slurp -s 10M -o $SEQUENCES_FILE
-# checkPipe
+rm -f $EDGE_GLOB
 
 echo "done"

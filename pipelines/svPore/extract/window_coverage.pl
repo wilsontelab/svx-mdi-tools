@@ -4,10 +4,13 @@ use warnings;
 # finalize the genome fragment coverage map
 
 # load dependencies
+our $script = "window_coverage";
+our $error  = "$script error";
 my $perlUtilDir = "$ENV{GENOMEX_MODULES_DIR}/utilities/perl";
 map { require "$perlUtilDir/$_.pl" } qw(workflow numeric);
 map { require "$perlUtilDir/genome/$_.pl" } qw(chroms);
 map { require "$perlUtilDir/sequence/$_.pl" } qw(general);
+resetCountFile();
 
 # constants
 use constant {
@@ -55,7 +58,7 @@ open my $nosvH,    "|-", "gzip -c | slurp -s 10M -o $EDGES_NO_SV_FILE" or die "c
 open my $qNamesH,  "|-", "slurp -s 10M -o $QNAMES_FILE" or die "could not open: $QNAMES_FILE\n";
 
 # process data
-my ($nTmpLines, $prevQName, @lines) = (0);
+my ($nReads, $nSv, $nNoSv, $prevQName, @lines) = (0, 0, 0);
 while(my $line = <STDIN>){
     chomp $line;
     my @line = split("\t", $line, 11);
@@ -73,16 +76,22 @@ printWindowCoverage();
 close $nosvH;
 close $qNamesH;
 
+# print summary information
+printCount($nReads, 'nReads',   'total reads processed');
+printCount($nSv,    'nSv',      'reads with at least one candidate SV');
+printCount($nNoSv,  'nNoSv',    'single-alignment reads with no SV (up to 10K kept)');
+
 # print a molecule's edges and/or qNames to the appropriate file(s)
 sub printMoleculeEdges {
+    $nReads++;
     if(@lines == 1){
+        $nNoSv++;
         my $line = join("\t", @{$lines[0]})."\n";
         print $nosvH $line; # the record of all simple alignment edges at low base resolution, without CIGAR strings
-        if($nTmpLines < 10000){
-            print $qNamesH $prevQName."\n"; # qNames of 10K non-SV reads for training adapter models
-            $nTmpLines++;
-        }
+        $nNoSv <= 10000 or return;
+        print $qNamesH $prevQName."\n"; # qNames of 10K non-SV reads for training adapter models
     } else {
+        $nSv++;
         print $qNamesH $prevQName."\n"; # qNames of all initial candidate SV reads
     }
 }

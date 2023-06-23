@@ -12,61 +12,38 @@ getAlignmentEdges <- function(edges) edges[, edgeType == edgeTypes$ALIGNMENT]
 getJunctionEdges  <- function(edges) edges[, edgeType != edgeTypes$ALIGNMENT]  
 
 # matchable junctions are compared across reads to accumulate SV evidence
-# unmatchable junctions failed one or more quality checks (flanks, bandwith, adapters, ...) and are ignored
+# unmatchable junctions failed one or more quality checks (flanks, bandwidth, adapters, ...) and are ignored
 getMatchableJunctions <- function(edges){
     isJunction <- getJunctionEdges(edges)
     edges[, 
         isJunction & 
-        passedFlankCheck == TRUE & # the junctions we are still willing to call after single-read analysis
+        mapQ >= env$MIN_MAPQ & # require confident flanking alignments...
+        alnSize >= env$MIN_ALIGNMENT_SIZE & # ... of sufficiently large size
+        gapCompressedIdentity >= env$MIN_ALIGNMENT_IDENTITY & # ... and quality, as judged by match to the reference genome
         passedBandwidth == TRUE &
-        hasAdapter == FALSE
-    ]
-}
-
-# real junctions are compared across reads to find duplex repetition
-# they represent all true reference discontinuities, including low-quality and adapter-chimeric junctions,
-# but not including low-bandwidth junctions that we ignore as "unreal"
-getRealJunctions <- function(edges){
-    isJunction <- getJunctionEdges(edges)
-    edges[, 
-        isJunction & 
-        passedBandwidth == TRUE
+        hasAdapter5 == FALSE &
+        hasAdapter3 == FALSE
     ]
 }
 
 # fusable junctions are maintained in a single segment, thereby calling a _recurring_ SV
-# unfusable junctions split reads into segments
+# unfusable junctions split reads into segments and can only be called as singletons
 getFusableJunctions <- function(edges){
     isJunction <- getJunctionEdges(edges)
     edges[, 
         isJunction &  # these filters reject any read not suitable for assembling genome SV paths from multiple reads
-        !hasAdapter & # adapters identify nanopore/basecaller artifacts
+        hasAdapter5 == FALSE & # adapters identify nanopore/basecaller artifacts
+        hasAdapter3 == FALSE &
         (
-            passedBandwidth == FALSE |      # we don't consider these to be true junctions, they don't break segments and are ignored during segment matching
+            passedBandwidth == FALSE |  # we don't consider these to be true junctions, they don't break segments and are ignored during segment matching
             (
-                passedFlankCheck == TRUE &  # low-quality alignments can't be trusted to assemble paths
+                mapQ >= env$MIN_MAPQ & # low-quality alignments can't be trusted to assemble paths
+                alnSize >= env$MIN_ALIGNMENT_SIZE & 
+                gapCompressedIdentity >= env$MIN_ALIGNMENT_IDENTITY & 
                 (
                     nCanonical    > 1 |  # junctions not validated by at least 2 reads on the same strand are likely to be ligation artifacts
                     nNonCanonical > 1    # see notes in duplex.R
                 )
-            )
-        )
-    ]
-}
-
-# singleton junctions are high quality junctions nominated as potential ultra-rare SVs
-# any junction found at least twice was already put into a segment
-# many singleton junctions are artifacts, e.g., due to ligation, but the list can be mined for true SVs
-getSingletonJunctions <- function(edges){
-    isJunction <- getJunctionEdges(edges)
-    edges[, 
-        isJunction & 
-        !hasAdapter & # adapters identify nanopore/basecaller artifacts
-        (
-            passedBandwidth == FALSE |      # we don't consider these to be true junctions, they don't breaks segments and are ignored during segment matching
-            (
-                passedFlankCheck == TRUE &  # low-quality alignments can't be trusted to assemble paths
-                nJunctionInstances == 1      # junctions not validated by at least 2 non-duplex molecules are likely to be ligation artifacts
             )
         )
     ]

@@ -19,11 +19,19 @@ description: "Analyze structural variants in nanopore data"
 uploadTypes:
     svPore: 
         contentFileTypes: # anything not listed will not be available to the app
-            svEdgesFile:  
+            manifestFile:
                 required: true
-            svSegmentsFile:  
+            chromosomesFile:
                 required: true
-            svClustersFile:  
+            coverageFile:
+                required: true
+            edgesFile:  
+                required: true
+            junctionClustersFile:
+                required: true
+            segmentsFile:  
+                required: true
+            segmentClustersFile:  
                 required: true     
 #----------------------------------------------------------------------
 # labels and definitions for all sequential analysis steps shown in sidebar
@@ -40,6 +48,8 @@ uploadTypes:
 appSteps:
     upload: # nearly always the 1st step of every app
         module: sourceFileUpload
+    browser:
+        module: genomex-mdi-tools//trackBrowser
     # assign: # usually the 2nd step of every app
     #     module: assignSamples        
     #     options:
@@ -52,8 +62,8 @@ appSteps:
     #                 singular: Example
     #                 plural: Examples
     #                 nLevels: 1:10
-    analyze:
-        module: summaryPlots
+    # analyze:
+    #     module: summaryTables
         # options:
         #     analysisTypes:
         #         example:

@@ -4,8 +4,12 @@ use warnings;
 # separate training and SV edges into separate files
 # interleave SV edge groups for each read with a fake separator junction to aid downstream calculations in R
 
+# load dependencies
+our $script = "split_edge_groups";
+our $error  = "$script error";
 my $perlUtilDir = "$ENV{GENOMEX_MODULES_DIR}/utilities/perl";
 map { require "$perlUtilDir/$_.pl" } qw(workflow numeric);
+resetCountFile();
 
 # constants
 use constant {
@@ -22,10 +26,11 @@ use constant {
     INSERT_SIZE => 10,
     N_STRANDS => 11,
     #-------------
-    passedFlanks => 12, # added to edges by processRead_
-    baseQual => 13,
-    sStart => 14,
-    sEnd => 15,
+    baseQual => 12,   
+    alnBaseQual => 13, 
+    alnSize => 14, # added to edges by processRead_
+    sStart => 15,
+    sEnd => 16,
     # #-------------
     # clip5 => 0, # adapter scores added to edges here by addAdaptersScores
     # score5 => 0,
@@ -61,7 +66,7 @@ open my $tmpH,  "|-", "gzip -c | slurp -s 10M -o $EDGES_TMP_FILE" or die "could 
 open my $svH,   "|-", "gzip -c | slurp -s 10M -o $EDGES_SV_FILE"  or die "could not open: $EDGES_SV_FILE\n";
 
 # process data
-my ($prevQName, @edges);
+my ($nReads, $nSv, $nNoSv, $prevQName, @edges) = (0, 0, 0);
 while(my $edge = <STDIN>){
     chomp $edge;
     my ($qName) = split("\t", $edge, 2);     
@@ -76,24 +81,20 @@ printMoleculeEdges();
 close $svH;
 close $tmpH;
 
+# print summary information
+printCount($nReads, 'nReads',   'total reads processed');
+printCount($nSv,    'nSv',      'reads with at least one candidate SV');
+printCount($nNoSv,  'nNoSv',    'single-alignment reads with no SV');
+
 # print a molecule's edges to the appropriate file(s)
-my $edgeSetI = 0;
-# my @spacer;
 sub printMoleculeEdges {
+    $nReads++;
     if(@edges == 1){
-        print $tmpH join("\t", $edges[0], 0), "\n";
+        $nNoSv++;
+        $nNoSv <= 10000 or return;
+        print $tmpH join("\t", $edges[0], $nNoSv), "\n";
     } else {
-        # if($edgeSetI){
-        #     $edgeSetI++;
-        #     print $svH join("\t", @spacer, $edgeSetI), "\n";
-        # } else {
-        #     my @x = split("\t", $edges[0]);
-        #     @spacer = ("NA") x scalar(@x);
-        #     $spacer[EDGE_TYPE] = "S";
-        #     $spacer[$#spacer - 1] = 1; # blockN
-        #     $spacer[$#spacer] = 1;     # edgeN
-        # }
-        $edgeSetI++;
-        print $svH join("\n", map { join("\t", $_, $edgeSetI) } @edges), "\n";
+        $nSv++;
+        print $svH join("\n", map { join("\t", $_, $nSv) } @edges), "\n";
     }
 }

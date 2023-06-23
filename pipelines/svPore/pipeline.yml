@@ -50,8 +50,8 @@ actions:
             required:
                 total-ram: 16G
             recommended: 
-                n-cpu: 8
-                ram-per-cpu: 4G
+                n-cpu: 2
+                ram-per-cpu: 8G
         job-manager:
             recommended:
                 time-limit: 4:00:00
@@ -64,14 +64,14 @@ actions:
             ont-model:   dna_r10.4.1_e8.2_400bps_sup@v4.1.0 # the sup (super-accuracy) is recommended for best base-level analysis of SV reads and adapters
         env-vars:
             dorado-output-type:   target_reads        
-            dorado-output-format: ubam # retain tags, including moves for correlating time-current squiggle traces to base and junction calls
+            dorado-output-format: usam # retain tags, including moves for correlating time-current squiggle traces to base and junction calls
             dorado-emit-moves: true
             dorado-read-ids: true # i.e., read QNAMES from extract.target.qNames.txt
     realign:
         order: 7
         module: genomex-mdi-tools//align/dna-long-read
         override:
-            description: align super-accuracy target long reads ubam to genome at high resolution using minimap2
+            description: align super-accuracy target long reads to genome at high resolution using minimap2
         env-vars:
             input-file-type: target_reads
             paf-file-type: target_reads        
@@ -85,15 +85,30 @@ actions:
             - sv-finding   
         resources:
             required:
-                total-ram: 16G
+                total-ram: 32G
+            recommended: 
+                n-cpu: 8
+                ram-per-cpu: 4G
+        job-manager:
+            recommended:
+                time-limit: 8:00:00
+        description: "apply read-level and molecule-level artifact filters"
+    find:
+        order: 9
+        optionFamilies:
+            - genomex-mdi-tools//read-filtering               
+            - size-limits
+            - sv-finding   
+        resources:
+            required:
+                total-ram: 32G
             recommended: 
                 n-cpu: 8
                 ram-per-cpu: 4G
         job-manager:
             recommended:
                 time-limit: 4:00:00
-        description: "apply read-level and molecule-level artifact filters and characterize novel SV paths"
-
+        description: "characterize novel SV paths in one or more input samples or nanopores"   
 condaFamilies:
     svPore:
         dependencies:
@@ -140,22 +155,34 @@ optionFamilies:
                 default: 20
                 description: "junction pairs with up to -b bp Euclidean distance are considered the same SV"                         
 package:
-    reextract: # the pipeline action after which a data package should assembled
+    find: # the pipeline action after which a data package should assembled
         uploadType: svPore # a signal to the Stage 2 framework regarding the package contents
         files:
-            # manifestFile:
-            #     type: comma-delimited
-            #     manifestType: simple
-            #     file: $COLLATE_PREFIX.manifest.csv
-            svEdgesFile:
+            # metadata:
+            #     type: yml
+            #     file: $FIND_PREFIX.metadata.yml
+            manifestFile:
+                type: comma-delimited
+                manifestType: simple
+                file: $MANIFEST_PREFIX.sample_manifest.csv
+            chromosomesFile:
                 type: rds
-                file: $DATA_FILE_PREFIX.edges.rds
-            svSegmentsFile:
+                file: $FIND_PREFIX.chromosome_metadata.rds
+            coverageFile:
+                type: zip
+                file: $FIND_PREFIX.windowCoverage.zip
+            edgesFile:
                 type: rds
-                file: $DATA_FILE_PREFIX.segments.rds
-            svClustersFile:
+                file: $FIND_PREFIX.edges.rds
+            junctionClustersFile:
                 type: rds
-                file: $DATA_FILE_PREFIX.clusters.rds          
+                file: $FIND_PREFIX.junctionClusters.rds
+            segmentsFile:
+                type: rds
+                file: $FIND_PREFIX.segments.rds
+            segmentClustersFile:
+                type: rds
+                file: $FIND_PREFIX.segmentClusters.rds          
 # container:
 #     supported: false    # set to true if you maintain a container registry for this pipeline [false]
 #     registry:  ghcr.io  # domain name of your OCI-compatible, oras-accessible, container registry [ghcr.io]

@@ -1,7 +1,9 @@
 #-------------------------------------------------------------------------------------
 # svPore analyze constants
 #-------------------------------------------------------------------------------------
-edgesCols <- c( 
+
+# extract edges column definition
+coreEdgeCols <- c( 
     "qName",
     "node1",
     "qStart",
@@ -13,13 +15,16 @@ edgesCols <- c(
     "edgeType",
     "eventSize",
     "insertSize",
-    "nStrands",
-    #-------------,
-    "passedFlanks",
+    "nStrands"
+)
+edgeExtensions1 <- c(
     "baseQual",
+    "alnBaseQual",
+    "alnSize",
     "sStart",
-    "sEnd",
-    #-------------,
+    "sEnd"    
+)
+edgeAdapterScores <- c(
     "clip5",
     "score5",
     "nBases5",
@@ -29,7 +34,9 @@ edgesCols <- c(
     "score3",
     "nBases3",
     "start3",
-    "end3",
+    "end3"    
+)
+controlAdapterScores <- c(
     "score5C",
     "nBases5C",
     "start5C",
@@ -37,13 +44,21 @@ edgesCols <- c(
     "score3C",
     "nBases3C",
     "start3C",
-    "end3C",
-    #-------------,
+    "end3C"    
+)
+edgeExtensions2 <- c(
     "channel",
     "pod5File",
     "blockN",
     "edgeN",
-    "edgeSetN"
+    "readI"    
+)
+edgesCols <- c( 
+    coreEdgeCols,
+    edgeExtensions1,
+    edgeAdapterScores,
+    controlAdapterScores,
+    edgeExtensions2
 )
 edgesColClasses <- c(
     "character",
@@ -57,28 +72,29 @@ edgesColClasses <- c(
     "character",
     "integer",
     "integer",
-    "integer"
+    "integer",
     #-------------,
-    "logical",
+    "numeric",
     "numeric",
     "integer",
     "integer",
+    "integer",
     #-------------,
     "integer",
+    "numeric",
     "integer",
     "integer",
     "integer",
     "integer",
+    "numeric",
     "integer",
     "integer",
     "integer",
+    "numeric",
     "integer",
     "integer",
     "integer",
-    "integer",
-    "integer",
-    "integer",
-    "integer",
+    "numeric",
     "integer",
     "integer",
     "integer",
@@ -89,33 +105,8 @@ edgesColClasses <- c(
     "integer",
     "integer"
 )
-# readsCols = c(
-#     "qName",
-#     "qSeq",
-#     "moves",
-#     "downsampling",
-#     "nSamples",
-#     "nTrimmedSamples",
-#     "meanBaseQual",
-#     "channel",
-#     "pod5File"
-#     # ,
-#     # "qQual"
-# )
-# readsColClasses = c(
-#     "character",
-#     "character",
-#     "character",
-#     "integer",
-#     "integer",
-#     "integer",
-#     "integer",
-#     "integer",
-#     "character"
-#     # ,
-#     # "character"
-# )
 
+# edge types
 edgeTypes <- list(
     ALIGNMENT     = "A", # the single type for a contiguous aligned segment
     TRANSLOCATION = "T", # edge/junction types (might be several per source molecule)
@@ -124,13 +115,10 @@ edgeTypes <- list(
     DELETION      = "D",
     UNKNOWN       = "?",
     INSERTION     = "I", 
-    PROPER        = "P",
-    SPACER        = "S"
+    PROPER        = "P"
 )
-inlineSvTypes <- c(edgeTypes$DELETION, edgeTypes$INSERTION)
-incrementRefTypes <- c(edgeTypes$ALIGNMENT, edgeTypes$DELETION)
-splitTypes <- c(edgeTypes$TRANSLOCATION, edgeTypes$INVERSION)
 
+# debug plot constants
 plotlyColors <- list(
     blue    = '#1f77b4',  # muted blue
     orange  = '#ff7f0e',  # safety orange

@@ -1,6 +1,6 @@
 #-------------------------------------------------------------------------------------
 # matching.R has functions that support re-orientation of alignments and junctions 
-# to allow proper matching between opposite strands
+# to allow proper matching between opposite read strands
 #-------------------------------------------------------------------------------------
 
 # rectify an edge, i.e., a pair of nodes, to a consistently ordered string representation suitable for sorting and grouping
@@ -11,7 +11,12 @@ isCanonicalStrand <- function(nodePair){
 isCanonicalStrandPath <- function(nodePath){
     isCanonicalStrand(c(nodePath[1], nodePath[length(nodePath)]))
 }
-setCanonicalNodes <- function(edges){
+setCanonicalNodes <- function(edges, chromSizes){
+    edges <- cbind(
+        edges, 
+        edges[, parseSignedNodes(chromSizes, node1, 1)], 
+        edges[, parseSignedNodes(chromSizes, node2, 2)]
+    )
     isAlignment <- getAlignmentEdges(edges)
     x <- edges[, 
         if(isAlignment[.I]) .(
@@ -28,24 +33,23 @@ setCanonicalNodes <- function(edges){
             cChromIndex2 = chromIndex2,
             cStrand1 = as.integer(sign(node1)),
             cStrand2 = as.integer(sign(node2)),
-            cRefPos1 = xStart,
-            cRefPos2 = xEnd 
+            cRefPos1 = refPos1,
+            cRefPos2 = refPos2 
         ) else .(
             isCanonical = FALSE,
             cChromIndex1 = chromIndex2, # reverse the node pair to the opposite strand
             cChromIndex2 = chromIndex1,
             cStrand1 = as.integer(-sign(node2)),
             cStrand2 = as.integer(-sign(node1)),
-            cRefPos1 = xEnd,
-            cRefPos2 = xStart 
+            cRefPos1 = refPos2,
+            cRefPos2 = refPos1 
         ),
-        by = c("qName","blockN","edgeN")
+        by = c("sample","readI","blockN","edgeN")
     ]
-    edges <- merge(edges, x, by = c("qName","blockN","edgeN"), all.x = TRUE)
-    setkey(edges, qName, blockN, edgeN)
-    isJunction <- getJunctionEdges(edges)
-    edges[isJunction, ":="(
-        junctionKey  = paste(cChromIndex1, cChromIndex2, cStrand1, cStrand2, cRefPos1, cRefPos2, insertSize, sep = ":")
+    edges <- merge(edges, x, by = c("sample","readI","blockN","edgeN"), all.x = TRUE)
+    setkey(edges, sample, readI, blockN, edgeN)
+    edges[!isAlignment, ":="(
+        junctionKey = paste(cChromIndex1, cChromIndex2, cStrand1, cStrand2, cRefPos1, cRefPos2, insertSize, sep = ":")
     )]
     edges
 }
@@ -53,14 +57,14 @@ setCanonicalNodes <- function(edges){
 # assemble readPaths for reads and segments
 getIndexedReadPath <- function(chromSizes, edges, usableJunctions){ # does NOT include outer alignment endpoints
     edges[usableJunctions, {
-        iRefPos1 <- if(is.na(iRefPos1)) xStart else iRefPos1 # fallback for real but unmatchable junctions that weren't scored by findMatchingJunctions
-        iRefPos2 <- if(is.na(iRefPos2)) xEnd   else iRefPos2
+        iRefPos1 <- if(is.na(iRefPos1)) refPos1 else iRefPos1 # fallback for real but unmatchable junctions that weren't scored by findMatchingJunctions
+        iRefPos2 <- if(is.na(iRefPos2)) refPos2 else iRefPos2
         .(
             node1      = chromSizes[chromIndex1, sign(node1) * (nBasesBefore + iRefPos1 - 1)], # complete description of a single indexed junction 
             insertSize = if(is.na(iInsertSize)) insertSize else iInsertSize, 
             node2      = chromSizes[chromIndex2, sign(node2) * (nBasesBefore + iRefPos2 - 1)]  
         )
-    }, by = .(edgeId)][, .SD, .SDcols = c("node1","insertSize","node2")] # complete description of a series of indexed junctions, as a data.table with integer64
+    }, by = .(edgeN)][, .SD, .SDcols = c("node1","insertSize","node2")] # complete description of a series of indexed junctions, as a data.table with integer64
 }
 getCanonicalReadPath <- function(iReadPath, isCanonical){
     if(isCanonical) return(iReadPath)

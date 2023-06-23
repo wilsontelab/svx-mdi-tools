@@ -5,11 +5,14 @@ use warnings;
 # adds information used in SV filtering and analysis
 
 # load dependencies
+our $script = "extend_edges";
+our $error  = "$script error";
 our ($matchScore, $mismatchPenalty, $gapOpenPenalty, $gapExtensionPenalty, $maxShift) = 
     (1,           -1.5,             -2.5,            -1,                   3);
 my $perlUtilDir = "$ENV{GENOMEX_MODULES_DIR}/utilities/perl";
 map { require "$perlUtilDir/$_.pl" } qw(workflow numeric);
 map { require "$perlUtilDir/sequence/$_.pl" } qw(general smith_waterman);
+resetCountFile();
 
 # constants
 use constant {
@@ -28,10 +31,11 @@ use constant {
     INSERT_SIZE => 10,
     N_STRANDS => 11,
     #-------------
-    passedFlanks => 12, # added to edges by processRead_
-    baseQual => 13,
-    sStart => 14,
-    sEnd => 15,
+    baseQual => 12,   
+    alnBaseQual => 13, 
+    alnSize => 14, # added to edges by processRead_
+    sStart => 15,
+    sEnd => 16,
     # #-------------
     # clip5 => 0, # adapter scores added to edges here by addAdaptersScores
     # score5 => 0,
@@ -82,15 +86,15 @@ my %inlineTypes = map { $_ => 1 } (ALIGNMENT, DELETION, DUPLICATION, INSERTION);
 
 # environment variables
 fillEnvVar(\our $EXTRACT_PREFIX,    'EXTRACT_PREFIX');
-fillEnvVar(\our $UBAM_FILE,         'UBAM_FILE');
+fillEnvVar(\our $USAM_FILE,         'USAM_FILE');
 fillEnvVar(\our $N_CPU,             'N_CPU');
 fillEnvVar(\our $MIN_SV_SIZE,       'MIN_SV_SIZE');
 fillEnvVar(\our $MIN_MAPQ,          'MIN_MAPQ');
 fillEnvVar(\our $MIN_ALIGNMENT_SIZE,        'MIN_ALIGNMENT_SIZE');
 fillEnvVar(\our $MIN_ALIGNMENT_IDENTITY,    'MIN_ALIGNMENT_IDENTITY');
 
-# open the ubam file for parallel threading of QNAMES
-open my $ubamH, "-|", "samtools view $UBAM_FILE" or die("could not open $UBAM_FILE: $!\n");
+# open the usam file for parallel threading of QNAMES
+open my $usamH, "-|", "zcat $USAM_FILE" or die "could not open $USAM_FILE: $!\n";
 
 # ONT adapter information
 # TODO: implement support for mosaic ends in Tn5-based rapid kit
@@ -199,26 +203,37 @@ sub addAdaptersScores {
 launchChildThreads(\&processRead);
 use vars qw(@readH @writeH);
 my $writeH = $writeH[1];
-my ($nReads, $prevQName) = (0);
+my ($nReads, $nSv, $nNoSv, $prevQName, @edges) = (0, 0, 0);
+sub printReadToThread {
+    my $isSv = (@edges > 1);
+    $nReads++;  
+    $isSv ? $nSv++ : $nNoSv++;
+    my $read = <$usamH>;
+    while($read !~ m/^$prevQName/){ # handle reads found in SAM that failed to align and are absent from PAF
+        $read = <$usamH>;
+    }  
+    $isSv or $nNoSv <= 10000 or return;
+    print $writeH join("", @edges);
+    print $writeH END_READ_EDGES, "\t", $read;  
+}
 while(my $edge = <STDIN>){
     my ($qName) = split("\t", $edge, 2);     
     if($prevQName and $qName ne $prevQName){
-        $nReads++;      
-        my $read = <$ubamH>;
-        while($read !~ m/^$prevQName/){ # handle reads found in BAM that failed to align and are absent from PAF
-            $read = <$ubamH>;
-        }        
-        print $writeH END_READ_EDGES, "\t", $read;
+        printReadToThread();
         $writeH = $writeH[$nReads % $N_CPU + 1];
+        @edges = ();
     }    
-    print $writeH $edge; # commit to worker thread
+    push @edges, $edge; # commit edge to worker thread
     $prevQName = $qName;
 }
-$nReads++;
-my $read = <$ubamH>;  
-print $writeH END_READ_EDGES, "\t", $read; # finish last read
+printReadToThread(); # finish last read
 finishChildThreads();
-close $ubamH;
+close $usamH;
+
+# print summary information
+printCount($nReads, 'nReads',   'total reads processed');
+printCount($nSv,    'nSv',      'reads with at least one candidate SV');
+printCount($nNoSv,  'nNoSv',    'single-alignment reads with no SV (up to 10K kept)');
 
 # extend and print one molecule's edges
 sub finishEdge {
@@ -236,35 +251,19 @@ sub processRead_ {
 
     # process an SV, junction-containing molecule
     if(@$edges > 1){
-
-        # calculate SV metrics in fast to slow order, and stop once a junction fails
-        my ($hasPassedFlanks);        
-        foreach my $i(0..$#$edges){
-            my $edge = $$edges[$i];
-            my $isJunction = ($i % 2);
-            $$edge[passedFlanks] = $isJunction ? ((
-                $$edge[MAPQ] >= $MIN_MAPQ and
-                $$edge[GAP_COMPRESSED_IDENTITY] >= $MIN_ALIGNMENT_IDENTITY and 
-                $$edges[$i - 1][EVENT_SIZE] >= $MIN_ALIGNMENT_SIZE and
-                $$edges[$i + 1][EVENT_SIZE] >= $MIN_ALIGNMENT_SIZE
-            ) ? "T" : "F") : "NA";
-            $hasPassedFlanks ||= $$edge[passedFlanks] eq "T";
-        }   
-        $hasPassedFlanks or return;
         my ($channel)  = ($$read[_TAGS] =~ m/ch:i:(\S+)/);
         my ($pod5File) = ($$read[_TAGS] =~ m/fn:Z:(\S+)/);
         # my ($readN)  = ($$read[_TAGS] =~ m/rn:i:(\S+)/); 
 
-        # for potentially valid SV molecules, parse qPos to sPos (i.e, sample position)
+        # parse qPos to sPos (i.e, sample position)
         my @baseSamples;
         # my ($nTotalSamples) = ($$read[_TAGS] =~ m/ns:i:(\S+)/);
         my ($nTrimmedSamples) = ($$read[_TAGS] =~ m/ts:i:(\S+)/);
         my ($downsampling, $moves) = ($$read[_TAGS] =~ m/\tmv:B:c,(\d+),(\S+)/);
         my @moves = split(",", $moves);
-        map { $moves[$_] and  push @baseSamples, $_ * $downsampling + $nTrimmedSamples } 0..$#moves;  
+        map { $moves[$_] and  push @baseSamples, $_ * $downsampling + $nTrimmedSamples } 0..$#moves; 
 
-        # finish each edge
-        my $blockN = 1;
+        # first run sets baseQual for each alignment and junction itself; required to set alnBaseQual below
         foreach my $i(0..$#$edges){
             my $edge = $$edges[$i];
             my $isJunction = ($i % 2);
@@ -276,13 +275,21 @@ sub processRead_ {
                 $$edge[baseQual] = getAvgQual(substr($$read[_QUAL], $$edges[$i + 1][QSTART], -$$edge[INSERT_SIZE]));
             } else {
                 $$edge[baseQual] = "NA";
-            }       
-            if($$edge[passedFlanks] eq "T"){
-                $$edge[sStart] = $baseSamples[$$edge[QSTART]] || "NA";
-                $$edge[sEnd]   = $baseSamples[$$edge[QEND]] || "NA";
+            } 
+        }
+        
+        # finish each edge
+        my $blockN = 1;
+        foreach my $i(0..$#$edges){
+            my $edge = $$edges[$i];
+            my $isJunction = ($i % 2);
+            $$edge[alnBaseQual] = $isJunction ? min($$edges[$i - 1][baseQual],   $$edges[$i + 1][baseQual])   : "NA";
+            $$edge[alnSize]     = $isJunction ? min($$edges[$i - 1][EVENT_SIZE], $$edges[$i + 1][EVENT_SIZE]) : "NA";
+            $$edge[sStart] = $baseSamples[$$edge[QSTART]] || "NA";
+            $$edge[sEnd]   = $baseSamples[$$edge[QEND]]   || "NA"; 
+            if($isJunction and $$edge[INSERT_SIZE] >= 5){
                 addAdaptersScores($read, $edge, 1, 1); 
             } else {
-                $$edge[sStart] = $$edge[sEnd] = "NA";
                 push @$edge, @nullAdapterScores;
             }
 
@@ -296,11 +303,10 @@ sub processRead_ {
     } else {
         my $aln = $$edges[0];
         $$aln[CIGAR] = "NA";
-        $$aln[passedFlanks] = $$aln[baseQual] = $$aln[sStart] = $$aln[sEnd] = "NA";
+        $$aln[baseQual] = $$aln[alnBaseQual] = $$aln[alnSize] = $$aln[sStart] = $$aln[sEnd] = "NA";
         addAdaptersScores($read, $aln); 
         finishEdge($aln, 1, 1);
     }
-    return 1;
 }
 sub processRead {
     my ($childN) = @_;
@@ -313,8 +319,8 @@ sub processRead {
         if($line =~ m/^__END_READ_EDGES__/){
             my @read = split("\t", $line, 13);
             shift @read;
-            my $validRead = processRead_(\@read, \@edges);
-            $validRead and print $outH join("\n", map { join("\t", @$_) } @edges), "\n";
+            processRead_(\@read, \@edges);
+            print $outH join("\n", map { join("\t", @$_) } @edges), "\n";
             @edges = ();
         } else {
             my @edge = split("\t", $line);

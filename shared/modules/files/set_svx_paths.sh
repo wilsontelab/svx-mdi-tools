@@ -14,8 +14,12 @@ export EXTRACT_PREFIX=$DATA_GENOME_PREFIX.extract
 export REEXTRACT_PREFIX=$DATA_GENOME_PREFIX.reextract
 export COMPILE_PREFIX=$DATA_GENOME_PREFIX.compile
 export EXTRACT_GLOB_PREFIX=$TASK_DIR/*/*.$GENOME.extract # for multi-sample find
-export REEXTRACT_GLOB_PREFIX=$TASK_DIR/*/*.$GENOME.reextract # for multi-sample find
+export REEXTRACT_GLOB_PREFIX=$TASK_DIR/*/*.$GENOME.reextract
 export COMPILE_GLOB_PREFIX=$TASK_DIR/*/*.$GENOME.compile
+
+# analyze 
+export ANALYZE_PREFIX=$DATA_GENOME_PREFIX.analyze
+export ANALYZE_GLOB_PREFIX=$TASK_DIR/*/*.$GENOME.analyze
 
 # coverage 
 export COVERAGE_PREFIX=$DATA_GENOME_PREFIX.coverage

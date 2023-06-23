@@ -1,0 +1,67 @@
+#----------------------------------------------------------------------
+# ui
+#----------------------------------------------------------------------
+shortLabel:       "Summary Tables" # shown on dashboard menu 
+shortDescription: "Tables with counts by junction and segment type" # shown on Overview page
+longLabel:        "Summary count tables" # shown at top of appStep page 
+
+#----------------------------------------------------------------------
+# server
+#----------------------------------------------------------------------
+types: summaryTables
+sourceTypes: upload # ... and of the module(s) on which it depends
+
+#----------------------------------------------------------------------
+# dependencies
+#----------------------------------------------------------------------
+packages: # required R packages
+    R:  null
+    Bioconductor: null
+
+## optional data classes and UI modules this module will use
+## e.g., might expect to find shared/optional/classes/<classType>/<className>/<className>_*.R
+#classes:
+#    classType:
+#        - className            
+#modules: null
+
+#----------------------------------------------------------------------
+# module-level settings
+#----------------------------------------------------------------------
+# settings:
+#     <settingsTabName>:
+#         <settingName>:
+#             type:   textInput
+#             value:  abc  
+#         <settingName>:
+#             type:   numericInput
+#             value:  1
+#             min:    1
+#             max:    100
+#             step:   1 
+#         <settingName>:
+#             type: selectInput
+#             choices:
+#                 - abc
+#                 - xyz
+#             value: abc    
+#         <settingName>:
+#             type: radioButtons
+#             choices:
+#                 - abc
+#                 - xyz
+#             value: abc    
+#         <settingName>:
+#             type: checkboxGroupInput
+#             choices:
+#                 - abc
+#                 - xyz
+#             value: abc 
+#         <settingName>:
+#             type: checkboxInput
+#             value: true 
+#         <settingName>:
+#             type:   fileInput
+#             accept: 
+#                 - ".csv"
+#                 - ".txt"
