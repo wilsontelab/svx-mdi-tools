@@ -82,8 +82,9 @@ edges <- loadEdgesRds()
 #=====================================================================================
 # matching individual SV junctions between molecules
 # -------------------------------------------------------------------------------------
+edges <- setMatchableFlag(edges)
 edges <- setCanonicalNodes(edges, chromSizes)
-junctionsToMatch <- getJunctionsToMatch(edges, getMatchableJunctions)
+junctionsToMatch <- getJunctionsToMatch(edges)
 junctionHardCounts <- getJunctionHardCounts(junctionsToMatch)
 junctionMatches <- findMatchingJunctions(junctionsToMatch) 
 junctionsNetwork <- analyzeJunctionNetwork(junctionMatches, junctionHardCounts)

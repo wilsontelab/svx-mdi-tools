@@ -37,38 +37,36 @@ splitReadsToSegments <- function(edges){
     # remove split segments that do not contain any potential SV junctions
     # e.g., in A[T]A[T]A or A[T]AdA[T]A (where "d" was rejected but not split)
     # TODO: save these segments as alignments for haplotype assembly?
-    matchable <- getMatchableJunctions(edges)
-    segmentsToKeep <- edges[, .(hasCandidateSvs = any(matchable[.I])), by = .(segmentName)][hasCandidateSvs == TRUE, segmentName]
+    segmentsToKeep <- edges[clustered == TRUE, unique(segmentName)] # segments with at least one clustered junction
     edges <- edges[segmentName %in% segmentsToKeep]
     setkey(edges, segmentName, blockN, edgeN)
 
     # prepare for assembly segment matching
-    matchable <- getMatchableJunctions(edges)
-    edges[matchable, ":="( 
+    edges[clustered == TRUE, ":="( 
         matchingSegments = list(unique(segmentName))
     ), by = .(clusterN)]
     edges
 }
 
 # concatenate nodes and edges into a single row per segment
+# every segment has at least one clustered junction with nInstances > 1
 collapseSegments <- function(edges, chromSizes){
     message("collapsing edges into contiguous, trusted read segments")
     isAlignment <- getAlignmentEdges(edges)
-    isMatchable <- getMatchableJunctions(edges)
     segments <- edges[, {
         alignment <- isAlignment[.I]
-        matchable <- isMatchable[.I]
+        clustered <- !is.na(clustered) & clustered
         .(
             sample = sample[1],
             readI = readI[1],
             segmentLength = qEnd[.N] - qStart[1],
             chroms = paste(unique(c(chrom1, chrom2)), collapse = ","),
             nJxns = sum(!alignment),
-            nMatchableJxns = sum(matchable),
-            pathType = paste0(ifelse(alignment | matchable, edgeType, tolower(edgeType)), collapse = ""),
+            nClusteredJxns = sum(clustered, na.rm = TRUE),
+            pathType = paste0(ifelse(alignment | clustered, edgeType, tolower(edgeType)), collapse = ""),
             isClosedPath = chromIndex1[1] == chromIndex2[.N] && strand1[1] == strand2[.N],
             outerNode1 = node1[1], # original nodes of outer molecule endpoints, on strand(s) as sequenced
-            iReadPath = list(getIndexedReadPath(chromSizes, .SD, matchable)), # index readPath, on strand(s) as sequenced
+            iReadPath = list(getIndexedReadPath(chromSizes, .SD, clustered)), # index readPath, on strand(s) as sequenced
             outerNode2 = node2[.N],
             isCanonical = isCanonicalStrand(c(node1[1], node2[.N])), # strand orientation for segments is determined by the outermost alignments
             matchingSegmentsTmp = { # a matching segment has at least one fuzzy junction in common with the query segment
@@ -122,18 +120,18 @@ analyzeSegmentsNetwork <- function(segments, segmentMatches){ # use igraph to id
             clusterN = cmp$membership
         ),
         segments[matchable, .(
-            nMatchableJxns,
+            nClusteredJxns,
             segmentLength, 
             pathType
         ), by = .(segmentName)],
         by = "segmentName",
         all.x = TRUE
     )
-    setkey(clusters, clusterN, segmentLength, nMatchableJxns)
-    clusters[, { # assign an index segment for each cluster as the longest segment in the group of segments with the most matchable junctions
+    setkey(clusters, clusterN, segmentLength, nClusteredJxns)
+    clusters[, { # assign an index segment for each cluster as the longest segment in the group of segments with the most clustered junctions
         .(
             segmentName = segmentName,
-            isIndexSegment = c(rep(FALSE, .N -1), TRUE),
+            isIndexSegment = c(rep(FALSE, .N - 1), TRUE),
             pathType = pathType
         )
     }, by = .(clusterN)][,
@@ -143,13 +141,11 @@ analyzeSegmentsNetwork <- function(segments, segmentMatches){ # use igraph to id
 }
 collapseSegmentClusters <- function(segmentEdges, segmentsNetwork){
     message("aggregating segments by cluster group")
-    matchable <- getMatchableJunctions(segmentEdges) 
-    segmentEdges <- segmentEdges[matchable]
-    setkey(segmentEdges, segmentName)
+    clusteredEdges <- segmentEdges[clustered == TRUE]
+    setkey(clusteredEdges, segmentName)
     clusters <- segmentsNetwork[, {
         clusterSegmentNames <- unique(segmentName)
-        clusterEdges <- segmentEdges[clusterSegmentNames]
-        junctionClusterNs <- clusterEdges[, unique(clusterN)]        
+        junctionClusterNs <- clusteredEdges[clusterSegmentNames, unique(na.omit(clusterN))]   
         .(
             nSegments = .N,
             segmentNames = list(clusterSegmentNames),

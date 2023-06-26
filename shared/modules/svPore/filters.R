@@ -24,6 +24,14 @@ getMatchableJunctions <- function(edges){
         hasAdapter5 == FALSE &
         hasAdapter3 == FALSE
     ]
+
+}
+# preserve junction matchable flag to stratify the quality of the junctions that end up in junction clusters
+setMatchableFlag <- function(edges){ 
+    isJunction  <- getJunctionEdges(edges)
+    isMatchable <- getMatchableJunctions(edges)
+    edges[isJunction, matchable := isMatchable[isJunction]] # edge matchable == NA, junction == (TRUE|FALSE)
+    edges
 }
 
 # fusable junctions are maintained in a single segment, thereby calling a _recurring_ SV
@@ -53,11 +61,11 @@ getFusableJunctions <- function(edges){
 # segment filters
 #-------------------------------------------------------------------------------------
 
-# matchable segments have matchable junctions corresponding to two or more edges (usually in different reads)
+# matchable segments have clustered junctions corresponding to two or more edges (usually in different reads)
 # they are thus segments useful for creating SV-driven allelic assemblies
 getMatchableSegments <- function(segments){
     segments[, 
-        nMatchableJxns > 0 &  # this segment has at least one matchable junction (really, all of them must)
-        nMatchingSegments > 0 # at least one other segment also had at least one of this segment's junctions
+        nClusteredJxns    > 0 &  # this segment has at least one clustered junction (really, all of them must)
+        nMatchingSegments > 0    # at least one other segment also had at least one of this segment's junctions
     ]
 }
