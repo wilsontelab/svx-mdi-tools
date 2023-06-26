@@ -14,12 +14,9 @@ new_svPore_nodesTrack <- function(trackId) {
 
 # build method for the S3 class; REQUIRED
 svPore_nodesTrackBuffer <- list()
-svPore_nodesY <- list(
-
-)
 build.svPore_nodesTrack <- function(track, reference, coord, layout){
     req(coord, coord$chromosome)
-    samplesToPlot <- track$settings$items()
+    sourcesToPlot <- getSvPoreSampleSources(track$settings$items())
     padding <- padding(track, layout)
     height <- height(track, 0.25) + padding$total # or set a known, fixed height in inches
     ylim <- c(0.5,4.5)
@@ -32,48 +29,40 @@ build.svPore_nodesTrack <- function(track, reference, coord, layout){
             xlim = coord$range, xlab = "", xaxt = "n", # nearly always set `xlim`` to `coord$range`
             ylim = ylim, ylab = "Junction Nodes", #yaxt = "n",
             xaxs = "i", yaxs = "i") # always set `xaxs` and `yaxs` to "i" 
-        jc <- do.call(rbind, lapply(seq_along(samplesToPlot), function(sampleI){
-            sample <- samplesToPlot[[sampleI]]
-            sourceId <- getSourceIdFromSample_svPore(sample)
-            jc <- applySettingsToJCs(sample, track) %>%
+        sourceI <- 1
+        jc <- do.call(rbind, lapply(names(sourcesToPlot), function(sourceId){
+            jc <- applySettingsToJCs(sourceId, sourcesToPlot[[sourceId]]$Sample_ID, track) %>%
                   filterJCsByRange(coord, "endpoint", chromOnly = FALSE)
-            jc[, instanceI := .I]
             jc <- cbind(
-                jc[, .SD, .SDcols = c("pos1","pos2","pos1In","pos2In","edgeType","size","color","cex","instanceI","clusterN")], 
-                sampleI  = if(nrow(jc) == 0) integer()   else sampleI,
+                jc[, .SD, .SDcols = c("pos1","pos2","pos1In","pos2In","edgeType","size","color","cex","clusterN")], 
                 sourceId = if(nrow(jc) == 0) character() else sourceId
             )
-            svPore_nodesTrackBuffer[[track$id]] <<- if(sampleI == 1) jc else rbind(svPore_nodesTrackBuffer[[track$id]], jc)
+            svPore_nodesTrackBuffer[[track$id]] <<- if(sourceI == 1) jc else rbind(svPore_nodesTrackBuffer[[track$id]], jc)
+            sourceI <<- sourceI + 1
             jc 
-        }))[sample(.N)]
+        }))[order(-size)]
 
-        jc[, y := jitter(unlist(junctionTypeLines[edgeType]), amount = 0.4)]
-        jc[, isIn := pos1In]
-        points(
-            jc[isIn == TRUE, pos1], 
-            jc[isIn == TRUE, y],
-            pch = 19,
-            cex = jc[isIn == TRUE, cex],
-            col = jc[isIn == TRUE, color]
-        )
+        jc[, y := junctionTypeLines[[edgeType]] - 0.5 + (1:.N)/.N, by = .(edgeType)]
 
-        jc[, isIn := pos2In]
-        points(
-            jc[isIn == TRUE, pos2], 
-            jc[isIn == TRUE, y],
-            pch = 19,
-            cex = jc[isIn == TRUE, cex],
-            col = jc[isIn == TRUE, color]
-        )
+        plotEndpoints <- function(isIn, pos){
+            points(
+                jc[isIn][[pos]], 
+                jc[isIn, y],
+                pch = 19,
+                cex = jc[isIn, cex],
+                col = jc[isIn, color]
+            )            
+        }
+        plotEndpoints(jc[, pos1In], "pos1")
+        plotEndpoints(jc[, pos2In], "pos2")
 
-        jc[, isIn := pos1In & pos2In]
-        jc[isIn == TRUE, {
+        jc[pos1In == TRUE & pos2In == TRUE, {
             lines(
                 c(pos1, pos2), 
                 rep(y, 2),
                 col = color
             )
-        }, by = .(sampleI, instanceI)]
+        }, by = .(clusterN)]
     })
 
     # return the track's magick image and associated metadata

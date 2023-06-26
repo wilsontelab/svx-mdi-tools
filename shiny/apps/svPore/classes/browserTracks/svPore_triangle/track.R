@@ -16,7 +16,7 @@ new_svPore_triangleTrack <- function(trackId) {
 svPore_triangleTrackBuffer <- list()
 build.svPore_triangleTrack <- function(track, reference, coord, layout){
     req(coord, coord$chromosome)
-    samplesToPlot <- track$settings$items()
+    sourcesToPlot <- getSvPoreSampleSources(track$settings$items())
     padding <- padding(track, layout)
     height <- height(track, 0.25) + padding$total # or set a known, fixed height in inches
     Max_SV_Size <- getBrowserTrackSetting(track, "SV_Filters", "Max_SV_Size", 0)
@@ -31,45 +31,24 @@ build.svPore_triangleTrack <- function(track, reference, coord, layout){
             xlim = coord$range, xlab = "", xaxt = "n", # nearly always set `xlim`` to `coord$range`
             ylim = ylim, ylab = "Junction Clusters", #yaxt = "n",
             xaxs = "i", yaxs = "i") # always set `xaxs` and `yaxs` to "i" 
-
-        jc <- do.call(rbind, lapply(seq_along(samplesToPlot), function(i){
-            sample <- samplesToPlot[[i]]
-            sourceId <- getSourceIdFromSample_svPore(sample)
-            jc <- applySettingsToJCs(sample, track) %>%
+        sourceI <- 1
+        jc <- do.call(rbind, lapply(names(sourcesToPlot), function(sourceId){
+            jc <- applySettingsToJCs(sourceId, sourcesToPlot[[sourceId]]$Sample_ID, track) %>%
                   filterJCsByRange(coord, "center")
             jc <- cbind(
                 jc[, .SD, .SDcols = c("center","size","color","cex","nInstances","clusterN")], 
                 sourceId = if(nrow(jc) == 0) character() else sourceId
             )
-            svPore_triangleTrackBuffer[[track$id]] <<- if(i == 1) jc else rbind(svPore_triangleTrackBuffer[[track$id]], jc)
+            svPore_triangleTrackBuffer[[track$id]] <<- if(sourceI == 1) jc else rbind(svPore_triangleTrackBuffer[[track$id]], jc)
+            sourceI <<- sourceI + 1
             jc 
         }))[sample(.N)]
-
-        # dprint(jc[order(-nInstances, clusterN)])        
-
-        # dmsg()
-        # dmsg("making triangle image")
-        # dprint(nrow(jc))
-        jc <- jc[, .(
-            color = color[1],
-            cex = cex[1],
-            nInstances = nInstances[1],
-            clusterN = clusterN[1]
-        ), by = .(center, size)]  
-        # dprint(nrow(jc))      
-        # points(
-        #     jc$center, 
-        #     jc$size,
-        #     pch = 19,
-        #     cex = jc$cex,
-        #     col = jc$color
-        # )
-
-
-        text(
+     
+        points(
             jc$center, 
-            jitter(as.numeric(jc$size)),
-            as.character(jc$nInstances),
+            jc$size,
+            pch = 19,
+            cex = jc$cex,
             col = jc$color
         )
     })
