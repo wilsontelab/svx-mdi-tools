@@ -53,10 +53,10 @@ edgeTypeColors <- list(
     "Q" = rgb(0, 0, 0, 0.1)
 )
 junctionTypeLines <- list(
-    "T" = 4,
-    "V" = 3,
-    "U" = 2,
     "D" = 1,
-    "I" = 0,    
+    "U" = 2,    
+    "V" = 3,
+    "T" = 4,
+    "I" = -1,    
     "?" = -1
 )

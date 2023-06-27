@@ -82,7 +82,7 @@ applySettingsToJCs <- function(sourceId, samples, track){
         create = "once", 
         createFn = function(...) {
             jc <- filterJCsBySample(sourceId, samples)
-            startSpinner(session, message = paste("applying JC ettings"))
+            startSpinner(session, message = paste("applying JC settings"))
             filters <- track$settings$SV_Filters()
             filters <- lapply(names(svPoreFilterDefaults), function(filter){
                 if(is.null(filters[[filter]])) svPoreFilterDefaults[[filter]]
@@ -91,7 +91,7 @@ applySettingsToJCs <- function(sourceId, samples, track){
             names(filters) <- names(svPoreFilterDefaults)
 
             if(filters$Min_SV_Size > 1) jc <- jc[size >= filters$Min_SV_Size]
-            if(filters$Max_SV_Size > 0) jc <- jc[size <= filters$Max_SV_Size & edgeType != "T"]
+            if(filters$Max_SV_Size > 0) jc <- jc[size <= filters$Max_SV_Size] #  & edgeType != "T"
 
             if(filters$Min_Samples_With_SV > 1) jc <- jc[nSamples >= filters$Min_Samples_With_SV]
             if(filters$Max_Samples_With_SV > 0) jc <- jc[nSamples <= filters$Max_Samples_With_SV]
@@ -127,8 +127,8 @@ filterJCsByRange <- function(jc, coord, rangeType, chromOnly = TRUE){
                 pos2 = if(isWholeGenome) abs(node2) else cRefPos2
             )]
             jc[ , ":="(
-                pos1In = cChrom1 == coord$chrom & between(as.numeric(pos1), coord$start, coord$end),
-                pos2In = cChrom2 == coord$chrom & between(as.numeric(pos2), coord$start, coord$end)
+                pos1In = (isWholeGenome | cChrom1 == coord$chrom) & between(as.numeric(pos1), coord$start, coord$end),
+                pos2In = (isWholeGenome | cChrom2 == coord$chrom) & between(as.numeric(pos2), coord$start, coord$end)
             )]
             jc[pos1In | pos2In]
         },

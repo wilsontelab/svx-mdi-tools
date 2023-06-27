@@ -14,12 +14,46 @@ new_svPore_nodesTrack <- function(trackId) {
 
 # build method for the S3 class; REQUIRED
 svPore_nodesTrackBuffer <- list()
+plotSvNodeEndpoints <- function(jc, pos){
+    points(
+        jc[[pos]], 
+        jc[, y],
+        pch = 19,
+        cex = jc[, cex],
+        col = jc[, color]
+    )       
+}
+plotSvNodeLines <- function(jc){
+    jc[, {
+        lines(
+            c(pos1, pos2), 
+            rep(y, 2),
+            col = color
+        )
+    }, by = .(clusterN)]     
+}
+plotChromosomeNodes <- function(jc){
+    jc[, y := junctionTypeLines[[edgeType]] - 0.5 + (1:.N)/.N, by = .(edgeType)]
+    plotSvNodeEndpoints(jc[pos1In == TRUE], "pos1")
+    plotSvNodeEndpoints(jc[pos2In == TRUE], "pos2")
+    plotSvNodeLines(jc[pos1In == TRUE & pos2In == TRUE])
+}
+plotGenomeNodes <- function(jc){
+    jc[, y := size]
+    plotSvNodeEndpoints(jc, "pos1")
+    plotSvNodeEndpoints(jc, "pos2")
+    plotSvNodeLines(jc)
+}
 build.svPore_nodesTrack <- function(track, reference, coord, layout){
     req(coord, coord$chromosome)
+    isWholeGenome <- coord$chromosome == "all"
     sourcesToPlot <- getSvPoreSampleSources(track$settings$items())
     padding <- padding(track, layout)
     height <- height(track, 0.25) + padding$total # or set a known, fixed height in inches
-    ylim <- c(0.5,4.5)
+    ylim <- if(isWholeGenome) {
+        Max_SV_Size <- getBrowserTrackSetting(track, "SV_Filters", "Max_SV_Size", 0)
+        if(Max_SV_Size == 0) coord$range else c(1, as.numeric(Max_SV_Size))
+    } else c(0.45,4.55)
 
     # use the mdiTrackImage helper function to create the track image
     mai <- NULL
@@ -40,29 +74,8 @@ build.svPore_nodesTrack <- function(track, reference, coord, layout){
             svPore_nodesTrackBuffer[[track$id]] <<- if(sourceI == 1) jc else rbind(svPore_nodesTrackBuffer[[track$id]], jc)
             sourceI <<- sourceI + 1
             jc 
-        }))[order(-size)]
-
-        jc[, y := junctionTypeLines[[edgeType]] - 0.5 + (1:.N)/.N, by = .(edgeType)]
-
-        plotEndpoints <- function(isIn, pos){
-            points(
-                jc[isIn][[pos]], 
-                jc[isIn, y],
-                pch = 19,
-                cex = jc[isIn, cex],
-                col = jc[isIn, color]
-            )            
-        }
-        plotEndpoints(jc[, pos1In], "pos1")
-        plotEndpoints(jc[, pos2In], "pos2")
-
-        jc[pos1In == TRUE & pos2In == TRUE, {
-            lines(
-                c(pos1, pos2), 
-                rep(y, 2),
-                col = color
-            )
-        }, by = .(clusterN)]
+        }))[order(if(isWholeGenome) sample(.N) else -size)]
+        if(isWholeGenome) plotGenomeNodes(jc) else plotChromosomeNodes(jc)
     })
 
     # return the track's magick image and associated metadata
