@@ -76,16 +76,16 @@ cigarDotPlot <- function(cigar, qryPos, refPos, strand){
 }
 
 # build one locus plot points without plotting yet, may reorder loci later
-buildLocus <- function(segments, minQStarts){
+buildLocus <- function(md, minQStarts){
     pts <- data.table(x = integer(), y = integer(), col = character(), 
                       operation = character(), type = character())
     lbls <- data.table(x = integer(), y = integer(), label = character())
-    ylim <- range(segments[, rStart], segments[, rEnd], na.rm = TRUE)
+    ylim <- range(md[, rStart], md[, rEnd], na.rm = TRUE)
     bwls <- data.table(intercept = integer(), slope = integer())
     tryCatch({
-        for(qName_ in segments[, unique(qName)]){
-            xq <- segments[qName == qName_]
-            minQs <- minQStarts[qName == qName_, qStart]
+        for(readKey_ in md[, unique(readKey)]){
+            xq <- md[readKey == readKey_]
+            minQs <- minQStarts[readKey == readKey_, qStart]
             bwls <- rbind(bwls, xq[1, .(
                 intercept = if(strand > 0) min(rStart, rEnd) - qStart + minQs 
                                       else max(rStart, rEnd) + qStart - minQs, 
@@ -138,7 +138,7 @@ buildLocus <- function(segments, minQStarts){
         print(e)
     })
     list(
-        chrom = segments[1, chrom],
+        chrom = md[1, chrom],
         ylim = ylim,  
         points = pts[order(unlist(dotStackOrder[pts$operation]))],
         labels = lbls,
@@ -147,29 +147,29 @@ buildLocus <- function(segments, minQStarts){
 }
 
 # add interlocus segments to the locus plots
-buildInterLocus <- function(segments, plotData){
-    N <- nrow(segments)
-    if(N == 0) return(plotData)
+buildInterLocus <- function(md, pd){
+    N <- nrow(md)
+    if(N == 0) return(pd)
     tryCatch({
         for(i in 1:N){
-            x <- segments[i]
+            x <- md[i]
             isUp <- x[, if(locus2 > locus1) TRUE else FALSE]
 
             locus <- as.character(x[, locus1])
-            pts <- plotData[[locus]]$points
+            pts <- pd[[locus]]$points
             qryPos <- x[, qStart]
             endQryPos <- qryPos + x[, qOffset - 1]
             refPos <- x[, rStart]
-            limitPos <- plotData[[locus]]$ylim[if(isUp) 2 else 1]
+            limitPos <- pd[[locus]]$ylim[if(isUp) 2 else 1]
             operation <- x[, if(qOffset > 1) "I" else "H"]
-            plotData[[locus]]$points <- rbind(plotData[[locus]]$points, data.table(
+            pd[[locus]]$points <- rbind(pd[[locus]]$points, data.table(
                 x = qryPos:endQryPos,
                 y = refPos,
                 col = unlist(dotPlotColors[operation]),
                 operation = operation,
                 type = "J"
             ))
-            plotData[[locus]]$points <- rbind(plotData[[locus]]$points, data.table(
+            pd[[locus]]$points <- rbind(pd[[locus]]$points, data.table(
                 x = endQryPos,
                 y = refPos:limitPos,
                 col = dotPlotColors$D,
@@ -178,10 +178,10 @@ buildInterLocus <- function(segments, plotData){
             )) 
 
             locus <- as.character(x[, locus2])
-            pts <- plotData[[locus]]$points
+            pts <- pd[[locus]]$points
             refPos <- x[, rEnd]
-            limitPos <- plotData[[locus]]$ylim[if(isUp) 1 else 2]
-            plotData[[locus]]$points <- rbind(plotData[[locus]]$points, data.table(
+            limitPos <- pd[[locus]]$ylim[if(isUp) 1 else 2]
+            pd[[locus]]$points <- rbind(pd[[locus]]$points, data.table(
                 x = endQryPos,
                 y = refPos:limitPos,
                 col = dotPlotColors$D,
@@ -190,34 +190,35 @@ buildInterLocus <- function(segments, plotData){
             ))                 
         }
     }, error = function(e){
-        str(segments)
-        str(plotData)
+        str(md)
+        str(pd)
         print(e)
     })
-    plotData
+    pd
 }
 
 # plot a single chromosome segment
-renderAlignmentPlot <- function(xlim, d){  
+renderAlignmentPlot <- function(xlim, pd){ # pd = plotData for one locus
     par(mar = c(0.1, 4.1, 0.1, 0.1), cex = 1)
     plot(
         NA, NA,
         xlim = xlim,
-        ylim = d$ylim,
+        ylim = pd$ylim,
         xlab = "",
-        ylab = d$chrom,
-        xaxt = "n"
+        ylab = pd$chrom,
+        xaxt = "n",
+        xaxs = "i", yaxs = "i"
     )  
     tryCatch({
-        for(i in 1:nrow(d$bandwidthLines)) abline(
-            d$bandwidthLines[i, intercept], 
-            d$bandwidthLines[i, slope],
+        for(i in 1:nrow(pd$bandwidthLines)) abline(
+            pd$bandwidthLines[i, intercept], 
+            pd$bandwidthLines[i, slope],
             col = CONSTANTS$plotlyColors$green,
             lty = 2
         )          
     }, error = function(e) NULL)
-    points(d$points$x, d$points$y, col = d$points$col, pch = 19, cex = 0.25)
-    for(i in 1:nrow(d$labels)) d$labels[i, text(x, y, label)]
+    points(pd$points$x, pd$points$y, col = pd$points$col, pch = 19, cex = 0.25)
+    # for(i in 1:nrow(pd$labels)) pd$labels[i, text(x, y, label)]
 }
 
 # plot the read(s) QUAL profile(s)
@@ -243,7 +244,7 @@ renderBaseQualPlot <- function(xlim, read){
 }
 
 # plot the read(s) M/D/I profile(s)
-renderReadQualPlot <- function(xlim, segments){
+renderReadQualPlot <- function(xlim, md){
     par(mar = c(4.1, 4.1, 0.1, 0.1), cex = 1)
     plot(
         NA, NA,
@@ -253,7 +254,7 @@ renderReadQualPlot <- function(xlim, segments){
         ylab = "Alignment"
     )
     abline(h = 1:3, col = CONSTANTS$plotlyColors$grey)
-    xq <- segments$dt[qName == segments$qNames[1]]
+    xq <- md$dt[readKey == md$readKey[1]]
     dt <- do.call(rbind, lapply(xq[edgeType == edgeTypes$ALIGNMENT, edgeN], function(edgeN_){
         xe <- xq[edgeN == edgeN_]
         qryPos <- xe[, qStart]
@@ -274,38 +275,47 @@ renderReadQualPlot <- function(xlim, segments){
 # render the composite QC plot; this is the main function call, cascading upwards
 baseQualHeight <- 0.1
 readQualHeight <- 0.19
-plotSegments <- function(sourceId, segments) {
-    xlim <- range(segments$dt[, qStart], segments$dt[, qEnd], na.rm = TRUE)
+renderMoleculePlot <- function(md) { # md == molecule(s) data
+    xlim <- range(md$dt[, qStart], md$dt[, qEnd], na.rm = TRUE)
 
     # prepare for alignment to multiple genome windows, i.e., loci
     # qualRowHeightSum <- baseQualHeight + readQualHeight
-    # alnRowHeight <- (1 - qualRowHeightSum) / segments$nLoci
-    # heights <- c(rep(alnRowHeight, segments$nLoci), baseQualHeight, readQualHeight)
-    # nPlotRows <- segments$nLoci + 2    
+    # alnRowHeight <- (1 - qualRowHeightSum) / md$nLoci
+    # heights <- c(rep(alnRowHeight, md$nLoci), baseQualHeight, readQualHeight)
+    # nPlotRows <- md$nLoci + 2    
     # layout(matrix(1:nPlotRows, ncol = 1), heights = heights) 
-    alnRowHeight <- (1 - readQualHeight) / segments$nLoci
-    heights <- c(rep(alnRowHeight, segments$nLoci), readQualHeight)
-    nPlotRows <- segments$nLoci + 1   
+
+    # alnRowHeight <- (1 - readQualHeight) / md$nLoci
+    # heights <- c(rep(alnRowHeight, md$nLoci), readQualHeight)
+    # nPlotRows <- md$nLoci + 1   
+    # layout(matrix(1:nPlotRows, ncol = 1), heights = heights) 
+
+    alnRowHeight <- 1 / md$nLoci
+    heights <- rep(alnRowHeight, md$nLoci)
+    nPlotRows <- md$nLoci
     layout(matrix(1:nPlotRows, ncol = 1), heights = heights) 
 
     # plot alignments
-    minQStarts <- segments$dt[edgeType == edgeTypes$ALIGNMENT, .(qStart = min(qStart, na.rm = TRUE)), by = .(qName)]
-    plotData <- lapply(segments$uniqueLoci, function(locus_) buildLocus(segments$dt[locus1 == locus_ & locus2 == locus_], minQStarts) )
-    names(plotData) <- as.character(segments$uniqueLoci)
-    orderedLoci <- rev(sort(segments$uniqueLoci))
-    if(segments$nLoci > 1) {
-        pairs <- as.data.table(expand.grid(leftLocus = segments$uniqueLoci, rightLocus = segments$uniqueLoci))
+    startSpinner(session, message = "calculating plot data")
+    minQStarts <- md$dt[edgeType == edgeTypes$ALIGNMENT, .(qStart = min(qStart, na.rm = TRUE)), by = .(readKey)]
+    plotData <- lapply64(md$uniqueLoci, function(locus_) buildLocus(md$dt[locus1 == locus_ & locus2 == locus_], minQStarts) )
+    names(plotData) <- as.character(md$uniqueLoci)
+    orderedLoci <- rev(sort(md$uniqueLoci))
+    if(md$nLoci > 1) {
+        pairs <- as.data.table(expand.grid(leftLocus = md$uniqueLoci, rightLocus = md$uniqueLoci))
         pairs <- pairs[leftLocus != rightLocus]
-        apply(pairs, 1, function(pair){
-            plotData <<- buildInterLocus(segments$dt[locus1 == pair[1] & locus2 == pair[2]], plotData)
-        })
+        mapply(function(pair){
+            plotData <<- buildInterLocus(md$dt[locus1 == pair[1] & locus2 == pair[2]], plotData)
+        }, pairs)
     }
-    for(locus_ in orderedLoci) renderAlignmentPlot(xlim, plotData[[as.character(locus_)]])
+
+    startSpinner(session, message = "rendering plots")
+    invisible(sapply64(orderedLoci, function(locus_) renderAlignmentPlot(xlim, plotData[[as.character(locus_)]])))
 
     # load read data from indexed file    
-    # read <- getReadFromSequenceIndex(sourceId, segments$qNames[1])
+    # read <- getReadFromSequenceIndex(sourceId, md$qNames[1])
 
     # plot QUAL
     # renderBaseQualPlot(xlim, read)
-    renderReadQualPlot(xlim, segments)
+    # renderReadQualPlot(xlim, md)
 }

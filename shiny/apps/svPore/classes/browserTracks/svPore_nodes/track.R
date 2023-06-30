@@ -1,14 +1,17 @@
 #----------------------------------------------------------------------
 # svPore_nodes trackBrowser track (i.e., a browserTrack)
 #----------------------------------------------------------------------
+svPore_nodesExpand <- reactiveVal(NULL)
 
 # constructor for the S3 class
 new_svPore_nodesTrack <- function(trackId) {
     list( # whether the track type has `click`, `hover`, and/or `items` methods
-        click = FALSE,
+        click = TRUE,
         hover = FALSE,
         brush = FALSE,
-        items = TRUE
+        items = TRUE,
+        expand = svPore_nodesExpand,
+        NULL
     )
 }
 
@@ -37,12 +40,14 @@ plotChromosomeNodes <- function(jc){
     plotSvNodeEndpoints(jc[pos1In == TRUE], "pos1")
     plotSvNodeEndpoints(jc[pos2In == TRUE], "pos2")
     plotSvNodeLines(jc[pos1In == TRUE & pos2In == TRUE])
+    jc
 }
 plotGenomeNodes <- function(jc){
     jc[, y := size]
     plotSvNodeEndpoints(jc, "pos1")
     plotSvNodeEndpoints(jc, "pos2")
     plotSvNodeLines(jc)
+    jc
 }
 build.svPore_nodesTrack <- function(track, reference, coord, layout){
     req(coord, coord$chromosome)
@@ -71,12 +76,13 @@ build.svPore_nodesTrack <- function(track, reference, coord, layout){
                 jc[, .SD, .SDcols = c("pos1","pos2","pos1In","pos2In","edgeType","size","color","cex","clusterN")], 
                 sourceId = if(nrow(jc) == 0) character() else sourceId
             )
-            svPore_nodesTrackBuffer[[track$id]] <<- if(sourceI == 1) jc else rbind(svPore_nodesTrackBuffer[[track$id]], jc)
             sourceI <<- sourceI + 1
             jc 
         }))[order(if(isWholeGenome) sample(.N) else -size)]
-        if(isWholeGenome) plotGenomeNodes(jc) else plotChromosomeNodes(jc)
+        jc <- if(isWholeGenome) plotGenomeNodes(jc) else plotChromosomeNodes(jc)
+        svPore_nodesTrackBuffer[[track$id]] <<- jc
     })
+    svPore_nodesExpand(NULL)
 
     # return the track's magick image and associated metadata
     list(
@@ -88,13 +94,17 @@ build.svPore_nodesTrack <- function(track, reference, coord, layout){
 
 # plot interaction methods for the S3 class
 # called by trackBrowser if track$click, $hover, or $brush is TRUE, above
-click.svPore_nodesTrack <- function(track, x, y){
-    # jc <- svPore_nodesTrackBuffer[[track$id]]
-    # dist <- jc[, sqrt((center - x) ** 2 + (size - y) ** 2)]
-    # jc <- jc[which.min(dist)]
-    # req(nrow(jc) > 0)
-    
-    # dprint(jc)
+click.svPore_nodesTrack <- function(track, x_, y_){
+    jc <- svPore_nodesTrackBuffer[[track$id]]
+    req(nrow(jc) > 0)  
+    y2 <- jc[, ((y - y_) / y_) ** 2]
+    dist <- jc[, pmin(
+        sqrt(((pos1 - x_) / x_) ** 2 + y2),
+        sqrt(((pos2 - x_) / x_) ** 2 + y2)
+    )]
+    jc <- jc[which.min(dist)]
+    svPore_nodesExpand(jc)
+    app$browser$expandingTrackId(track$id)
 }
 hover.svPore_nodesTrack <- function(track, x, y){
     # custom actions
@@ -106,3 +116,8 @@ brush.svPore_nodesTrack <- function(track, x1, y1, x2, y2){
 # method for the S3 class to show a relevant trackItemsDialog or trackSamplesDialog
 # used when a track can take a list of items to be plotted together and the item list icon is clicked
 items.svPore_nodesTrack <- function(...) svPore_trackItems(...)
+
+# expand methods for the S3 class
+expand.svPore_nodesTrack <- function(track, reference, coord, layout){
+    svPore_expandJunctionCluster(svPore_nodesExpand(), track, layout)
+}

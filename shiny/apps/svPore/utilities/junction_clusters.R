@@ -24,8 +24,8 @@ loadJunctionClusters <- function(sourceId){
         'junctionClusters', 
         key = sourceId, 
         permanent = TRUE, 
-        from = "disk", 
-        create = "once", 
+        from = "ram", 
+        create = "asNeeded", 
         createFn = function(...) {
             startSpinner(session, message = "loading source JCs")
             jc <- readRDS(getSourceFilePath(sourceId, "junctionClustersFile")) 
@@ -50,8 +50,8 @@ filterJCsBySample <- function(sourceId, samples_){
         'junctionClusters', 
         keyObject = list(sourceId = sourceId, samples = samples_), 
         permanent = TRUE, 
-        from = "disk", 
-        create = "once", 
+        from = "ram", 
+        create = "asNeeded", 
         createFn = function(...) {
             jc <- loadJunctionClusters(sourceId)
             startSpinner(session, message = "filtering JCs by sample")
@@ -78,8 +78,8 @@ applySettingsToJCs <- function(sourceId, samples, track){
         'junctionClusters', 
         keyObject = list(sourceId = sourceId, samples = samples, settings = track$settings$all()), 
         permanent = TRUE,
-        from = "disk", 
-        create = "once", 
+        from = "ram", 
+        create = "asNeeded", 
         createFn = function(...) {
             jc <- filterJCsBySample(sourceId, samples)
             startSpinner(session, message = paste("applying JC settings"))

@@ -27,7 +27,3 @@ getAlnEndPos <- function(node1Pos, strand, cigar){
 getRefPos <- function(strand, pos, cigar){
     if(strand == 1) pos else getAlnStartPos(pos, cigar)
 }
-
-
-
-

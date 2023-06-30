@@ -136,46 +136,23 @@ plotJunctionsReactive <- function(filteredJunctions, input) reactive({
 # [29] "hasAdapter3"      "hasAdapter5"      "hasAdapter"       "fractionChimeric"
 # [33] "segment"          "segmentName"
 segmentsReactive <- function(svEdges, filteredJunctions, plotJunctions, summaryPlot) reactive({
-    svEdges <- svEdges()
-    filteredJunctions <- filteredJunctions()
-    plotJunctions <- plotJunctions()
-    coord <- summaryPlot$click()$coord
-    req(nrow(filteredJunctions) > 0, nrow(plotJunctions) > 0, coord, coord$x, coord$y)
-    distance <- plotJunctions[, sqrt((x - coord$x)**2 + (y - coord$y)**2)]
-    indexNode <- plotJunctions[which.min(distance)]
-    indexJunctionKey_ <- indexNode[, if(is.na(indexJunctionKey)) "UNMATCHABLE_JUNCTION" else indexJunctionKey]
-    indexQName <- indexNode[, qName]
-    otherQNames <- filteredJunctions[indexJunctionKey == indexJunctionKey_ & qName != indexQName, unique(qName)]
-    if(length(otherQNames) > 2) otherQNames <- sample(otherQNames, 2)
-    qNames <- c(indexQName, otherQNames)
-    x <- svEdges[qNames]
-    padding <- 10000
+    # svEdges <- svEdges()
+    # filteredJunctions <- filteredJunctions()
+    # plotJunctions <- plotJunctions()
+    # coord <- summaryPlot$click()$coord
+    # req(nrow(filteredJunctions) > 0, nrow(plotJunctions) > 0, coord, coord$x, coord$y)
+    # distance <- plotJunctions[, sqrt((x - coord$x)**2 + (y - coord$y)**2)]
+    # indexNode <- plotJunctions[which.min(distance)]
+    # indexJunctionKey_ <- indexNode[, if(is.na(indexJunctionKey)) "UNMATCHABLE_JUNCTION" else indexJunctionKey]
+    # indexQName <- indexNode[, qName]
+    # otherQNames <- filteredJunctions[indexJunctionKey == indexJunctionKey_ & qName != indexQName, unique(qName)]
+    # if(length(otherQNames) > 2) otherQNames <- sample(otherQNames, 2)
+    # qNames <- c(indexQName, otherQNames)
+    # x <- svEdges[qNames]
+
+
+
     maxI <- nrow(x)
-    maxQSize <- x[edgeType == edgeTypes$ALIGNMENT, max(xEnd)]
-    x[, locus := NA_integer_]
-    getAlnRPos <- function(qName_, edgeN_) {
-        xq <- x[qName == qName_]
-        if(edgeN_ == 1) xq[edgeN_ + 1, xStart] else xq[edgeN_ - 1, xEnd] 
-    }
-    nLoci <- 0
-    fillLocus <- function(x){
-        pending <- x[, edgeType == edgeTypes$ALIGNMENT & is.na(locus)]
-        i <- x[, min(which(pending), na.rm = TRUE)]
-        chrom <- x[i, chrom1]
-        rPos  <- x[i, getAlnRPos(qName, edgeN)]
-        rRange <- c(
-            rPos - padding - maxQSize,
-            rPos + padding + maxQSize 
-        )
-        x[, locus := {
-            if(!is.na(locus) || edgeType != edgeTypes$ALIGNMENT) locus
-            else if(chrom1 == chrom && getAlnRPos(qName, edgeN) %between% rRange) abs(x[i, node1])
-            else as.integer(NA)   
-        }, by = .(qName, edgeN)]
-        nLoci <<- nLoci + 1
-        x
-    }
-    while(x[edgeType == edgeTypes$ALIGNMENT, any(is.na(locus))]) x <- fillLocus(x)
     dt <- do.call(rbind, lapply(1:maxI, function(i){
         if(x[i, edgeType == edgeTypes$ALIGNMENT]) data.table(
             qName = x[i, qName],
@@ -224,3 +201,4 @@ segmentsReactive <- function(svEdges, filteredJunctions, plotJunctions, summaryP
         maxI = maxI
     )
 })
+
