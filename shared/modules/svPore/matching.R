@@ -89,29 +89,3 @@ getCanonicalPathKey <- function(cOuterNode1, icReadPath, cOuterNode2){
         sep = ":::"
     )
 }
-
-
-# # operators for performing node path matching
-# isOuterEndpointMatch <- function(cOuterNode1_1, cOuterNode2_1, cOuterNode1_2, cOuterNode2_2){
-#     cOuterNode1_1 == cOuterNode1_2 &&
-#     cOuterNode2_1 == cOuterNode2_2
-# }
-# isReadPathMatch <- function(icReadPath_1, icReadPath_2){ # icReadPaths are data.tables of indexed, canonical junction sequences
-#     nrow(icReadPath1) == nrow(icReadPath2) && 
-#     all(icReadPath1 == icReadPath2)
-# }
-
-# pathTolerance <- 1 # i.e., "fuzzy" allows a one-window adjacency tolerance
-# pathOffsets <- -pathTolerance:pathTolerance
-# `%is_fuzzy_match%` <- function(path1, path2){ # core function that checks if two equal-length node sequences are an adjacency match
-#     all(apply(sapply(pathOffsets, "+", path2) - path1, 1, function(v) min(abs(v))) == 0)
-# }
-# `%is_exact_match%` <- function(path1, path2){ # related function applied after assignment of reference junctions, where exact matches are expected
-#     identical(path1, path2)
-# }
-# `%is_fuzzy_rev_match%` <- function(path1, path2){ # check if two paths are fuzzy reciprocal with respect to strand
-#     path1 %is_fuzzy_match% -rev(path2)
-# }
-# `%is_exact_rev_match%` <- function(path1, path2){ # check if two paths are exactly reciprocal with respect to strand
-#     path1 %is_exact_match% -rev(path2)
-# }

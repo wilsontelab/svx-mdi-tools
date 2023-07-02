@@ -24,7 +24,6 @@ getMatchableJunctions <- function(edges){
         hasAdapter5 == FALSE &
         hasAdapter3 == FALSE
     ]
-
 }
 # preserve junction matchable flag to stratify the quality of the junctions that end up in junction clusters
 setMatchableFlag <- function(edges){ 
@@ -41,7 +40,7 @@ getFusableJunctions <- function(edges){
     edges[, 
         isJunction &  # these filters reject any read not suitable for assembling genome SV paths from multiple reads
         hasAdapter5 == FALSE & # adapters identify nanopore/basecaller artifacts
-        hasAdapter3 == FALSE &
+        hasAdapter3 == FALSE & # each segment side of a read-through junction is kept at this stage, since duplex foldback inversions were collapsed upstream
         (
             passedBandwidth == FALSE |  # we don't consider these to be true junctions, they don't break segments and are ignored during segment matching
             (
@@ -50,7 +49,7 @@ getFusableJunctions <- function(edges){
                 gapCompressedIdentity >= env$MIN_ALIGNMENT_IDENTITY & 
                 (
                     nCanonical    > 1 |  # junctions not validated by at least 2 reads on the same strand are likely to be ligation artifacts
-                    nNonCanonical > 1    # see notes in duplex.R
+                    nNonCanonical > 1    # the required two reads might have been in the same channel (but usually aren't)
                 )
             )
         )

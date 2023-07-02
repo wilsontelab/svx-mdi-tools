@@ -11,3 +11,9 @@ Junction_Zoom:
         min:    0
         max:    500000
         step:   50000
+    Plot_Speed: 
+        type:   selectInput
+        choices:
+            - fast
+            - accurate
+        selected: fast

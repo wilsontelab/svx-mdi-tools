@@ -154,7 +154,7 @@ sub getSvSize { # always a positive integer, zero if NA
 # strictly speaking we expect symmetry, but cannot count on complete alignment of both flanks
 # we might expect adapters in the junction, but exploration says they may not be there
 # and foldback inversions are so supsect as artifacts that we maintain high sensivitiy for purging them
-# finally, some duplex molecules are output as two distinct reads; these are handled later, not here
+# finally, some duplex molecules are output as two distinct reads; these are handled by analyze/duplex.R
 #---------------------------------------------------------------------------------------------------
 sub checkForDuplex {
     my ($nEdges) = @_;

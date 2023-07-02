@@ -76,10 +76,20 @@ cigarDotPlot <- function(cigar, qryPos, refPos, strand){
 }
 
 # build one locus plot points without plotting yet, may reorder loci later
-buildLocus <- function(md, minQStarts){
-    pts <- data.table(x = integer(), y = integer(), col = character(), 
-                      operation = character(), type = character())
-    lbls <- data.table(x = integer(), y = integer(), label = character())
+buildLocus <- function(md, minQStarts, speed){
+    od <- if(speed == "fast"){
+        data.table( # output data
+            x1 = integer(), x2 = integer(), y1 = integer(), y2 = integer(), 
+            col = character(),
+            operation = character(), type = character()
+        )     
+    } else {
+        data.table( # output data
+            x = integer(), y = integer(), 
+            col = character(),
+            operation = character(), type = character()
+        )           
+    }
     ylim <- range(md[, rStart], md[, rEnd], na.rm = TRUE)
     bwls <- data.table(intercept = integer(), slope = integer())
     tryCatch({
@@ -91,45 +101,71 @@ buildLocus <- function(md, minQStarts){
                                       else max(rStart, rEnd) + qStart - minQs, 
                 slope = strand
             )])
-
             for(edgeN_ in xq[, edgeN]){
                 xe <- xq[edgeN == edgeN_]
                 if(xe$edgeType == edgeTypes$ALIGNMENT){
-                    qryPos <- xe[, qStart]
-                    refPos <- xe[, min(rStart, rEnd)]
-                    dp <- cigarDotPlot(xe[, cigar], qryPos, refPos, xe[, strand])
-                    pts <- rbind(pts, data.table(
-                        x = dp$dt$x,
-                        y = dp$dt$y,
-                        col = unlist(dotPlotColors[dp$dt$operation]),
-                        operation = dp$dt$operation,
-                        type = "A"
-                    ))
-                    lbls <- rbind(lbls, data.table(
-                        x = mean(dp$dt$x), 
-                        y = ylim[2], 
-                        label = xe[, label]
-                    ))
-
+                    if(speed == "fast"){
+                        od <- rbind(od, data.table(
+                            x1 = xe$qStart,
+                            x2 = xe$qEnd,
+                            y1 = xe$rStart,
+                            y2 = xe$rEnd,
+                            col = unlist(dotPlotColors$M),
+                            operation = "M",
+                            type = "A"
+                        ))
+                    } else {
+                        qryPos <- xe[, qStart]
+                        refPos <- xe[, min(rStart, rEnd)]                        
+                        dp <- cigarDotPlot(xe[, cigar], qryPos, refPos, xe[, strand])
+                        od <- rbind(od, data.table(
+                            x = dp$dt$x,
+                            y = dp$dt$y,
+                            col = unlist(dotPlotColors[dp$dt$operation]),
+                            operation = dp$dt$operation,
+                            type = "A"
+                        ))                        
+                    }
                 } else {
                     qryPos <- xe[, qStart]
                     refPos <- xe[, rStart]
                     endQryPos <- qryPos + xe[, qOffset - 1]
                     operation <- xe[, if(qOffset > 1) "I" else "H"]
-                    pts <- rbind(pts, data.table(
-                        x = qryPos:endQryPos,
-                        y = refPos,
-                        col = unlist(dotPlotColors[operation]),
-                        operation = operation,
-                        type = "J"
-                    ))
-                    pts <- rbind(pts, data.table(
-                        x = endQryPos,
-                        y = xe[, rStart]:xe[, rEnd],
-                        col = dotPlotColors$D,
-                        operation = "D",
-                        type = "J"
-                    ))                  
+                    if(speed == "fast"){
+                        od <- rbind(od, data.table(
+                            x1 = qryPos,
+                            x2 = endQryPos,
+                            y1 = refPos,
+                            y2 = refPos,
+                            col = unlist(dotPlotColors[operation]),
+                            operation = operation,
+                            type = "J"
+                        ))
+                        od <- rbind(od, data.table(
+                            x1 = endQryPos,
+                            x2 = endQryPos,
+                            y1 = xe$rStart,
+                            y2 = xe$rEnd,
+                            col = dotPlotColors$D,
+                            operation = "D",
+                            type = "J"
+                        ))     
+                    } else {
+                        od <- rbind(od, data.table(
+                            x = qryPos:endQryPos,
+                            y = refPos,
+                            col = unlist(dotPlotColors[operation]),
+                            operation = operation,
+                            type = "J"
+                        ))
+                        od <- rbind(od, data.table(
+                            x = endQryPos,
+                            y = xe[, rStart]:xe[, rEnd],
+                            col = dotPlotColors$D,
+                            operation = "D",
+                            type = "J"
+                        ))  
+                    }
                 }
             }        
         }
@@ -140,54 +176,83 @@ buildLocus <- function(md, minQStarts){
     list(
         chrom = md[1, chrom],
         ylim = ylim,  
-        points = pts[order(unlist(dotStackOrder[pts$operation]))],
-        labels = lbls,
+        data = od[order(unlist(dotStackOrder[od$operation]))],
+        # labels = lbls,
         bandwidthLines = bwls    
     )   
 }
 
 # add interlocus segments to the locus plots
-buildInterLocus <- function(md, pd){
+buildInterLocus <- function(md, pd, speed){
     N <- nrow(md)
     if(N == 0) return(pd)
     tryCatch({
         for(i in 1:N){
             x <- md[i]
             isUp <- x[, if(locus2 > locus1) TRUE else FALSE]
-
             locus <- as.character(x[, locus1])
-            pts <- pd[[locus]]$points
             qryPos <- x[, qStart]
             endQryPos <- qryPos + x[, qOffset - 1]
             refPos <- x[, rStart]
             limitPos <- pd[[locus]]$ylim[if(isUp) 2 else 1]
             operation <- x[, if(qOffset > 1) "I" else "H"]
-            pd[[locus]]$points <- rbind(pd[[locus]]$points, data.table(
-                x = qryPos:endQryPos,
-                y = refPos,
-                col = unlist(dotPlotColors[operation]),
-                operation = operation,
-                type = "J"
-            ))
-            pd[[locus]]$points <- rbind(pd[[locus]]$points, data.table(
-                x = endQryPos,
-                y = refPos:limitPos,
-                col = dotPlotColors$D,
-                operation = "D",
-                type = "J"
-            )) 
-
+            if(speed == "fast"){
+                pd[[locus]]$data <- rbind(pd[[locus]]$data, data.table(
+                    x1 = qryPos,
+                    x2 = endQryPos,
+                    y1 = refPos,
+                    y2 = refPos,
+                    col = unlist(dotPlotColors[operation]),
+                    operation = operation,
+                    type = "J"
+                ))
+                pd[[locus]]$data <- rbind(pd[[locus]]$data, data.table(
+                    x1 = endQryPos,
+                    x2 = endQryPos,
+                    y1 = refPos,
+                    y2 = limitPos,
+                    col = dotPlotColors$D,
+                    operation = "D",
+                    type = "J"
+                )) 
+            } else {
+                pd[[locus]]$data <- rbind(pd[[locus]]$data, data.table(
+                    x = qryPos:endQryPos,
+                    y = refPos,
+                    col = unlist(dotPlotColors[operation]),
+                    operation = operation,
+                    type = "J"
+                ))
+                pd[[locus]]$data <- rbind(pd[[locus]]$data, data.table(
+                    x = endQryPos,
+                    y = refPos:limitPos,
+                    col = dotPlotColors$D,
+                    operation = "D",
+                    type = "J"
+                )) 
+            }
             locus <- as.character(x[, locus2])
-            pts <- pd[[locus]]$points
             refPos <- x[, rEnd]
             limitPos <- pd[[locus]]$ylim[if(isUp) 1 else 2]
-            pd[[locus]]$points <- rbind(pd[[locus]]$points, data.table(
-                x = endQryPos,
-                y = refPos:limitPos,
-                col = dotPlotColors$D,
-                operation = "D",
-                type = "J"
-            ))                 
+            if(speed == "fast"){
+                pd[[locus]]$data <- rbind(pd[[locus]]$data, data.table(
+                    x1 = endQryPos,
+                    x2 = endQryPos,
+                    y1 = refPos,
+                    y2 = limitPos,
+                    col = dotPlotColors$D,
+                    operation = "D",
+                    type = "J"
+                ))  
+            } else {
+                pd[[locus]]$data <- rbind(pd[[locus]]$data, data.table(
+                    x = endQryPos,
+                    y = refPos:limitPos,
+                    col = dotPlotColors$D,
+                    operation = "D",
+                    type = "J"
+                ))  
+            }      
         }
     }, error = function(e){
         str(md)
@@ -198,16 +263,16 @@ buildInterLocus <- function(md, pd){
 }
 
 # plot a single chromosome segment
-renderAlignmentPlot <- function(xlim, pd){ # pd = plotData for one locus
-    par(mar = c(0.1, 4.1, 0.1, 0.1), cex = 1)
+renderAlignmentPlot <- function(xlim, pd, speed, showX){ # pd = plotData for one locus
+    par(mar = c(if(showX) 4.1 else 0.1, 4.1, 0.1, 0.1), cex = 1)
     plot(
         NA, NA,
         xlim = xlim,
         ylim = pd$ylim,
-        xlab = "",
+        xlab = if(showX) "Read Pos" else "",
         ylab = pd$chrom,
-        xaxt = "n",
-        xaxs = "i", yaxs = "i"
+        xaxt = if(showX) "s" else "n",
+        xaxs = "i" # , yaxs = "i"
     )  
     tryCatch({
         for(i in 1:nrow(pd$bandwidthLines)) abline(
@@ -217,8 +282,14 @@ renderAlignmentPlot <- function(xlim, pd){ # pd = plotData for one locus
             lty = 2
         )          
     }, error = function(e) NULL)
-    points(pd$points$x, pd$points$y, col = pd$points$col, pch = 19, cex = 0.25)
-    # for(i in 1:nrow(pd$labels)) pd$labels[i, text(x, y, label)]
+    if(speed == "fast"){
+        for(i in seq_len(nrow(pd$data))){
+            ld <- pd$data[i]
+            lines(c(ld$x1, ld$x2), c(ld$y1, ld$y2), col = ld$col, lwd = 2.5)
+        }
+    } else {
+        points(pd$data$x, pd$data$y, col = pd$data$col, pch = 19, cex = 0.25)
+    }
 }
 
 # plot the read(s) QUAL profile(s)
@@ -275,7 +346,8 @@ renderReadQualPlot <- function(xlim, md){
 # render the composite QC plot; this is the main function call, cascading upwards
 baseQualHeight <- 0.1
 readQualHeight <- 0.19
-renderMoleculePlot <- function(md) { # md == molecule(s) data
+xLabHeight <- 4.1 * 0.2 # inches
+renderMoleculePlot <- function(md, height, speed) { # md == molecule(s) data
     xlim <- range(md$dt[, qStart], md$dt[, qEnd], na.rm = TRUE)
 
     # prepare for alignment to multiple genome windows, i.e., loci
@@ -290,27 +362,29 @@ renderMoleculePlot <- function(md) { # md == molecule(s) data
     # nPlotRows <- md$nLoci + 1   
     # layout(matrix(1:nPlotRows, ncol = 1), heights = heights) 
 
-    alnRowHeight <- 1 / md$nLoci
-    heights <- rep(alnRowHeight, md$nLoci)
+    alnRowHeightInches <- height / md$nLoci
+    alnRowHeightInches[1] <- alnRowHeightInches[1] + xLabHeight
     nPlotRows <- md$nLoci
-    layout(matrix(1:nPlotRows, ncol = 1), heights = heights) 
+    layout(matrix(1:nPlotRows, ncol = 1), heights = alnRowHeightInches / height) 
 
     # plot alignments
     startSpinner(session, message = "calculating plot data")
     minQStarts <- md$dt[edgeType == edgeTypes$ALIGNMENT, .(qStart = min(qStart, na.rm = TRUE)), by = .(readKey)]
-    plotData <- lapply64(md$uniqueLoci, function(locus_) buildLocus(md$dt[locus1 == locus_ & locus2 == locus_], minQStarts) )
+    plotData <- lapply64(md$uniqueLoci, function(locus_) buildLocus(md$dt[locus1 == locus_ & locus2 == locus_], minQStarts, speed) )
     names(plotData) <- as.character(md$uniqueLoci)
     orderedLoci <- rev(sort(md$uniqueLoci))
     if(md$nLoci > 1) {
         pairs <- as.data.table(expand.grid(leftLocus = md$uniqueLoci, rightLocus = md$uniqueLoci))
         pairs <- pairs[leftLocus != rightLocus]
         mapply(function(pair){
-            plotData <<- buildInterLocus(md$dt[locus1 == pair[1] & locus2 == pair[2]], plotData)
+            plotData <<- buildInterLocus(md$dt[locus1 == pair[1] & locus2 == pair[2]], plotData, speed)
         }, pairs)
     }
 
     startSpinner(session, message = "rendering plots")
-    invisible(sapply64(orderedLoci, function(locus_) renderAlignmentPlot(xlim, plotData[[as.character(locus_)]])))
+    invisible(sapply64(seq_along(orderedLoci), function(i) {
+        renderAlignmentPlot(xlim, plotData[[as.character(orderedLoci[i])]], speed, showX = i == md$nLoci)
+    }))
 
     # load read data from indexed file    
     # read <- getReadFromSequenceIndex(sourceId, md$qNames[1])

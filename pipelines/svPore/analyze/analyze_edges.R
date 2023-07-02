@@ -16,13 +16,13 @@
 #                   blocks may contain deletion, duplication and insertion junctions, but never inversions or translocations
 # bandwidth     a base span on the reference genome strand minus the corresponding span on a read
 #                   no SVs are called in a read span with bandwidth < MIN_SV_SIZE as they likely arise from misaligned low quality bases
-#                   junctions that fail bandwidth never split a read into segments
+#                   junctions that fail bandwidth do NOT split a read into segments
 # segment       a subset of a readPath considered to be non-chimeric, arising from a single source DNA molecule
 #                   unlike blocks, which are retained in a single segment row, segments are split from each other into separate rows
 #                   a segment may contain SV junctions if they could be confirmed by multiple independent source molecules
 # canonical     the strand orientation agreed to represent a given junction or readPath to allow comparison across reads and strands 
 #                   junction canonicity is determined from the nodes flanking the junction
-#                   segment  canonicity is determined from the outermost alignment nodes
+#                   read/segment canonicity is determined from the outermost alignment nodes
 #-------------------------------------------------------------------------------------
 # in total, in decreasing order of hierarchy:
 #   all reads analyzed here contain at least two alignment edges and one junction edge (maybe more)
@@ -84,6 +84,8 @@ svPoreSharedDir <- file.path(env$MODULES_DIR, 'svPore')
 sourceScripts(svPoreSharedDir, c(
     'constants','utilities','matching','filters','junctions'
 ))
+setCanonicalChroms()
+chromSizes <- loadChromSizes(env$WINDOW_SIZE)
 #-------------------------------------------------------------------------------------
 # set some options
 setDTthreads(env$N_CPU)
@@ -95,6 +97,8 @@ options(warn = 2)
 # initial loading and parsing of edges
 # -------------------------------------------------------------------------------------
 edges <- loadEdges("sv")
+# edges <- edges[qName %in% c("714a3db0-c419-42be-b680-0efad4a9969a", "80b6332a-ca0b-4040-9549-b683edd73059")]
+# edges[, cigar := "X"]
 edges[, c(controlAdapterScores) := NULL]
 setkey(edges, readI, blockN, edgeN)
 edges <- checkReadBandwidth(edges)
@@ -117,10 +121,10 @@ rm(trainingSet, svms, adapterCheck)
 #=====================================================================================
 # remove redundant duplex reads that were not fused during sequencing/basecalling
 # -------------------------------------------------------------------------------------
-reads <- collapseReads(edges)
-duplexStatus <- findDuplexReads(reads)
-edges <- adjustEdgesForDuplex(edges, duplexStatus)
-rm(reads, duplexStatus)
+reads <- collapseReads(edges, chromSizes)
+readMatches <- findMatchingReads(reads) 
+edges <- analyzeReadsNetwork(readMatches, reads, edges)
+rm(reads, readMatches)
 #=====================================================================================
 
 #=====================================================================================

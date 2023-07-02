@@ -3,7 +3,7 @@
 # train the models using adapters from the outsides of simple, non-SV alignments 
 #-------------------------------------------------------------------------------------
 # logic and workflow:
-#   explore the region immediately adjacent to the read outer clips as candidate adapters
+#   explore the region immediately adjacent to read outer clips as candidate adapters
 #   pad them to allow for sequencing errors and shared bases between adapter and genome
 #   use Smith-Waterman local alignment to find best match of clips to expected adapters (done by extend_edges.pl)
 #   as training negative controls, use sequences well internal to the clip point, expected to NOT match adapters
@@ -70,7 +70,7 @@ trainAdapterClassifiers <- function(d){
     x
 }
 
-# use the SVMs to determine whether SV adapter alignments are sufficient evidence to call as an adapter
+# use the SVMs to determine whether SV adapter alignments are sufficient evidence to call a junction as an adapter chimera
 checkJunctionsForAdapters <- function(svms, d){
     message("running adapter predictions on SV junctions")
     predictAdapter <- function(endN, insertSize, dd){
@@ -85,7 +85,8 @@ checkJunctionsForAdapters <- function(svms, d){
     )
 }
 
-# update edges with adapter splitting
+# update edges with adapter splitting flags
+# no edge are dropped yet, at this point we only set hasAdapter5 and hasAdapter3
 updateEdgesForAdapters <- function(edges, adapterCheck){
     message("updating edges")
     edges <- merge(edges, adapterCheck, by = c("readI","edgeN"), all.x = TRUE)

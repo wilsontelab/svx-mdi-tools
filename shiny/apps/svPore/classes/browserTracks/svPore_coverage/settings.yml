@@ -1,0 +1,16 @@
+include:
+    - height
+settings:
+    Coverage:
+        Max_Points:
+            type:   numericInput
+            value:  1000
+            min:    50
+            max:    10000
+            step:   50
+        Max_Coverage:
+            type:   numericInput
+            value:  0
+            min:    0
+            max:    100
+            step:   5

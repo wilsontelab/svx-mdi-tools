@@ -34,13 +34,14 @@ loadSourceEdges <- function(sourceId){
 # [49] "icRefPos2"             "iInsertSize"           "clustered"
 # [52] "iRefPos1"              "iRefPos2"              "segmentN"
             edges <- edges[, .SD, .SDcols = c(
-                "clusterN","sample","readI","edgeN",
-                "edgeType","qStart","qEnd",
+                "sample","readI","channel",
+                "clusterN","nStrands",
+                "edgeN","edgeType",
+                "qStart","qEnd",
                 "node1","node2",
                 "chrom1","refPos1","strand1",
                 "chrom2","refPos2","strand2",
-                "cigar","eventSize","insertSize",
-                "isCanonical","channel"
+                "cigar","eventSize","insertSize"
             )]            
             edges[, ":="(
                 readKey = paste(sample, readI, sep = ":")

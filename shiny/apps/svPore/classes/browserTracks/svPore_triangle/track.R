@@ -40,24 +40,26 @@ build.svPore_triangleTrack <- function(track, reference, coord, layout){
             jc <- applySettingsToJCs(sourceId, sourcesToPlot[[sourceId]]$Sample_ID, track) %>%
                   filterJCsByRange(coord, "center")
             jc <- cbind(
-                jc[, .SD, .SDcols = c("center","size","color","cex","nInstances","clusterN")], 
+                jc[, .SD, .SDcols = c("center","size","color","cex",
+                                       "nInstances","clusterN",
+                                       "edgeType","cChrom1","cRefPos1","cRefPos2","node1","node2")], 
                 sourceId = if(nrow(jc) == 0) character() else sourceId
             )
             sourceI <<- sourceI + 1
             jc 
         }))[sample(.N)]
-        svPore_triangleTrackBuffer[[track$id]] <<- jc
         points(
             jc$center, 
             jc$size,
             pch = 19,
             cex = jc$cex,
             col = jc$color
-        )
+        )        
+        svPore_triangleTrackBuffer[[track$id]] <<- jc
     })
 
     # return the track's magick image and associated metadata
-    svPore_triangleExpand(NULL)
+    # svPore_triangleExpand(NULL)
     list(
         ylim  = ylim,
         mai   = mai,
@@ -67,18 +69,22 @@ build.svPore_triangleTrack <- function(track, reference, coord, layout){
 
 # plot interaction methods for the S3 class
 # called by trackBrowser if track$click, $hover, or $brush is TRUE, above
-click.svPore_triangleTrack <- function(track, x, y){
+click.svPore_triangleTrack <- function(track, click){
     jc <- svPore_triangleTrackBuffer[[track$id]]
     req(nrow(jc) > 0)    
-    dist <- jc[, sqrt((center - x) ** 2 + (size - y) ** 2)]
+    dist <- jc[, sqrt((center - click$coord$x) ** 2 + (size - click$coord$y) ** 2)]
     jc <- jc[which.min(dist)]    
-    svPore_triangleExpand(jc)
-    app$browser$expandingTrackId(track$id)
+    if(click$keys$ctrl){
+        svPore_triangleExpand(jc)
+        app$browser$expandingTrackId(track$id)         
+    } else {
+        jumpToJunctionCluster(jc)       
+    }
 }
-hover.svPore_triangleTrack <- function(track, x, y){
+hover.svPore_triangleTrack <- function(track, hover){
     # custom actions
 }
-brush.svPore_triangleTrack <- function(track, x1, y1, x2, y2){
+brush.svPore_triangleTrack <- function(track, brush){
     # custom actions
 }
 

@@ -31,19 +31,35 @@ svPore_trackItems <- function(track, session, input, reference){
 }
 
 # show a detailed plot and table of the molecule support for a junction cluster
-svPore_expandJunctionCluster_table <- function(edges){
+svPore_objectTable <- function(jc){
+    req(jc)
+    jc[, .(
+        clusterN,
+        edgeType,
+        eventSize,
+        insertSize,
+        mapQ,
+        identity = gapCompressedIdentity,
+        baseQual,
+        nSamples,
+        nInstances,
+        rStart = paste0(cChrom1, ":", cRefPos1, if(cStrand1 == 1) "+" else "-"),
+        rEnd   = paste0(cChrom2, ":", cRefPos2, if(cStrand2 == 1) "+" else "-")
+    )]
+}
+svPore_expansionTable <- function(edges){
     req(edges)
     edges[, .(
-        clusterN,
-        readKey = readKey,
+        readKey,
+        channel,
+        nStrands,
         edge = paste(edgeN, edgeType, sep = ":"),
-        eventSize = eventSize,
-        insertSize = insertSize,
-        qStart = qStart,
-        qEnd = qEnd,
+        eventSize,
+        insertSize,
+        qStart,
+        qEnd,
         rStart = paste0(chrom1, ":", refPos1, strand1),
-        rEnd   = paste0(chrom2, ":", refPos2, strand2),
-        channel = channel
+        rEnd   = paste0(chrom2, ":", refPos2, strand2)
     )]
 }
 svPore_expandJunctionCluster <- function(jc, track, layout){
@@ -59,14 +75,19 @@ svPore_expandJunctionCluster <- function(jc, track, layout){
 
         edges <- loadClusterEdges(jc$sourceId, jc$clusterN) 
 
+        jc %>% 
+        getJunctionCluster() %>% 
+        svPore_objectTable() %>% 
+        app$browser$objectTableData() # junction cluster metadata
+
         edges %>% 
-        svPore_expandJunctionCluster_table() %>% 
-        app$browser$expansionTableData()
+        svPore_expansionTable() %>% 
+        app$browser$expansionTableData() # supporting junctions metadata
         
         edges %>% 
         setAlignmentLoci(locusPadding) %>% 
         parseEdgeForMolPlot() %>% 
-        renderMoleculePlot() 
+        renderMoleculePlot(height, getBrowserTrackSetting(track, "Junction_Zoom", "Plot_Speed", "fast")) # supporting junction image
     })
     stopSpinner(session)  
 
@@ -77,4 +98,13 @@ svPore_expandJunctionCluster <- function(jc, track, layout){
         mai   = mai,
         image = image
     )
+}
+
+# handle SV junction based browser navigation
+jumpToJunctionCluster <- function(jc){
+    if(jc$edgeType == edgeTypes$TRANSLOCATION){
+        app$browser$jumpToCoordinates("all", abs(jc$node1), abs(jc$node2))
+    } else {
+        app$browser$jumpToCoordinates(jc$cChrom1, jc$cRefPos1, jc$cRefPos2)
+    }
 }

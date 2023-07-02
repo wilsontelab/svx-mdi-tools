@@ -135,3 +135,8 @@ filterJCsByRange <- function(jc, coord, rangeType, chromOnly = TRUE){
         jc
     )   
 }
+
+# get a single junction cluster for the object table
+getJunctionCluster <- function(x){
+    loadJunctionClusters(x$sourceId)[clusterN == x$clusterN]
+}

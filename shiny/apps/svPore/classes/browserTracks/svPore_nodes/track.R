@@ -1,88 +1,54 @@
 #----------------------------------------------------------------------
-# svPore_nodes trackBrowser track (i.e., a browserTrack)
+# svPore_coverage trackBrowser track (i.e., a browserTrack)
 #----------------------------------------------------------------------
-svPore_nodesExpand <- reactiveVal(NULL)
 
 # constructor for the S3 class
-new_svPore_nodesTrack <- function(trackId) {
+new_svPore_coverageTrack <- function(trackId) {
     list( # whether the track type has `click`, `hover`, and/or `items` methods
-        click = TRUE,
+        click = FALSE,
         hover = FALSE,
         brush = FALSE,
         items = TRUE,
-        expand = svPore_nodesExpand,
+        expand = NULL,
         NULL
     )
 }
 
 # build method for the S3 class; REQUIRED
-svPore_nodesTrackBuffer <- list()
-plotSvNodeEndpoints <- function(jc, pos){
-    points(
-        jc[[pos]], 
-        jc[, y],
-        pch = 19,
-        cex = jc[, cex],
-        col = jc[, color]
-    )       
-}
-plotSvNodeLines <- function(jc){
-    jc[, {
-        lines(
-            c(pos1, pos2), 
-            rep(y, 2),
-            col = color
-        )
-    }, by = .(clusterN)]     
-}
-plotChromosomeNodes <- function(jc){
-    jc[, y := junctionTypeLines[[edgeType]] - 0.5 + (1:.N)/.N, by = .(edgeType)]
-    plotSvNodeEndpoints(jc[pos1In == TRUE], "pos1")
-    plotSvNodeEndpoints(jc[pos2In == TRUE], "pos2")
-    plotSvNodeLines(jc[pos1In == TRUE & pos2In == TRUE])
-    jc
-}
-plotGenomeNodes <- function(jc){
-    jc[, y := size]
-    plotSvNodeEndpoints(jc, "pos1")
-    plotSvNodeEndpoints(jc, "pos2")
-    plotSvNodeLines(jc)
-    jc
-}
-build.svPore_nodesTrack <- function(track, reference, coord, layout){
+svPore_coverageTrackBuffer <- list()
+
+build.svPore_coverageTrack <- function(track, reference, coord, layout){
     req(coord, coord$chromosome)
-    isWholeGenome <- coord$chromosome == "all"
-    sourcesToPlot <- getSvPoreSampleSources(track$settings$items())
+    Max_Points   <- getBrowserTrackSetting(track, "Coverage", "Max_Points", 1000)
+    Max_Coverage <- getBrowserTrackSetting(track, "Coverage", "Max_Coverage", 0) # 0 means "auto"
+    if(Max_Coverage == 0) Max_Coverage <- 1e8
+    samplesToPlot <- track$settings$items()
+    sourcesToPlot <- getSvPoreSampleSources(samplesToPlot)
+    coverage <- do.call(rbind, lapply(names(sourcesToPlot), function(sourceId){
+        do.call(rbind, lapply(sourcesToPlot[[sourceId]]$Sample_ID, function(sample_){
+            coverage <- filterCoverageByRange(sourceId, sample_, coord) %>% 
+                        aggregateCoverageBins(Max_Points)
+            coverage[, sample := sample_]
+            coverage
+        }))
+    }))   
     padding <- padding(track, layout)
     height <- height(track, 0.25) + padding$total # or set a known, fixed height in inches
-    ylim <- if(isWholeGenome) {
-        Max_SV_Size <- getBrowserTrackSetting(track, "SV_Filters", "Max_SV_Size", 0)
-        if(Max_SV_Size == 0) coord$range else c(1, as.numeric(Max_SV_Size))
-    } else c(0.45,4.55)
+    ylim <- c(coverage[, min(coverage)], coverage[, min(max(coverage), Max_Coverage)]) 
 
     # use the mdiTrackImage helper function to create the track image
     mai <- NULL
-    image <- mdiTrackImage(layout, height, message = getBrowserTrackSetting(track, "Track_Options", "Track_Name", "svPore_nodes"), function(...){
+    image <- mdiTrackImage(layout, height, message = getBrowserTrackSetting(track, "Track_Options", "Track_Name", "svPore_coverage"), function(...){
         mai <<- setMdiTrackMai(layout, padding, mar = list(top = 0, bottom = 0))
         plot(0, 0, type = "n", bty = "n",
             xlim = coord$range, xlab = "", xaxt = "n", # nearly always set `xlim`` to `coord$range`
-            ylim = ylim, ylab = "Junction Nodes", #yaxt = "n",
+            ylim = ylim, ylab = "Coverage", #yaxt = "n",
             xaxs = "i", yaxs = "i") # always set `xaxs` and `yaxs` to "i" 
-        sourceI <- 1
-        jc <- do.call(rbind, lapply(names(sourcesToPlot), function(sourceId){
-            jc <- applySettingsToJCs(sourceId, sourcesToPlot[[sourceId]]$Sample_ID, track) %>%
-                  filterJCsByRange(coord, "endpoint", chromOnly = FALSE)
-            jc <- cbind(
-                jc[, .SD, .SDcols = c("pos1","pos2","pos1In","pos2In","edgeType","size","color","cex","clusterN")], 
-                sourceId = if(nrow(jc) == 0) character() else sourceId
-            )
-            sourceI <<- sourceI + 1
-            jc 
-        }))[order(if(isWholeGenome) sample(.N) else -size)]
-        jc <- if(isWholeGenome) plotGenomeNodes(jc) else plotChromosomeNodes(jc)
-        svPore_nodesTrackBuffer[[track$id]] <<- jc
+        for(sample_ in unique(coverage$sample)){
+            x <- coverage[sample == sample_]
+            points(if(coord$chromosome == "all") as.numeric(x$genomeStart) else x$start, x$coverage, pch = 19)
+        }
     })
-    svPore_nodesExpand(NULL)
 
     # return the track's magick image and associated metadata
     list(
@@ -94,30 +60,13 @@ build.svPore_nodesTrack <- function(track, reference, coord, layout){
 
 # plot interaction methods for the S3 class
 # called by trackBrowser if track$click, $hover, or $brush is TRUE, above
-click.svPore_nodesTrack <- function(track, x_, y_){
-    jc <- svPore_nodesTrackBuffer[[track$id]]
-    req(nrow(jc) > 0)  
-    y2 <- jc[, ((y - y_) / y_) ** 2]
-    dist <- jc[, pmin(
-        sqrt(((pos1 - x_) / x_) ** 2 + y2),
-        sqrt(((pos2 - x_) / x_) ** 2 + y2)
-    )]
-    jc <- jc[which.min(dist)]
-    svPore_nodesExpand(jc)
-    app$browser$expandingTrackId(track$id)
+click.svPore_coverageTrack <- function(track, click){
 }
-hover.svPore_nodesTrack <- function(track, x, y){
-    # custom actions
+hover.svPore_coverageTrack <- function(track, hover){
 }
-brush.svPore_nodesTrack <- function(track, x1, y1, x2, y2){
-    # custom actions
+brush.svPore_coverageTrack <- function(track, brush){
 }
 
 # method for the S3 class to show a relevant trackItemsDialog or trackSamplesDialog
 # used when a track can take a list of items to be plotted together and the item list icon is clicked
-items.svPore_nodesTrack <- function(...) svPore_trackItems(...)
-
-# expand methods for the S3 class
-expand.svPore_nodesTrack <- function(track, reference, coord, layout){
-    svPore_expandJunctionCluster(svPore_nodesExpand(), track, layout)
-}
+items.svPore_coverageTrack <- function(...) svPore_trackItems(...)

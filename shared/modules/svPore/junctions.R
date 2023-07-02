@@ -1,5 +1,6 @@
 #-------------------------------------------------------------------------------------
 # junction edges are pairs of nodes flanking a single junction
+# functions in this file compare junctions between reads
 #-------------------------------------------------------------------------------------
 
 # drop reads with no matchable junctions, they can never support an SV call
@@ -50,9 +51,14 @@ findMatchingJunctions <- function(junctionsToMatch){ # top-level function to per
         }, 
         by = .(searchKey) # restrict search space to chrom pairs for speed
     ]
-    if(nrow(x) == 0) return(data.table(junctionKey1 = character(), junctionKey2 = character()))
-    x[, k := 1:.N]
-    x[queryJxnKey != targetJxnKey & distance <= env$JUNCTION_BANDWIDTH, .( # order the matching junction edges (not the nodes within them)
+    nullTable <- data.table(junctionKey1 = character(), junctionKey2 = character())
+    if(nrow(x) == 0) return(nullTable)
+    x[, ":="(
+        k = 1:.N,
+        passed = queryJxnKey != targetJxnKey & distance <= env$JUNCTION_BANDWIDTH
+    )]
+    if(x[, sum(passed) == 0]) return(nullTable)
+    x[passed == TRUE, .( # order the matching junction edges (not the nodes within them)
         junctionKey1 = min(queryJxnKey, targetJxnKey), # this paradigm for row-by-row reordering of two character columns is much faster
         junctionKey2 = max(queryJxnKey, targetJxnKey)
     ), keyby = .(k)][,
@@ -61,7 +67,7 @@ findMatchingJunctions <- function(junctionsToMatch){ # top-level function to per
     ]
 }
 analyzeJunctionNetwork <- function(junctionMatches, junctionHardCounts){ # use igraph to identify and examine clusters of adjacent nodes
-    if(nrow(junctionMatches) == 0) return(data.table( # handle case with no fuzz-match junction adjacencies
+    if(nrow(junctionMatches) == 0) return(data.table( # handle case with no fuzzy-match junction adjacencies
         junctionKey = character(), 
         clusterN = integer(),        
         isIndexJunctionKey = logical(),
@@ -113,7 +119,7 @@ finalizeJunctionClustering <- function(edges, junctionHardCounts, junctionCluste
     clusterNs[, clusterN := 1:.N + maxClusterN]
     setkey(clusterNs, junctionKey) 
     edges[I, ":="( 
-        clusterN = clusterNs[junctionKey, clusterN], # would it be faster to add the keyed items outside of groupby?  
+        clusterN = clusterNs[junctionKey, clusterN], 
         isIndexJunctionKey = TRUE,         
         nCanonical    = junctionHardCounts[junctionKey, nCanonical], 
         nNonCanonical = junctionHardCounts[junctionKey, nNonCanonical],  
@@ -138,10 +144,25 @@ finalizeJunctionClustering <- function(edges, junctionHardCounts, junctionCluste
 collapseJunctionClusters <- function(edges){
     message("aggregating junctions by cluster group")
 
+    # account for duplex junctions that escaped prior detection due to the known limitation described in analyze/duplex.R
+    # here, each nanopore channel reports the number of times it detected a junction on its most highly represented strand
+    # given that detections in _different_ channels or on the _same_ strands must be independent    
+    getNIndependentInstances <- function(junctions, hasSample = TRUE){
+        if(hasSample){
+            junctions[, .(N = max(sum(isCanonical), sum(!isCanonical))), by = .(sample, channel)][, sum(N)]
+        } else {
+            junctions[, .(N = max(sum(isCanonical), sum(!isCanonical))), by = .(channel)][, sum(N)]
+        }
+    }
+
     # aggregate junctions to clusters
     junctions <- edges[clustered == TRUE, {
-        i <- which(isIndexJunctionKey)[1] # select an index junction from those matching the indexJunctionKey
+
+        # select one index junction from those matching the indexJunctionKey
+        i <- which(isIndexJunctionKey)[1] 
         samples <- unique(sample)
+
+        # assembled metadata on the junction cluster
         .(
             edgeType        = edgeType[i], # these values are all the same for all instances of indexJunctionKey 
             eventSize       = eventSize[i],
@@ -161,18 +182,22 @@ collapseJunctionClusters <- function(edges){
             alnSize         = max(alnSize),
             samples         = paste(sort(samples), collapse = ","),
             nSamples        = length(samples),
-            nInstances      = .N, # usually, but not necessarily == nReads (fails if same junction found >1 time in a read)
-            nCanonical      = sum(isCanonical),
-            nNonCanonical   = sum(!isCanonical)
+            nInstances      = getNIndependentInstances(.SD), # usually, but not necessarily == nReads
+            nCanonical      = sum(isCanonical), # given above, nCanonical + nNonCanonical might sometimes exceed nInstances
+            nNonCanonical   = sum(!isCanonical) # since nInstances is guaranteed to be independent detections
         )
     }, by = .(clusterN)]
 
     # stratify nInstances by sample
-    junctionsBySample <- edges[clustered == TRUE, .(nInstances = .N), by = .(clusterN, sample)]
+    junctionsBySample <- edges[
+        clustered == TRUE, 
+        .(nInstances = getNIndependentInstances(.SD, hasSample = FALSE)), 
+        by = .(clusterN, sample)
+    ]
     junctionsBySample <- dcast(junctionsBySample,
         clusterN ~ sample,
         fun.aggregate = sum,
-        value.var = "nInstances"
+        value.var = "nInstances" # the sum of each sample's nInstances should sum to nInstances for the junction cluster
     )
     merge(
         junctions,
