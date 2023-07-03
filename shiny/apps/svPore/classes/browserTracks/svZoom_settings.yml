@@ -1,19 +1,19 @@
-Junction_Zoom:
-    Zoom_Height:
+Junctions:
+    Plot_Height:
         type:   numericInput
         value:  3
         min:    1
         max:    10
         step:   0.5
+    Plot_Speed: 
+        type:   selectInput
+        choices:
+            - fast
+            - accurate
+        selected: fast        
     Locus_Padding: 
         type:   numericInput
         value:  50000
         min:    0
         max:    500000
         step:   50000
-    Plot_Speed: 
-        type:   selectInput
-        choices:
-            - fast
-            - accurate
-        selected: fast

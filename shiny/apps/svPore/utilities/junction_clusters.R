@@ -71,22 +71,23 @@ svPoreFilterDefaults <- list(
     Max_Samples_With_SV = 0,
     Min_Source_Molecules = 1,
     Max_Source_Molecules = 0,    
-    SV_Type = c("Del","Dup","Inv")
+    SV_Type = c("Del","Dup","Inv"),
+    Show_ChrM = "never"
 )
 applySettingsToJCs <- function(sourceId, samples, track){
     svPoreCache$get(
         'junctionClusters', 
         keyObject = list(sourceId = sourceId, samples = samples, settings = track$settings$all()), 
-        permanent = TRUE,
+        permanent = FALSE,
         from = "ram", 
         create = "asNeeded", 
         createFn = function(...) {
             jc <- filterJCsBySample(sourceId, samples)
             startSpinner(session, message = paste("applying JC settings"))
-            filters <- track$settings$SV_Filters()
+            filters <- track$settings$Filters()
             filters <- lapply(names(svPoreFilterDefaults), function(filter){
                 if(is.null(filters[[filter]])) svPoreFilterDefaults[[filter]]
-                else filters[[filter]]$value
+                else if(!is.null(filters[[filter]]$selected)) filters[[filter]]$selected else filters[[filter]]$value
             })
             names(filters) <- names(svPoreFilterDefaults)
 
@@ -100,6 +101,12 @@ applySettingsToJCs <- function(sourceId, samples, track){
             if(filters$Max_Source_Molecules > 0) jc <- jc[nInstances <= filters$Max_Source_Molecules]
 
             if(length(filters$SV_Type) > 0) jc <- jc[svPore$jxnTypes[edgeType, name] %in% filters$SV_Type]
+
+            if(filters$Show_ChrM != "always"){
+                hasChrM <- jc[, cChrom1 == "chrM" | cChrom2 == "chrM"]
+                if(filters$Show_ChrM == "translocations_only") jc <- jc[hasChrM == FALSE | xor(cChrom1 == "chrM", cChrom2 == "chrM")]
+                else if(filters$Show_ChrM == "never")          jc <- jc[hasChrM == FALSE]
+            }
 
             jc %>% svPore$setJunctionPointColors(track) %>% svPore$setJunctionPointSizes(track)
         }

@@ -30,6 +30,52 @@ svPore_trackItems <- function(track, session, input, reference){
     )
 }
 
+# show several plots that summarize the junction clusters of one or more samples
+svPore_summarizeJunctionClusters <- function(jc, track, layout){
+    req(jc)
+    jc[, alnBaseQual := as.integer(alnBaseQual)]
+    jc[, alnSize_kb  := as.integer(alnSize / 1000)]
+
+    plotH <- function(dt, lwd = 2){
+        plot(
+            dt, 
+            typ = "h", 
+            ylim = c(0, max(dt[[2]]) * 1.05), 
+            xlab = names(dt)[1],
+            ylab = "N",
+            lwd = lwd
+        )
+    }    
+
+    padding <- padding(track, layout)
+    height <- getBrowserTrackSetting(track, "Summarize", "Plot_Height", 3) # height in inches
+    mai <- NULL
+    image <- mdiTrackImage(layout, height, message = "svPore_triangle summary", function(...){
+        mai <<- setMdiTrackMai(layout, padding, mar = list(top = 0, bottom = 0))
+        layout(matrix(1:6, nrow = 2, byrow = TRUE)) 
+        par(mar = c(4.6, 4.1, 0.6, 0.1), cex = 1)
+
+        # mapQ            = max(mapQ), # these values aggregate over all junction in the cluster, even the fuzzy matched ones
+        # gapCompressedIdentity = max(gapCompressedIdentity),
+
+        plotH(jc[, .N, keyby = .(nSamples)])
+        plotH(jc[, .N, keyby = .(nInstances)]) # nInstances <= 50
+        plotH(jc[between(insertSize, -50, 50), .N, keyby = .(insertSize)])
+        plotH(jc[, .N, keyby = .(alnBaseQual)])
+        plotH(jc[, .N, keyby = .(alnSize_kb)])
+        barplot(N ~ edgeType, jc[, .N, keyby = .(edgeType)])
+    })
+    stopSpinner(session)  
+
+    # return the track's magick image and associated metadata
+    list(
+        # xlim  = xlim, # will be rescaled to c(0, 1) across all stacked zoom images
+        ylim  = NA,
+        mai   = mai,
+        image = image
+    )
+}
+
 # show a detailed plot and table of the molecule support for a junction cluster
 svPore_objectTable <- function(jc){
     req(jc)
@@ -65,8 +111,8 @@ svPore_expansionTable <- function(edges){
 svPore_expandJunctionCluster <- function(jc, track, layout){
     req(jc)
     padding <- padding(track, layout)
-    height <- getBrowserTrackSetting(track, "Junction_Zoom", "Zoom_Height", 3) # height in inches
-    locusPadding <- getBrowserTrackSetting(track, "Junction_Zoom", "Locus_Padding", 50000)
+    height <- getBrowserTrackSetting(track, "Junctions", "Plot_Height", 3) # height in inches
+    locusPadding <- getBrowserTrackSetting(track, "Junctions", "Locus_Padding", 50000)
 
     # use the mdiTrackImage helper function to create the track image
     mai <- NULL
@@ -87,7 +133,7 @@ svPore_expandJunctionCluster <- function(jc, track, layout){
         edges %>% 
         setAlignmentLoci(locusPadding) %>% 
         parseEdgeForMolPlot() %>% 
-        renderMoleculePlot(height, getBrowserTrackSetting(track, "Junction_Zoom", "Plot_Speed", "fast")) # supporting junction image
+        renderMoleculePlot(height, getBrowserTrackSetting(track, "Junctions", "Plot_Speed", "fast")) # supporting junction image
     })
     stopSpinner(session)  
 
@@ -107,4 +153,25 @@ jumpToJunctionCluster <- function(jc){
     } else {
         app$browser$jumpToCoordinates(jc$cChrom1, jc$cRefPos1, jc$cRefPos2)
     }
+}
+
+# appropriately disperse a nodes or triangle click event
+handleJunctionClustersClick <- function(track, click, buffer, expandReactive, distFn){
+    jcs <- buffer[[track$id]]
+    req(nrow(jcs) > 0)  
+    dist <- distFn(jcs)
+    jc <- jcs[which.min(dist)]  
+    if(click$keys$ctrl){
+        expandReactive(list(jc = jc, fnName = "svPore_expandJunctionCluster"))
+        app$browser$expandingTrackId(track$id)  
+    } else if(click$keys$shift){
+        expandReactive(list(jc = jcs, fnName = "svPore_summarizeJunctionClusters"))
+        app$browser$expandingTrackId(track$id) 
+    } else {
+        jumpToJunctionCluster(jc)       
+    }
+}
+handleJunctionClusterExpansion <- function(track, layout, expandReactive){
+    x <- expandReactive()
+    get(x$fnName)(x$jc, track, layout)
 }

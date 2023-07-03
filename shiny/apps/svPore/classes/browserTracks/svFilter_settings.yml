@@ -1,4 +1,4 @@
-SV_Filters:
+Filters:
     Min_SV_Size:
         type:   numericInput
         value:  1
@@ -50,9 +50,15 @@ SV_Filters:
             - Dup
             - Inv
             - Trans
-            - Ins
         value:
             - Del
             - Dup
             - Inv
         inline: TRUE
+    Show_ChrM:
+        type:   selectInput
+        choices:
+            - always
+            - translocations_only
+            - never
+        selected: never

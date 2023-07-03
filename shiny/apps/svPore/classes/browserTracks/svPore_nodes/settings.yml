@@ -4,3 +4,4 @@ shared:
     - ../svPoint_settings.yml
     - ../svFilter_settings.yml
     - ../svZoom_settings.yml
+    - ../svSummarize_settings.yml
