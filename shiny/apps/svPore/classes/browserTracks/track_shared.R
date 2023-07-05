@@ -81,6 +81,7 @@ svPore_navTable <- function(jc){
     req(jc)
     jc[, .(
         cluster = clusterN,
+        samples = trimws(gsub(",", " ", samples)),
         type = edgeType,
         size = eventSize,
         insertSize,
@@ -202,18 +203,26 @@ handleJunctionClusterExpansion2 <- function(track, reference, selectedRowData){
 
 # construct the junction cluster trackNav table
 svPore_junctionClusterNavTable <- function(track, session, browserId, reference, coord, expandReactive){
-    navTableName <- initTrackNav(track, session, "navTable") # table reactive functions are provided below    
+    navTableName <- initTrackNav(track, session, "navTable") # table reactive functions are provided below  
     trackNavDataUnformatted <- reactive({
         samplesToPlot <- track$settings$items()
         sourcesToPlot <- getSvPoreSampleSources(samplesToPlot)
         jc <- do.call(rbind, lapply(names(sourcesToPlot), function(sourceId){
             jc <- applySettingsToJCs(sourceId, sourcesToPlot[[sourceId]]$Sample_ID, track)
-            cbind(jc, sourceId = if(nrow(jc) == 0) character() else sourceId)
+            cbind(
+                jc[, .SD, .SDcols = c("clusterN","edgeType","eventSize","node1","node2",
+                                      "cChromIndex1","cChromIndex2","cStrand1","cStrand2","cRefPos1","cRefPos2",
+                                      "insertSize","mapQ","gapCompressedIdentity","baseQual","alnBaseQual","alnSize",
+                                      "samples","nSamples","nInstances","nCanonical","nNonCanonical",
+                                      "cChrom1","cChrom2")], # NB: tables from different sources have non-identical columns
+                sourceId = if(nrow(jc) == 0) character() else sourceId
+            )
         }))
         req(nrow(jc) <= 10000)
-       jc
+        jc
     })
     trackNavDataFormatted <- reactive({
+        dmsg("trackNavDataFormatted")
         svPore_navTable(trackNavDataUnformatted())
     })
     handleRowClick <- function(selectedRow){

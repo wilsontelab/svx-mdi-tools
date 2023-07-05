@@ -91,7 +91,7 @@ hover.svPore_triangleTrack <- function(track, hover){
 brush.svPore_triangleTrack <- function(track, brush){
     # custom actions
 }
-
+ 
 # method for the S3 class to show a relevant trackItemsDialog or trackSamplesDialog
 # used when a track can take a list of items to be plotted together and the item list icon is clicked
 items.svPore_triangleTrack <- function(...) svPore_trackItems(...)
