@@ -1,4 +1,0 @@
-Track_Options:
-    Show_Navigation:
-        type:   checkboxInput
-        value:  false

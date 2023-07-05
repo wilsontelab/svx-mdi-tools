@@ -195,6 +195,11 @@ handleJunctionClusterExpansion <- function(track, layout, expandReactive){
     get(x$fnName)(x$jc, track, layout)
 }
 
+# execute second-level expansion of a specific read, from an expansion table click
+handleJunctionClusterExpansion2 <- function(track, reference, selectedRowData){
+    app$browser$expansionUI(selectedRowData)
+}
+
 # construct the junction cluster trackNav table
 svPore_junctionClusterNavTable <- function(track, session, browserId, reference, coord, expandReactive){
     navTableName <- initTrackNav(track, session, "navTable") # table reactive functions are provided below    
@@ -214,14 +219,14 @@ svPore_junctionClusterNavTable <- function(track, session, browserId, reference,
     handleRowClick <- function(selectedRow){
         req(selectedRow)
         jc <- trackNavDataUnformatted()[selectedRow]
+        expandFn <- function(jobId){
+            expandReactive(list(jc = jc, fnName = "svPore_expandJunctionCluster"))
+            app$browser$expandingTrackId(track$id)  
+        }
         if(jc$edgeType == edgeTypes$TRANSLOCATION){
-            # to use this, need to either tabulate node1/node2 (undesirable), hide them(difficult?), or convert chrom/pos to node (best)
-            # app$browser$jumpToCoordinates("all", abs(c$node1), abs(c$node2))
+            handleTrackNavTableClick(track, "all", abs(jc$node1), abs(jc$node2), expandFn = expandFn)
         } else {
-            app$browser$jumpToCoordinates(jc$cChrom1, jc$cRefPos1, jc$cRefPos2, then = function(jobId){
-                expandReactive(list(jc = jc, fnName = "svPore_expandJunctionCluster"))
-                app$browser$expandingTrackId(track$id)  
-            })
+            handleTrackNavTableClick(track, jc$cChrom1, jc$cRefPos1, jc$cRefPos2, expandFn = expandFn)
         }
     }
     tagList(

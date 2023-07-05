@@ -12,6 +12,7 @@ new_svPore_triangleTrack <- function(trackId) {
         brush  = FALSE,
         items  = TRUE,
         expand = svPore_triangleExpand,
+        expand2 = TRUE,
         navigation = TRUE
     )
 }
@@ -98,6 +99,11 @@ items.svPore_triangleTrack <- function(...) svPore_trackItems(...)
 # expand method for the S3 class
 expand.svPore_triangleTrack <- function(track, reference, coord, layout){
     handleJunctionClusterExpansion(track, layout, svPore_triangleExpand)
+}
+
+# expand2 method for the S3 class
+expand2.svPore_triangleTrack <- function(track, reference, coord, selectedRowData){
+    handleJunctionClusterExpansion2(track, reference, selectedRowData)
 }
 
 # method for the S3 class to populate one or more trackNav inputs above the browser output
