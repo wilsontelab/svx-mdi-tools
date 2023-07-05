@@ -105,8 +105,8 @@ svPore$junctionClusterLegend <- function(track, coord, ylim, sourcesToPlot){
         sample = {
             sampleCols <- svPore$getSampleColors(sourcesToPlot)            
             list(
-                legend = gsub(",", "", names(sampleCols)),
-                color  = unlist(CONSTANTS$plotlyColors[unlist(sampleCols)])
+                legend = c(gsub(",", "", names(sampleCols)), ">1 sample"),
+                color  = c(unlist(CONSTANTS$plotlyColors[unlist(sampleCols)]), CONSTANTS$plotlyColors$black)
             )
         }
     )

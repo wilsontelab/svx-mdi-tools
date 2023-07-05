@@ -216,12 +216,6 @@ makeArtifactMicrohomologyPlot <- function(settings, sampleSelector, plot){
             isCapture = TRUE,
             targetClasses = uHomTargetClasses[[type]]
         ) 
-        # if(type == "ligationArtifact"){
-        #     dmsg(type)
-        #     dprint(svs[abs(MICROHOM_LEN) <= 1, 
-        #                .N, 
-        #                by = c("MICROHOM_LEN", "JXN_BASES")][order(MICROHOM_LEN, JXN_BASES)])
-        # }
         x <- svs[
             JXN_BASES != "*",
             .(

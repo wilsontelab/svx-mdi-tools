@@ -1,7 +1,7 @@
 #----------------------------------------------------------------------
 # svPore_triangle trackBrowser track (i.e., a browserTrack)
 #----------------------------------------------------------------------
-svPore_triangleTrackBuffer <- list()
+svPore_triangleTrackBuffer <- reactiveValues()
 svPore_triangleExpand <- reactiveVal(NULL)
 
 # constructor for the S3 class
@@ -12,7 +12,7 @@ new_svPore_triangleTrack <- function(trackId) {
         brush  = FALSE,
         items  = TRUE,
         expand = svPore_triangleExpand,
-        NULL
+        navigation = TRUE
     )
 }
 
@@ -44,8 +44,9 @@ build.svPore_triangleTrack <- function(track, reference, coord, layout){
                 jc[, .SD, .SDcols = c("center","size","color","cex",
                                        "nInstances","clusterN",
                                        "samples","nSamples",
-                                       "edgeType","cChrom1","cRefPos1","cRefPos2","node1","node2",
-                                       "insertSize","alnBaseQual","alnSize")], 
+                                       "edgeType","cChrom1","cChrom2","cRefPos1","cRefPos2","node1","node2",
+                                       "insertSize","alnBaseQual","alnSize",
+                                       "eventSize","cStrand1","cStrand2")], 
                 sourceId = if(nrow(jc) == 0) character() else sourceId
             )
             sourceI <<- sourceI + 1
@@ -64,7 +65,7 @@ build.svPore_triangleTrack <- function(track, reference, coord, layout){
 
         svPore$junctionClusterLegend(track, coord, ylim, sourcesToPlot)
 
-        svPore_triangleTrackBuffer[[track$id]] <<- jc
+        svPore_triangleTrackBuffer[[track$id]] <- jc
     })
 
     # return the track's magick image and associated metadata
@@ -97,4 +98,9 @@ items.svPore_triangleTrack <- function(...) svPore_trackItems(...)
 # expand method for the S3 class
 expand.svPore_triangleTrack <- function(track, reference, coord, layout){
     handleJunctionClusterExpansion(track, layout, svPore_triangleExpand)
+}
+
+# method for the S3 class to populate one or more trackNav inputs above the browser output
+navigation.svPore_triangleTrack <- function(...){
+    svPore_junctionClusterNavTable(..., svPore_triangleExpand)
 }

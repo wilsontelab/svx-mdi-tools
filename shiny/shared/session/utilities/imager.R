@@ -29,7 +29,6 @@ cnvHighlightColor = "green" # yields yellow for red+green, cyan for blue+green
 #-------------------------------------------------------------------
 # convert an intensity matrix to an array of RGB colors
 parseHeatMapIntensity <- function(intensity, triangle, mirror){ # step 1: apply triangle, mirror and inversion
-    dprint('parseHeatMapIntensity')
     intensity[is.na(intensity)]  <- 0 # ImageR requires actual values
     if(triangle) {
         intensity <- as.matrix(imager::imrotate(imager::as.cimg(intensity), -45)) # -45 is the angle that works!
@@ -41,7 +40,6 @@ parseHeatMapIntensity <- function(intensity, triangle, mirror){ # step 1: apply 
     t(intensity) # transpose for ImageR coordinate consistency
 }
 parseHeatMapHue <- function(intensity, hue){ # step 2: create the colors array
-    dprint('parseHeatMapHue')
     intensity <- 1 - intensity # for color, 0 is max intensity
     max <- cnvHues[[hue]]$max
     hue_ <- max + (1 - max) * intensity
@@ -52,7 +50,6 @@ parseHeatMapHue <- function(intensity, hue){ # step 2: create the colors array
     )    
 }
 printHeatMapImage <- function(img, file, xScaleFactor, yScaleFactor, transpose, decorate, ...){
-    dprint('printHeatMapImage')
     if(transpose){
         tmp <- xScaleFactor
         xScaleFactor <- yScaleFactor
@@ -73,8 +70,7 @@ printHeatMapImage <- function(img, file, xScaleFactor, yScaleFactor, transpose, 
 saveHeatMap_one_color <- function(intensity, hue, file, ..., # ... passed to decorateFN
                                   triangle = FALSE, mirror = TRUE,
                                   xScaleFactor = 1, yScaleFactor = 1, transpose = FALSE,
-                                  decorate = NULL){
-    dprint('saveHeatMap_one_color')   
+                                  decorate = NULL){   
     intensity <- parseHeatMapIntensity(intensity, triangle, mirror)
     cimg <- suppressWarnings(imager::as.cimg(parseHeatMapHue(intensity, hue)))
     printHeatMapImage(cimg, file, xScaleFactor, yScaleFactor, transpose, decorate, ...)
@@ -85,7 +81,6 @@ saveHeatMap_two_color <- function(intensityLow, intensityHigh, highlight, file, 
                                   triangle = FALSE, mirror = TRUE,
                                   xScaleFactor = 1, yScaleFactor = 1, transpose = FALSE,
                                   decorate = NULL){
-    dprint('saveHeatMap_two_color')
     intensityLow  <- parseHeatMapIntensity(intensityLow,  triangle, mirror)
     intensityHigh <- parseHeatMapIntensity(intensityHigh, triangle, mirror)
     highlight     <- parseHeatMapIntensity(highlight,     triangle, mirror)

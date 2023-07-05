@@ -15,16 +15,12 @@ junctionEdgesReactive <- function(sourceId, session) reactive({
 junctionClustersReactive <- function(sourceId, session) reactive({ 
     sourceId <- sourceId()
     req(sourceId)
-    dprint(sourceId)
     startSpinner(session, message = "loading junction clusters")
-    dprint(getSourceFilePath(sourceId, "junctionClustersFile"))
     x <- readRDS(getSourceFilePath(sourceId, "junctionClustersFile")) 
     stopSpinner(session)
     # x[, isChrM := chrom1 == "chrM" | chrom2 == "chrM"]
     # # x[1:100000]
     # setkey(x, qName, blockN, edgeN)
-
-    dstr(x)
     data.table(a=1:10)    
 })
 # <<< stopSpinner: 

@@ -76,17 +76,34 @@ svPore_summarizeJunctionClusters <- function(jc, track, layout){
     )
 }
 
-# show a detailed plot and table of the molecule support for a junction cluster
+# output table definitions
+svPore_navTable <- function(jc){
+    req(jc)
+    jc[, .(
+        cluster = clusterN,
+        type = edgeType,
+        size = eventSize,
+        insertSize,
+        nSamples,
+        nInstances,
+        chrom1 = cChrom1,
+        pos1 = cRefPos1,
+        str1 = ifelse(cStrand1 == 1, "+", "-"),
+        chrom2 = cChrom2,
+        pos2 = cRefPos2,
+        str2 = ifelse(cStrand2 == 1, "+", "-")
+    )]   
+}
 svPore_objectTable <- function(jc){
     req(jc)
     jc[, .(
-        clusterN,
-        edgeType,
-        eventSize,
+        cluster = clusterN,
+        type = edgeType,
+        size = eventSize,
         insertSize,
         mapQ,
         identity = gapCompressedIdentity,
-        baseQual,
+        alnBaseQual = as.integer(alnBaseQual),
         nSamples,
         nInstances,
         rStart = paste0(cChrom1, ":", cRefPos1, if(cStrand1 == 1) "+" else "-"),
@@ -108,6 +125,8 @@ svPore_expansionTable <- function(edges){
         rEnd   = paste0(chrom2, ":", refPos2, strand2)
     )]
 }
+
+# show a detailed plot and table of the molecule support for a junction cluster
 svPore_expandJunctionCluster <- function(jc, track, layout){
     req(jc)
     padding <- padding(track, layout)
@@ -174,4 +193,45 @@ handleJunctionClustersClick <- function(track, click, buffer, expandReactive, di
 handleJunctionClusterExpansion <- function(track, layout, expandReactive){
     x <- expandReactive()
     get(x$fnName)(x$jc, track, layout)
+}
+
+# construct the junction cluster trackNav table
+svPore_junctionClusterNavTable <- function(track, session, browserId, reference, coord, expandReactive){
+    navTableName <- initTrackNav(track, session, "navTable") # table reactive functions are provided below    
+    trackNavDataUnformatted <- reactive({
+        samplesToPlot <- track$settings$items()
+        sourcesToPlot <- getSvPoreSampleSources(samplesToPlot)
+        jc <- do.call(rbind, lapply(names(sourcesToPlot), function(sourceId){
+            jc <- applySettingsToJCs(sourceId, sourcesToPlot[[sourceId]]$Sample_ID, track)
+            cbind(jc, sourceId = if(nrow(jc) == 0) character() else sourceId)
+        }))
+        req(nrow(jc) <= 10000)
+       jc
+    })
+    trackNavDataFormatted <- reactive({
+        svPore_navTable(trackNavDataUnformatted())
+    })
+    handleRowClick <- function(selectedRow){
+        req(selectedRow)
+        jc <- trackNavDataUnformatted()[selectedRow]
+        if(jc$edgeType == edgeTypes$TRANSLOCATION){
+            # to use this, need to either tabulate node1/node2 (undesirable), hide them(difficult?), or convert chrom/pos to node (best)
+            # app$browser$jumpToCoordinates("all", abs(c$node1), abs(c$node2))
+        } else {
+            app$browser$jumpToCoordinates(jc$cChrom1, jc$cRefPos1, jc$cRefPos2, then = function(jobId){
+                expandReactive(list(jc = jc, fnName = "svPore_expandJunctionCluster"))
+                app$browser$expandingTrackId(track$id)  
+            })
+        }
+    }
+    tagList(
+        trackNavTable(
+            track, 
+            session, 
+            browserId,
+            navTableName, # the name as provided by initTrackNav
+            tableData = trackNavDataFormatted, # populate a table based on track settings, etc.
+            actionFn = handleRowClick
+        )
+    )    
 }

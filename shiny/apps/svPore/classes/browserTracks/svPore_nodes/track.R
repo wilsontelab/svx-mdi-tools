@@ -11,7 +11,7 @@ new_svPore_nodesTrack <- function(trackId) {
         brush = FALSE,
         items = TRUE,
         expand = svPore_nodesExpand,
-        NULL
+        navigation = TRUE
     )
 }
 
@@ -129,3 +129,7 @@ expand.svPore_nodesTrack <- function(track, reference, coord, layout){
     handleJunctionClusterExpansion(track, layout, svPore_nodesExpand)
 }
 
+# method for the S3 class to populate one or more trackNav inputs above the browser output
+navigation.svPore_nodesTrack <- function(...){
+    svPore_junctionClusterNavTable(..., svPore_nodesExpand)
+}
