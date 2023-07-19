@@ -14,12 +14,13 @@ at the University of Michigan.
 ## Available tools
 
 Pipelines and apps in stable release are:
-- **svCapture** = find SVs in whole-genome capture sequencing
+- **svCapture** = find SVs in short-read whole-genome capture sequencing
 
 Pipelines and apps in alpha or beta are:
-- **svWGS** = find SVs in whole-genome sequencing data (without capture)
+- **svWGS** = find SVs in short-read whole-genome sequencing data (without capture)
 - **scCNV** = find CNVs in single-cell whole-genome amplification sequencing
 - **svAmplicon** = find SVs in targeted amplicon sequences
+- **svPore** = find SVs in nanopore long-read whole-genome sequencing data (with or without capture)
 
 # Installation and usage
 

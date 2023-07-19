@@ -4,9 +4,9 @@ published: false
 
 ## svWGS: Structural Variant Analysis by Whole Genome Sequencing
 
-**svWGS** takes the output of typical, paired-end whole-genome
-sequencing data and uses it to call structural variants, with 
-downstream visualization in a Stage 2 Shiny app.
+**svWGS** takes the output of typical, paired-end, short-read 
+whole-genome sequencing data and uses it to call structural variants,  
+with downstream visualization in a Stage 2 Shiny app.
 
 The pipeline can be applied to one or multiple related samples in 
 a run. When multiple samples are analyzed together, the 'find' 
@@ -20,14 +20,17 @@ In this case, you must provide a set of fastq.gz format files,
 with one pair of files for each sample corresponding to the two 
 reads of a paired-end sequencing run. These are specified using 
 the '--input-dir' and '--input-name' options of the 'align' action.
-Your job configuration should execute actions 'align', 'extract''
-and 'find'.
+Your job file should execute actions 'align', 'extract'' and 'find'.
 
 Alternatively, if you pre-aligned your reads in some other pipeline,
 you can skip the 'align' action and provide the path to a 
 name-sorted (not coordinate-sorted) bam or cram file using the
 '--bam-file' and '--use-cram' options of the 'extract' action.
-Your job configuration should execute actions 'extract' and 'find'.
+Your job file should execute actions 'extract' and 'find'.
+
+If you need to convert your bam/cram file to name-sorted, the command
+'samtools collate' will suffice, as it is only imporant that all 
+alignments of a given read are grouped together.
 
 ### Required Genome Inputs
 

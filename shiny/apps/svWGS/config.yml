@@ -6,7 +6,7 @@
 # external modules will come from latest suite versions unless listed in suiteVersions
 #----------------------------------------------------------------------
 name: svWGS
-description: "Analyze structural variants found throughout a source genome"
+description: "Analyze structural variants found through short-read whole-genome sequencing"
 # version: v0.0.0 # OPTIONAL
 # suiteVersions:
 #     suiteName: v0.0.0
@@ -46,23 +46,25 @@ uploadTypes:
 appSteps:
     upload: # nearly always the 1st step of every app
         module: sourceFileUpload
-    assign: # usually the 2nd step of every app
-        module: assignSamples        
-        options:
-            allowEmptyCells: true
-            categories:
-                column: 
-                    singular: Column
-                    plural: Columns
-                    nLevels: 1:10            
-                row: 
-                    singular: Row
-                    plural: Rows
-                    nLevels: 1:10
-    # libraryQC:
-    #     module: libraryQC
-    svWGSExplorer:
-        module: svWGSExplorer
+    browser:
+        module: genomex-mdi-tools//trackBrowser
+    # assign: # usually the 2nd step of every app
+    #     module: assignSamples        
+    #     options:
+    #         allowEmptyCells: true
+    #         categories:
+    #             column: 
+    #                 singular: Column
+    #                 plural: Columns
+    #                 nLevels: 1:10            
+    #             row: 
+    #                 singular: Row
+    #                 plural: Rows
+    #                 nLevels: 1:10
+    # # libraryQC:
+    # #     module: libraryQC
+    # svWGSExplorer:
+    #     module: svWGSExplorer
     # aggregatePlots:
     #     module: aggregatePlots
     # analyzeInsertions:

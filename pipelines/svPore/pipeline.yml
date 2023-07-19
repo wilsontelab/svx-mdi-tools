@@ -11,37 +11,26 @@ actions:
         condaFamilies:
             - genomex-mdi-tools//base
             - genomex-mdi-tools//genome
-            # - genomex-mdi-tools//nanopore
             - r-4.2
             - svPore
         optionFamilies:
             - genomex-mdi-tools//genome
-            # - genomex-mdi-tools//dorado
-            # - genomex-mdi-tools//pod5-dir
     download:
         order: 1
-        module: genomex-mdi-tools//nanopore/download                   
+        module: genomex-mdi-tools//nanopore/download      
+        override:
+            ont-model: all             
     convert:
         order: 2
         module: genomex-mdi-tools//nanopore/convert
     basecall:
         order: 3
         module: genomex-mdi-tools//nanopore/basecall
-        override:
-            description: use Dorado to perform faster, lower-accuracy basecalling of all POD5 reads
-            ont-model:   dna_r10.4.1_e8.2_400bps_hac@v4.1.0 # the hac (high-accuracy) model is much faster than sup (super-accuracy) and recommended for first pass
-        env-vars:
-            dorado-output-type:   all_reads        
-            dorado-output-format: fastq
+        env-vars:     
+            dorado-output-format: usam # retain tags
     align:
         order: 4
-        module: genomex-mdi-tools//align/dna-long-read
-        override:
-            description: align all lower-accuracy long read fastqs to genome at low resolution using minimap2
-        env-vars:
-            input-file-type: all_reads
-            paf-file-type: all_reads        
-            minimap2-accuracy: low
+        module: genomex-mdi-tools//align/dna-long-read      
     extract:
         order: 5
         optionFamilies:
@@ -56,26 +45,26 @@ actions:
             recommended:
                 time-limit: 4:00:00
         description: "pull molecules that provisionally nominate SV junctions and create a coverage map"
-    rebasecall:
-        order: 6
-        module: genomex-mdi-tools//nanopore/basecall
-        override:
-            description: use Dorado to perform slower, super-accuracy basecalling of target reads, mostly SV candidates
-            ont-model:   dna_r10.4.1_e8.2_400bps_sup@v4.1.0 # the sup (super-accuracy) is recommended for best base-level analysis of SV reads and adapters
-        env-vars:
-            dorado-output-type:   target_reads        
-            dorado-output-format: usam # retain tags, including moves for correlating time-current squiggle traces to base and junction calls
-            dorado-emit-moves: true
-            dorado-read-ids: true # i.e., read QNAMES from extract.target.qNames.txt
-    realign:
-        order: 7
-        module: genomex-mdi-tools//align/dna-long-read
-        override:
-            description: align super-accuracy target long reads to genome at high resolution using minimap2
-        env-vars:
-            input-file-type: target_reads
-            paf-file-type: target_reads        
-            minimap2-accuracy: high
+    # rebasecall:
+    #     order: 6
+    #     module: genomex-mdi-tools//nanopore/basecall
+    #     override:
+    #         description: use Dorado to perform slower, super-accuracy basecalling of target reads, mostly SV candidates
+    #         ont-model:   dna_r10.4.1_e8.2_400bps_sup@v4.1.0 # the sup (super-accuracy) is recommended for best base-level analysis of SV reads and adapters
+    #     env-vars:
+    #         dorado-output-type:   target_reads        
+    #         dorado-output-format: usam # retain tags, including moves for correlating time-current squiggle traces to base and junction calls
+    #         dorado-emit-moves: true
+    #         dorado-read-ids: true # i.e., read QNAMES from extract.target.qNames.txt
+    # realign:
+    #     order: 7
+    #     module: genomex-mdi-tools//align/dna-long-read
+    #     override:
+    #         description: align super-accuracy target long reads to genome at high resolution using minimap2
+    #     env-vars:
+    #         input-file-type: target_reads
+    #         paf-file-type: target_reads        
+    #         minimap2-accuracy: high
     analyze:
         order: 8
         optionFamilies:

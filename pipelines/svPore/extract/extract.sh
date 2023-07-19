@@ -1,18 +1,18 @@
 # action:
-#     assemble the low resolution node path of every molecule
+#     collapse duplex reads into a single output read
 #     create a coverage map
-#     extract all SV and a representative subset of non-SV qNames for high accuracy analysis
+#     assemble the node path of every SV molecule
 # input:
-#     minimap2 PAF file (CIGAR string not required)
+#     minimap2 PAF file
 # output:
 #     $EXTRACT_PREFIX.windowCoverage.txt.bgz[.tbi]
 #     $EXTRACT_PREFIX.edges.no_sv.txt.gz
-#     $EXTRACT_PREFIX.target.qNames.txt (cannot be compressed)
 
 # log file feedback
 echo "executing first-pass low-resolution analysis of all reads"
 echo "input PAF: $NAME_PAF_FILE"
-export EXTRACT_PASS=1
+
+
 
 # assemble the node path of every molecule to yield 
 # one line per 2-node edge, one or more edges per molecule, in molecule order

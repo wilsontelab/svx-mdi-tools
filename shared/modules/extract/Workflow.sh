@@ -33,9 +33,10 @@ runWorkflowStep 3 compile compile/compile_nodes.sh
 
 # clean up
 rm -fr $TMP_DIR_WRK
+rm -f  $EXTRACT_PREFIX.insert_sizes.*.gz
+rm -f  $EXTRACT_PREFIX.nodes.*.gz 
+rm -f  $EXTRACT_PREFIX.spans.*.gz 
 # rm -f  $EXTRACT_PREFIX.endpoints.*.gz
-# rm -f  $EXTRACT_PREFIX.insert_sizes.*.gz
-# rm -f  $EXTRACT_PREFIX.nodes.*.gz
 # rm -f  $EXTRACT_PREFIX.strand_counts.*.gz
 # rm -f  $COMPILE_PREFIX.junction_edges.gz
 # rm -f  $COMPILE_PREFIX.matchedProper.gz
