@@ -7,11 +7,12 @@
 #----------------------------------------------------------------------
 # if not needed, simply omit file server.R from your app
 #----------------------------------------------------------------------
+
+# objects instantiated here are available to all appStep modules in a session
 library(bit64)
-svPoreCache <- new_dataCache('svPoreCache')
+sessionCache <- new_dataCache('svPoreCache')
 
 # appServer function called after all modules are instantiated
 appServer <- function(){
-
 
 }

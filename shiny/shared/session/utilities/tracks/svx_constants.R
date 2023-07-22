@@ -1,0 +1,84 @@
+# junction types
+
+svx_edgeTypes <- list(
+    ALIGNMENT     = "A", # the single type for a contiguous aligned segment
+    TRANSLOCATION = "T", # edge/junction types (might be several per source molecule)
+    INVERSION     = "V",
+    DUPLICATION   = "U",
+    DELETION      = "D",
+    UNKNOWN       = "?",
+    INSERTION     = "I", 
+    PROPER        = "P"
+)
+svx_jxnTypes <- data.table(
+    code = c( # as used in svPore
+        "D",
+        "I",
+        "U",
+        "V",
+        "T",
+        "?"
+    ),
+    altCode = c( # as used in svWGS/capture
+        "L",
+        "X", # not used
+        "D",
+        "I",
+        "T",
+        "?"
+    ),
+    name = c(
+        "Del",
+        "Ins",
+        "Dup",
+        "Inv",
+        "Trans",
+        "?"
+    ),
+    longName = c(
+        "Deletion",
+        "Insertion",
+        "Duplication",
+        "Inversion",
+        "Translocation",
+        "?"
+    ), 
+    legend = c(
+        TRUE,
+        FALSE,
+        TRUE,
+        TRUE,
+        TRUE,
+        FALSE
+    ),
+    order = 1:6,
+    color = c(
+        CONSTANTS$plotlyColors$blue,
+        CONSTANTS$plotlyColors$black,
+        CONSTANTS$plotlyColors$green,
+        CONSTANTS$plotlyColors$red,
+        CONSTANTS$plotlyColors$orange,
+        NA
+    ),
+    lineN = c(
+        "D" = 1,
+        "U" = 2,    
+        "V" = 3,
+        "T" = 4,
+        "I" = -1,    
+        "?" = -1  
+    )
+)
+setkey(svx_jxnTypes, code)
+
+# junction filters
+svx_filterDefaults <- list(
+    Min_SV_Size = 1,
+    Max_SV_Size = 0,
+    Min_Samples_With_SV = 1,
+    Max_Samples_With_SV = 0,
+    Min_Source_Molecules = 1,
+    Max_Source_Molecules = 0,    
+    SV_Type = c("Del","Dup","Inv"),
+    Show_ChrM = "never"
+)

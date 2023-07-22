@@ -147,31 +147,28 @@ package:
     find: # the pipeline action after which a data package should assembled
         uploadType: svPore # a signal to the Stage 2 framework regarding the package contents
         files:
-            # metadata:
-            #     type: yml
-            #     file: $FIND_PREFIX.metadata.yml
+            chromosomesFile:
+                type: rds
+                file: $FIND_PREFIX.chromosome_metadata.rds        
             manifestFile:
                 type: comma-delimited
                 manifestType: simple
                 file: $MANIFEST_PREFIX.sample_manifest.csv
-            chromosomesFile:
-                type: rds
-                file: $FIND_PREFIX.chromosome_metadata.rds
             coverageFile:
                 type: zip
                 file: $FIND_PREFIX.windowCoverage.zip
-            edgesFile:
-                type: rds
-                file: $FIND_PREFIX.edges.rds
             junctionClustersFile:
                 type: rds
                 file: $FIND_PREFIX.junctionClusters.rds
+            edgesFile:
+                type: rds
+                file: $FIND_PREFIX.edges.rds
+            segmentClustersFile:
+                type: rds
+                file: $FIND_PREFIX.segmentClusters.rds                  
             segmentsFile:
                 type: rds
                 file: $FIND_PREFIX.segments.rds
-            segmentClustersFile:
-                type: rds
-                file: $FIND_PREFIX.segmentClusters.rds          
 # container:
 #     supported: false    # set to true if you maintain a container registry for this pipeline [false]
 #     registry:  ghcr.io  # domain name of your OCI-compatible, oras-accessible, container registry [ghcr.io]

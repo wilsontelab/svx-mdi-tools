@@ -19,15 +19,15 @@ description: "Analyze structural variants in nanopore data"
 uploadTypes:
     svPore: 
         contentFileTypes: # anything not listed will not be available to the app
-            manifestFile:
-                required: true
             chromosomesFile:
+                required: true        
+            manifestFile:
                 required: true
             coverageFile:
                 required: true
-            edgesFile:  
-                required: true
             junctionClustersFile:
+                required: true
+            edgesFile:  
                 required: true
             segmentsFile:  
                 required: true
@@ -50,6 +50,9 @@ appSteps:
         module: sourceFileUpload
     browser:
         module: genomex-mdi-tools//trackBrowser
+        options:
+            tracks:
+                - bruseq-mdi-tools//BruSeq_generic
     # assign: # usually the 2nd step of every app
     #     module: assignSamples        
     #     options:

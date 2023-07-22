@@ -4,7 +4,7 @@
 loadSampleCoverage <- function(sourceId, sample){
     req(sourceId)
     startSpinner(session, message = "loading coverage")
-    svPoreCache$get(
+    sessionCache$get(
         'svCoverage', 
         keyObject = list(sourceId, sample), 
         permanent = TRUE, 

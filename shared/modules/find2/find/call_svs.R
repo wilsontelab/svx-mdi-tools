@@ -5,9 +5,12 @@
 # script initialization
 #-------------------------------------------------------------------------------------
 # load packages
-library(parallel)
-library(data.table)
-library(jsonlite)
+suppressPackageStartupMessages(suppressWarnings({
+    library(parallel)
+    library(data.table)
+    library(jsonlite)
+    library(bit64)
+}))
 #-------------------------------------------------------------------------------------
 # load, parse and save environment variables
 env <- as.list(Sys.getenv())
@@ -173,6 +176,7 @@ jxnMols <- do.call(rbind, mclapply(jxnMols[, unique(svIndex)], purgeInvalidClips
 # initialize genome
 message("initializing genome sequence retrieval")
 setCanonicalChroms()
+chromSizes <- loadChromSizes()
 write(
     paste0('CHROMS: ', paste(canonicalChroms, collapse = " ")), 
     file = paste(env$FIND_PREFIX, "metadata", "yml", sep = "."),
@@ -242,5 +246,19 @@ outFile <- paste(env$FIND_PREFIX, 'junction_molecules', 'rds', sep = ".")
 saveRDS(
     jxnMols, 
     file = outFile
+)
+
+# save chromosome metadata
+message("saving chromosome metadata")   
+chromosomeMetadata <- list(
+    genome          = env$GENOME,
+    canonicalChroms = canonicalChroms,
+    chromIndex      = chromIndex,
+    revChromIndex   = revChromIndex,
+    chromSizes      = chromSizes
+)
+saveRDS(
+    chromosomeMetadata, 
+    paste(env$FIND_PREFIX, "chromosome_metadata", "rds", sep = ".")
 )
 #=====================================================================================

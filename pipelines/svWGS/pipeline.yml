@@ -22,22 +22,25 @@ package:
             metadata:
                 type: yml
                 file: $FIND_PREFIX.metadata.yml
+            chromosomesFile:
+                type: rds
+                file: $FIND_PREFIX.chromosome_metadata.rds
+            manifestFile:
+                type: comma-delimited
+                manifestType: simple
+                file: $MANIFEST_PREFIX.sample_manifest.csv
+            coverageFile:
+                type: rds-file
+                file: $COVERAGE_PREFIX.rds
             structuralVariants:
                 type: rds-file
                 file: $FIND_PREFIX.structural_variants.rds
             junctionMolecules:
                 type: rds-file
                 file: $FIND_PREFIX.junction_molecules.rds
-            manifestFile:
-                type: comma-delimited
-                manifestType: simple
-                file: $MANIFEST_PREFIX.sample_manifest.csv
             distributionsZip:
                 type: zip-file
                 file: $MANIFEST_PREFIX.distribution_plots.zip
-            coverageFile:
-                type: rds-file
-                file: $COVERAGE_PREFIX.rds
 container:
     supported: false    # set to true if you maintain a container registry for this pipeline [false]
     registry:  ghcr.io  # domain name of your OCI-compatible, oras-accessible, container registry [ghcr.io]

@@ -62,19 +62,3 @@ mergeWindowCoverageFiles <- function(){
     unlink(tmpDir, recursive = TRUE, force = TRUE)
     coverages
 }
-
-# nodes are codified into an integer64 for streamlined comparison
-# this function expands integer nodes out to chrom/strand/pos
-parseSignedNodes <- function(chromSizes, nodes, side, canonical = FALSE) {
-    genomeIs <- abs(nodes) # 1-referenced, per initialize_windows.pl
-    chromIs <- Vectorize(function(i) which(chromSizes$nBasesThrough >= i)[1])(genomeIs) # sapply does not work with integer64!
-    dt <- chromSizes[chromIs][, .(
-        chrom = chrom, 
-        chromIndex = chromIndex,
-        refPos = as.integer(genomeIs - nBasesBefore),
-        strand = ifelse(nodes > 0, "+", "-")
-    )]    
-    if(canonical) setnames(dt, c("cChrom","cChromIndex","cRefPos","cStrand"))
-    setnames(dt, paste0(names(dt), side))
-    dt
-}

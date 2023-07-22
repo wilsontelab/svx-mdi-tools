@@ -9,6 +9,8 @@
 #----------------------------------------------------------------------
 
 # objects instantiated here are available to all appStep modules in a session
+library(bit64)
+sessionCache <- new_dataCache('svWgsCache')
 sourceExternalScript("genomex-mdi-tools", "shared/global/utilities/sequence.R")
 
 # appServer function called after all modules are instantiated

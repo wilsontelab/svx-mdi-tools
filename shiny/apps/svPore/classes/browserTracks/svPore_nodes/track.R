@@ -37,7 +37,7 @@ plotSvNodeLines <- function(jc){
     }, by = .(clusterN)]     
 }
 plotChromosomeNodes <- function(jc){
-    jc[, y := junctionTypeLines[[edgeType]] - 0.5 + (1:.N)/.N, by = .(edgeType)]
+    jc[, y := svx_jxnTypes[edgeType, lineN] - 0.5 + (1:.N)/.N, by = .(edgeType)]
     plotSvNodeEndpoints(jc[pos1In == TRUE], "pos1")
     plotSvNodeEndpoints(jc[pos2In == TRUE], "pos2")
     plotSvNodeLines(jc[pos1In == TRUE & pos2In == TRUE])
@@ -53,7 +53,7 @@ plotGenomeNodes <- function(jc){
 build.svPore_nodesTrack <- function(track, reference, coord, layout){
     req(coord, coord$chromosome)
     isWholeGenome <- coord$chromosome == "all"
-    sourcesToPlot <- getSvPoreSampleSources(track$settings$items())
+    selectedSources <- getSourcesFromTrackSamples(track$settings$items())
     padding <- padding(track, layout)
     height <- height(track, 0.25) + padding$total # or set a known, fixed height in inches
     Color_By <- getBrowserTrackSetting(track, "Points", "Color_By", "edgeType")
@@ -71,9 +71,9 @@ build.svPore_nodesTrack <- function(track, reference, coord, layout){
             ylim = ylim, ylab = "Junction Nodes", #yaxt = "n",
             xaxs = "i", yaxs = "i") # always set `xaxs` and `yaxs` to "i" 
         sourceI <- 1
-        jc <- do.call(rbind, lapply(names(sourcesToPlot), function(sourceId){
-            jc <- applySettingsToJCs(sourceId, sourcesToPlot[[sourceId]]$Sample_ID, track) %>%
-                  filterJCsByRange(coord, "endpoint", chromOnly = FALSE)
+        jc <- do.call(rbind, lapply(names(selectedSources), function(sourceId){
+            jc <- applySettingsToJCs(sourceId, selectedSources[[sourceId]]$Sample_ID, track) %>%
+                  svx_filterJunctionsByRange(coord, "endpoint", chromOnly = FALSE)
             jc <- cbind(
                 jc[, .SD, .SDcols = c("pos1","pos2","pos1In","pos2In","size","color","cex","clusterN",
                                       "samples","nSamples","nInstances",
@@ -85,11 +85,11 @@ build.svPore_nodesTrack <- function(track, reference, coord, layout){
             jc 
         }))[order(if(isWholeGenome) sample(.N) else -size)]
 
-        if(Color_By == "sample") jc <- svPore$colorBySample(jc, sourcesToPlot)
+        if(Color_By == "sample") jc <- dt_colorBySelectedSample(jc, selectedSources)
 
         jc <- if(isWholeGenome) plotGenomeNodes(jc) else plotChromosomeNodes(jc)
 
-        svPore$junctionClusterLegend(track, coord, ylim, sourcesToPlot)
+        svx_junctionsLegend(track, coord, ylim, selectedSources)
 
         svPore_nodesTrackBuffer[[track$id]] <<- jc
     })

@@ -3,11 +3,11 @@
 #----------------------------------------------------------------------
 
 # load all edges for a specific sourceId (not filtered yet)
-loadSourceEdges <- function(sourceId){
+svPore_loadSourceEdges <- function(sourceId){
     req(sourceId)
     startSpinner(session, message = "loading edges")
-    svPoreCache$get(
-        'svEdges', 
+    sessionCache$get(
+        'svPore_edges', 
         key = sourceId, 
         permanent = TRUE, 
         from = "ram", 
@@ -52,17 +52,17 @@ loadSourceEdges <- function(sourceId){
     )$value
 }
 
-# pull the edges for a specific SV cluster
-loadClusterEdges <- function(sourceId, clusterN_){
-    svPoreCache$get(
-        'svEdges', 
+# pull the edges for a specific junction
+svPore_loadEdges <- function(sourceId, clusterN_){
+    sessionCache$get(
+        'svPore_edges', 
         keyObject = list(sourceId = sourceId, clusterN = clusterN_), 
         permanent = FALSE, 
         from = "ram", 
         create = "asNeeded", 
         createFn = function(...) {
-            edges <- loadSourceEdges(sourceId)
-            startSpinner(session, message = "loading cluster")
+            edges <- svPore_loadSourceEdges(sourceId)
+            startSpinner(session, message = "loading junction")
             readKeys <- edges[clusterN == clusterN_, unique(readKey)]
             edges[readKeys]
         }

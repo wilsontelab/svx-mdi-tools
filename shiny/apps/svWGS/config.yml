@@ -6,7 +6,7 @@
 # external modules will come from latest suite versions unless listed in suiteVersions
 #----------------------------------------------------------------------
 name: svWGS
-description: "Analyze structural variants found through short-read whole-genome sequencing"
+description: "Analyze structural variants in short-read whole-genome sequencing"
 # version: v0.0.0 # OPTIONAL
 # suiteVersions:
 #     suiteName: v0.0.0
@@ -20,17 +20,20 @@ uploadTypes:
     svWGS: 
         contentFileTypes: # anything not listed will not be available to the app
             metadata:
+                required: true   
+            chromosomesFile:
+                required: true       
+            manifestFile:
+                required: true
+            coverageFile:
                 required: true
             structuralVariants:
                 required: true
             junctionMolecules:
                 required: true
-            manifestFile:
-                required: true
             distributionsZip:
                 required: false
-            coverageFile:
-                required: true
+
 #----------------------------------------------------------------------
 # labels and definitions for all sequential analysis steps shown in sidebar
 #----------------------------------------------------------------------
@@ -48,6 +51,9 @@ appSteps:
         module: sourceFileUpload
     browser:
         module: genomex-mdi-tools//trackBrowser
+        options:
+            tracks:
+                - bruseq-mdi-tools//BruSeq_generic
     # assign: # usually the 2nd step of every app
     #     module: assignSamples        
     #     options:
