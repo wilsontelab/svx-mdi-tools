@@ -18,102 +18,35 @@ new_svx_coverageTrack <- function(trackId) {
 build.svx_coverageTrack <- function(track, reference, coord, layout){
     req(coord, coord$chromosome)
 
-    Max_Points          <- getBrowserTrackSetting(track, "Coverage", "Max_Points", 1000)
-    Max_Copy_Number     <- getBrowserTrackSetting(track, "Coverage", "Max_Copy_Number", 6) 
-    Max_Coverage        <- getBrowserTrackSetting(track, "Coverage", "Max_Coverage", 100) 
-    Median_Ploidy       <- getBrowserTrackSetting(track, "Coverage", "Median_Ploidy", 2)
-    Plot_As             <- getBrowserTrackSetting(track, "Coverage", "Plot_As", "Read Depth")  
-    Combine_Samples     <- getBrowserTrackSetting(track, "Coverage", "Combine_Samples", FALSE) 
-
-
-
-
-
-    sampleItems <- track$settings$items()
-    selectedSources <- getSourcesFromTrackSamples(sampleItems)
-    selectedSamples <- list()
-    sampleI <- 1
-
-
-
-    
-    coverage <- do.call(rbind, lapply(names(selectedSources), function(sourceId){
-        do.call(rbind, lapply(selectedSources[[sourceId]]$Sample_ID, function(sample_){
-            selectedSamples[[sample_]] <<- sampleI
-            sampleI <<- sampleI + 1
-            filterCoverageByRange(sourceId, sample_, coord, Max_Points) %>% 
-            aggregateCoverageBins(Max_Points) %>% 
-            setCoverageXY(Plot_As, Median_Ploidy, coord, sample_)
-        }))
-    }))
-
-    if(Plot_As == "Copy Number Change"){
-        req(length(selectedSamples) > 1)
-        refSample <- sampleItems[[1]]$Sample_ID
-        refY <- coverage[sample == refSample, y]
-        coverage <- coverage[sample != refSample, .(
-            x = x,
-            y = y - refY
-        ), by = .(sample)][, .SD, .SDcols = c("x","y","sample")]    
-        selectedSamples <- selectedSamples[2:length(selectedSamples)]      
+    # get operating parameters
+    Plot_Type       <- getTrackSetting(track, "Coverage", "Plot_Type", "Read Depth")  
+    Median_Ploidy   <- getTrackSetting(track, "Coverage", "Median_Ploidy", 2)
+    plotBinSize     <- as.integer(getTrackSetting(track, "X_Axis", "Bin_Size", ""))
+    if(!isTruthy(plotBinSize)) {
+        maxBins <- getTrackSetting(track, "X_Axis", "Max_Bins", 250)
+        plotBinSize <- floor(coord$width / maxBins)
+    } else {
+        maxBins <- floor(coord$width / plotBinSize)
     }
 
-    if(Combine_Samples){
-        selectedSamples <- list(combined = 1)
-        coverage <- coverage[, .(
-            y = if(Plot_As == "Read Depth") sum(y) else mean(y),
-            sample = "combined"
-        ), by = .(x)]
+    # parse our binned coverage data source
+    nSamples <- length(track$settings$items())
+    selectedSources <- getSourcesFromTrackSamples(track$settings$items())
+    dataFn <- function(track, reference, coord, sampleName, sample){
+        sourceId <- c(sapply(names(selectedSources), function(x) if(sampleName %in% selectedSources[[x]]$Sample_ID) x else NULL))
+        x <- svx_filterCoverageByRange(sourceId, sampleName, coord, maxBins)
+        aggregateTabixBins(x$bins, track, coord, plotBinSize) %>%
+        svx_setCoverageValue(Plot_Type, x$medianCoverage, Median_Ploidy)
     }
 
-    ylim <- switch(
-        Plot_As,
-        'Read Depth' = {
-            if(Max_Coverage == 0) Max_Coverage <- max(coverage$y) * 1.05
-            c(0, Max_Coverage)
-        },
-        'Copy Number' = {
-            if(Max_Copy_Number == 0) Max_Copy_Number <- max(coverage$y) * 1.05
-            c(0, Max_Copy_Number)
-        },
-        'Copy Number Change' = {
-            if(Max_Copy_Number == 0) Max_Copy_Number <- max(abs(coverage$y)) * 1.05
-            c(-Max_Copy_Number, Max_Copy_Number)
-        }
-    ) 
-
-    # use the mdiTrackImage helper function to create the track image
-    mai <- NULL
-    padding <- padding(track, layout)
-    height <- height(track, 0.25) + padding$total # or set a known, fixed height in inches    
-    image <- mdiTrackImage(layout, height, message = getBrowserTrackSetting(track, "Track_Options", "Track_Name", "svx_coverage"), function(...){
-        mai <<- setMdiTrackMai(layout, padding, mar = list(top = 0, bottom = 0))
-
-        plot(0, 0, type = "n", bty = "n",
-            xlim = coord$range, xlab = "", xaxt = "n", # nearly always set `xlim`` to `coord$range`
-            ylim = ylim, ylab = Plot_As, #yaxt = "n",
-            xaxs = "i", yaxs = "i") # always set `xaxs` and `yaxs` to "i"
-
-        abline(
-            h = if(Plot_As == "Read Depth") seq(0, ylim[2], 10) else -Max_Copy_Number:Max_Copy_Number, 
-            col = CONSTANTS$plotlyColors$grey
-        )
-
-        I <- if(length(selectedSamples) > 1) coverage[, sample(.N)] else TRUE
-        colI <- coverage[I, unlist(selectedSamples[sample])]
-        points(coverage[I], pch = 19, col = unlist(CONSTANTS$plotlyColors[colI]))
-
-        colI <- unlist(selectedSamples)
-        trackLegend(
-            track, coord, ylim, 
-            legend = names(selectedSamples), pch = 19, col =  unlist(CONSTANTS$plotlyColors[colI])
-        )
-    })
-
-    # return the track's magick image and associated metadata
-    list(
-        ylim  = ylim,
-        mai   = mai,
-        image = image
+    # build the binned_XY_track
+    isDifference <- nSamples > 1 && getTrackSetting(track, "Data", "Aggregate", "none") == "difference"
+    build.binned_XY_track(
+        track, reference, coord, layout, 
+        dataFn, 
+        stranded = FALSE, 
+        allowNeg = isDifference, 
+        ylab = if(isDifference) paste(Plot_Type, "Change") else Plot_Type,
+        center = TRUE, binSize = plotBinSize
     )
 }

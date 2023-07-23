@@ -1,38 +1,8 @@
-include:
-    - height
-settings:
-    Coverage:
-        Max_Points:
-            type:   numericInput
-            value:  1000
-            min:    50
-            max:    10000
-            step:   50
-        Max_Copy_Number:
-            type:   numericInput
-            value:  6
-            min:    1
-            max:    1000
-            step:   1
-        Max_Coverage:
-            type:   numericInput
-            value:  100
-            min:    1
-            max:    10000
-            step:   10        
-        Median_Ploidy:
-            type:   numericInput
-            value:  2
-            min:    1
-            max:    10
-            step:   1
-        Plot_As:
-            type:   selectInput
-            choices:
-                - Read Depth
-                - Copy Number
-                - Copy Number Change
-            selected:  read_depth
-        Combine_Samples:
-            type:   checkboxInput
-            value:  false
+trackType:
+    - binned_XY
+    - svx_coverage
+override:
+    Data:
+        Plot_As: points
+    X_Axis:
+        Max_Bins: 500

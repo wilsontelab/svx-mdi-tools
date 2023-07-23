@@ -51,7 +51,7 @@ svx_handleJunctionClick <- function(track, click, buffer, expandReactive, distFn
     dist <- if(!is.null(distFn)) distFn(jxns) else switch(
         distType,
         triangle = jxns[, sqrt((center - click$coord$x) ** 2 + (size - click$coord$y) ** 2)],
-        node = {
+        nodes = {
             y2 <- jxns[, ((y - click$coord$y) / click$coord$y) ** 2]
             jxns[, pmin(
                 sqrt(((pos1 - click$coord$x) / click$coord$x) ** 2 + y2),
