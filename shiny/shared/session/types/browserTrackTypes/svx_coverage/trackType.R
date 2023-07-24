@@ -15,7 +15,7 @@ new_svx_coverageTrack <- function(trackId) {
 }
 
 # build method for the S3 class; REQUIRED
-build.svx_coverageTrack <- function(track, reference, coord, layout){
+build.svx_coverageTrack <- function(track, reference, coord, layout, loadFn){
     req(coord, coord$chromosome)
 
     # get operating parameters
@@ -34,7 +34,7 @@ build.svx_coverageTrack <- function(track, reference, coord, layout){
     selectedSources <- getSourcesFromTrackSamples(track$settings$items())
     dataFn <- function(track, reference, coord, sampleName, sample){
         sourceId <- c(sapply(names(selectedSources), function(x) if(sampleName %in% selectedSources[[x]]$Sample_ID) x else NULL))
-        x <- svx_filterCoverageByRange(sourceId, sampleName, coord, maxBins)
+        x <- svx_filterCoverageByRange(sourceId, sampleName, coord, maxBins, loadFn)
         aggregateTabixBins(x$bins, track, coord, plotBinSize) %>%
         svx_setCoverageValue(Plot_Type, x$medianCoverage, Median_Ploidy)
     }

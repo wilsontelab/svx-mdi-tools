@@ -103,7 +103,7 @@ buildLocus <- function(md, minQStarts, speed){
             )])
             for(edgeN_ in xq[, edgeN]){
                 xe <- xq[edgeN == edgeN_]
-                if(xe$edgeType == edgeTypes$ALIGNMENT){
+                if(xe$edgeType == svx_edgeTypes$ALIGNMENT){
                     if(speed == "fast"){
                         od <- rbind(od, data.table(
                             x1 = xe$qStart,
@@ -326,7 +326,7 @@ renderReadQualPlot <- function(xlim, md){
     )
     abline(h = 1:3, col = CONSTANTS$plotlyColors$grey)
     xq <- md$dt[readKey == md$readKey[1]]
-    dt <- do.call(rbind, lapply(xq[edgeType == edgeTypes$ALIGNMENT, edgeN], function(edgeN_){
+    dt <- do.call(rbind, lapply(xq[edgeType == svx_edgeTypes$ALIGNMENT, edgeN], function(edgeN_){
         xe <- xq[edgeN == edgeN_]
         qryPos <- xe[, qStart]
         refPos <- xe[, min(rStart, rEnd)]
@@ -369,7 +369,7 @@ renderMoleculePlot <- function(md, height, speed) { # md == molecule(s) data
 
     # plot alignments
     startSpinner(session, message = "calculating plot data")
-    minQStarts <- md$dt[edgeType == edgeTypes$ALIGNMENT, .(qStart = min(qStart, na.rm = TRUE)), by = .(readKey)]
+    minQStarts <- md$dt[edgeType == svx_edgeTypes$ALIGNMENT, .(qStart = min(qStart, na.rm = TRUE)), by = .(readKey)]
     plotData <- lapply64(md$uniqueLoci, function(locus_) buildLocus(md$dt[locus1 == locus_ & locus2 == locus_], minQStarts, speed) )
     names(plotData) <- as.character(md$uniqueLoci)
     orderedLoci <- rev(sort(md$uniqueLoci))

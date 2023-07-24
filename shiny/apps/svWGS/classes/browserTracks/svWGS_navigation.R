@@ -1,6 +1,6 @@
 # svWGS track navigation
 
-svx_navTable_display_app <- function(jxns){
+svWGS_navTable_display <- function(jxns){
     req(jxns)
     jxns[, .(
         svId = SV_ID,

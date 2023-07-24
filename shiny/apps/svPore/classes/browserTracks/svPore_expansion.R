@@ -34,10 +34,10 @@ svPore_expansionTable <- function(edges){
 }
 
 # show a detailed plot and table of the molecule support for a junction cluster
-svx_expandJunction_app <- function(jxn, track, layout){
+svPore_expandJunction <- function(jxn, track, layout){
     req(jxn)
     padding <- padding(track, layout)
-    height <- getBrowserTrackSetting(track, "Junctions", "Plot_Height", 3) # height in inches
+    height <- getBrowserTrackSetting(track, "Junctions", "Junction_Plot_Height", 3) # height in inches
     locusPadding <- getBrowserTrackSetting(track, "Junctions", "Locus_Padding", 50000)
 
     # use the mdiTrackImage helper function to create the track image
@@ -50,16 +50,16 @@ svx_expandJunction_app <- function(jxn, track, layout){
         jxn %>% 
         svPore_getJunction() %>% 
         svPore_objectTable() %>% 
-        app$browser$objectTableData() # junction cluster metadata
+        app$browser$objectTableData() # junction metadata
 
         edges %>% 
         svPore_expansionTable() %>% 
-        app$browser$expansionTableData() # supporting junctions metadata
+        app$browser$expansionTableData() # supporting edges (i.e., molecules) metadata
         
         edges %>% 
         setAlignmentLoci(locusPadding) %>% 
         parseEdgeForMolPlot() %>% 
-        renderMoleculePlot(height, getBrowserTrackSetting(track, "Junctions", "Plot_Speed", "fast")) # supporting junction image
+        renderMoleculePlot(height, getBrowserTrackSetting(track, "Junctions", "Plot_Speed", "fast")) # supporting edges (i.e., molecules) image
     })
     stopSpinner(session)  
 

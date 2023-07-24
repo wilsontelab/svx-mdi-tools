@@ -8,8 +8,8 @@
 #-------------------------------------------------------------------------------------
 
 # all alignment or junction edges
-getAlignmentEdges <- function(edges) edges[, edgeType == edgeTypes$ALIGNMENT]
-getJunctionEdges  <- function(edges) edges[, edgeType != edgeTypes$ALIGNMENT]
+getAlignmentEdges <- function(edges) edges[, edgeType == svx_edgeTypes$ALIGNMENT]
+getJunctionEdges  <- function(edges) edges[, edgeType != svx_edgeTypes$ALIGNMENT]
 getAllJunctions <- getJunctionEdges  
 
 # real junctions are compared across reads to find duplex repetition

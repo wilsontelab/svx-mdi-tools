@@ -6,3 +6,4 @@ shared:
     - svFilter_settings.yml
     - svZoom_settings.yml
     - svSummarize_settings.yml
+    - ../junction_settings.yml

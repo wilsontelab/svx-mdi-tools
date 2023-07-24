@@ -1,5 +1,5 @@
 Junctions:
-    Plot_Height:
+    Junction_Plot_Height:
         type:   numericInput
         value:  3
         min:    1

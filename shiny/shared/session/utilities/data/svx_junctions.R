@@ -4,12 +4,12 @@
 # expects:
 #   sessionCache
 #   chromosomesFile provided in data.package
-#   svx_loadJunctions_app(sourceId, chroms) that return a compatible data.table with at least columns
+#   loadFn(sourceId) that return a compatible data.table with at least columns
 #       edgeType, node1/2, cChromIndex1/2, cRefPos1/2, samples, nSamples, nInstances
 #----------------------------------------------------------------------
 
 # load all unique junctions for a specific sourceId (not filtered by region, type, or sample yet)
-svx_loadJunctions <- function(sourceId){
+svx_loadJunctions <- function(sourceId, loadFn){
     req(sourceId)
     sessionCache$get(
         'junctions', 
@@ -19,7 +19,7 @@ svx_loadJunctions <- function(sourceId){
         create = "asNeeded", 
         createFn = function(...) {
             startSpinner(session, message = "loading junctions")
-            jxns <- svx_loadJunctions_app(sourceId)
+            jxns <- loadFn(sourceId)
             chroms <- readRDS(getSourceFilePath(sourceId, "chromosomesFile")) 
             getCenter <- function(p1, p2) pmin(p1, p2) + abs(p2 - p1) / 2  
             jxns[, ":="(
@@ -36,7 +36,7 @@ svx_loadJunctions <- function(sourceId){
 }
 
 # filter unique junctions by sample, e.g., specified by browser items
-svx_filterJunctionsBySample <- function(sourceId, samples_){
+svx_filterJunctionsBySample <- function(sourceId, samples_, loadFn){
     sessionCache$get(
         'junctions', 
         keyObject = list(sourceId = sourceId, samples = samples_), 
@@ -44,7 +44,7 @@ svx_filterJunctionsBySample <- function(sourceId, samples_){
         from = "ram",
         create = "asNeeded", 
         createFn = function(...) {
-            jxns <- svx_loadJunctions(sourceId)
+            jxns <- svx_loadJunctions(sourceId, loadFn)
             startSpinner(session, message = "filtering junctions")
             I <- FALSE
             samples_ <- paste0(",", samples_, ",")
@@ -55,7 +55,7 @@ svx_filterJunctionsBySample <- function(sourceId, samples_){
 }
 
 # filter junction clusters based on track or other settings
-svx_filterJunctionsBySettings <- function(track, sourceId, samples){
+svx_filterJunctionsBySettings <- function(track, sourceId, samples, loadFn){
     jxns <- sessionCache$get(
         'junctions', 
         keyObject = list(sourceId = sourceId, samples = samples, settings = track$settings$all()), 
@@ -63,7 +63,7 @@ svx_filterJunctionsBySettings <- function(track, sourceId, samples){
         from = "ram", 
         create = "asNeeded", 
         createFn = function(...) {
-            jxns <- svx_filterJunctionsBySample(sourceId, samples)
+            jxns <- svx_filterJunctionsBySample(sourceId, samples, loadFn)
             startSpinner(session, message = paste("getting junctions"))
 
             filters <- track$settings$Filters()
@@ -72,6 +72,8 @@ svx_filterJunctionsBySettings <- function(track, sourceId, samples){
                 else if(!is.null(filters[[filter]]$selected)) filters[[filter]]$selected else filters[[filter]]$value
             })
             names(filters) <- names(svx_filterDefaults)
+
+            if(filters$Min_Map_Quality > 0) jxns <- jxns[mapQ >= filters$Min_Map_Quality] 
 
             if(filters$Min_SV_Size > 1) jxns <- jxns[size >= filters$Min_SV_Size]
             if(filters$Max_SV_Size > 0) jxns <- jxns[size <= filters$Max_SV_Size] #  & edgeType != "T"
@@ -99,7 +101,7 @@ svx_filterJunctionsBySettings <- function(track, sourceId, samples){
 }
 
 # filter junction clusters by browser coordinates
-svx_filterJunctionsByRange <- function(jxns, coord, rangeType, chromOnly = TRUE){
+svx_filterJunctionsByRange <- function(jxns, coord, rangeType, chromOnly = FALSE){
     startSpinner(session, message = "filtering junctions to window")
     isWholeGenome <- coord$chromosome == "all"
     if(!isWholeGenome && chromOnly) jxns <- jxns[
@@ -129,10 +131,10 @@ svx_filterJunctionsByRange <- function(jxns, coord, rangeType, chromOnly = TRUE)
 }
 
 # get all filtered junctions, with (for plots) or without (for nav table) filtering to the coordinate range
-svx_getTrackJunctions <- function(track, selectedSources, 
-                                  coord = NULL, rangeType = NULL, chromOnly = TRUE){
+svx_getTrackJunctions <- function(track, selectedSources, loadFn, 
+                                  coord = NULL, rangeType = NULL, chromOnly = FALSE){
     jxns <- do.call(rbind, c(lapply(names(selectedSources), function(sourceId){
-        jxns <- svx_filterJunctionsBySettings(track, sourceId, selectedSources[[sourceId]]$Sample_ID)
+        jxns <- svx_filterJunctionsBySettings(track, sourceId, selectedSources[[sourceId]]$Sample_ID, loadFn)
         cbind(
             jxns,
             sourceId = if(nrow(jxns) == 0) character() else sourceId

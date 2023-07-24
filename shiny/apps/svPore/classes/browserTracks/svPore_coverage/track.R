@@ -13,5 +13,5 @@ items.svPore_coverageTrack <- function(...) showTrackSamplesDialog(...)
 
 # build method for the S3 class; REQUIRED
 build.svPore_coverageTrack <- function(...){
-    build.svx_coverageTrack(...)
+    build.svx_coverageTrack(..., svPore_loadSampleCoverage)
 }

@@ -2,7 +2,7 @@
 # handle binned coverage loading and filtering
 # these are generic functions that apply to potentially any SVX app
 # expects:
-#   app-specific svx_loadSampleCoverage_app() that returns
+#   app-specific loadFn() that returns
 # list(
 #     maxPower = 1,
 #     binDensities = sapply(0:maxPower, function(power) binDensity0 / aggFactor**power), # aggFactor typically 10
@@ -54,8 +54,8 @@ svx_rebinCoverage <- function(x0, aggFactor = 10){
 }
 
 # filter coverage profile by browser coordinates
-svx_filterCoverageByRange <- function(sourceId, sample, coord, maxBins){
-    coverage <- svx_loadSampleCoverage_app(sourceId, sample)  
+svx_filterCoverageByRange <- function(sourceId, sample, coord, maxBins, loadFn){
+    coverage <- loadFn(sourceId, sample)  
     startSpinner(session, message = "filtering coverage")
     maxBinDensity <- maxBins / coord$width
     passingPowers <- which(coverage$binDensities <= maxBinDensity) - 1L

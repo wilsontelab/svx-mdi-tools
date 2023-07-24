@@ -10,7 +10,7 @@ svx_setJunctionPointColors <- function(jxns, track){
     jxns
 }
 svx_setJunctionPointSizes <- function(jxns, track){
-    cex1      <- getBrowserTrackSetting(track, "Points", "Point_Size", 0.25)
+    cex1      <- getBrowserTrackSetting(track, "Points", "Point_Size", 0.5)
     cexFactor <- getBrowserTrackSetting(track, "Points", "Point_Scale_Factor", 0.25)
     jxns[, cex := switch(
         getBrowserTrackSetting(track,"Points","Size_By","fixed"),

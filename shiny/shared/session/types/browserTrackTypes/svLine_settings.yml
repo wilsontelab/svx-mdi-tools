@@ -1,0 +1,7 @@
+Points:
+    Line_Width:
+        type:   numericInput
+        value:  1
+        min:    0.25
+        max:    5
+        step:   0.25 

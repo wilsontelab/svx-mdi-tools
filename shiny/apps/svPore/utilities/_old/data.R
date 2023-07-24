@@ -150,10 +150,10 @@ segmentsReactive <- function(svEdges, filteredJunctions, plotJunctions, summaryP
 
     maxI <- nrow(x)
     dt <- do.call(rbind, lapply(1:maxI, function(i){
-        if(x[i, edgeType == edgeTypes$ALIGNMENT]) data.table(
+        if(x[i, edgeType == svx_edgeTypes$ALIGNMENT]) data.table(
             qName = x[i, qName],
             edgeN  = x[i, edgeN],
-            edgeType = edgeTypes$ALIGNMENT,
+            edgeType = svx_edgeTypes$ALIGNMENT,
             cigar   = x[i, cigar],
             locus1  = x[i, locus],
             locus2  = x[i, locus],
@@ -184,14 +184,14 @@ segmentsReactive <- function(svEdges, filteredJunctions, plotJunctions, summaryP
             label   = as.character(NA)
         )
     }))
-    for(i in 1:maxI) if(dt[i, edgeType != edgeTypes$ALIGNMENT]){
+    for(i in 1:maxI) if(dt[i, edgeType != svx_edgeTypes$ALIGNMENT]){
         ln2 <- dt[i + 1, locus1]
         dt[i, locus2 := ln2]
     }
     list(
         qNames = qNames,
-        loci = dt[edgeType == edgeTypes$ALIGNMENT, locus1],
-        uniqueLoci = dt[edgeType == edgeTypes$ALIGNMENT, unique(locus1)],
+        loci = dt[edgeType == svx_edgeTypes$ALIGNMENT, locus1],
+        uniqueLoci = dt[edgeType == svx_edgeTypes$ALIGNMENT, unique(locus1)],
         nLoci = nLoci,
         dt = dt,
         maxI = maxI

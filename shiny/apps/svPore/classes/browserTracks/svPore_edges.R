@@ -13,7 +13,7 @@ svPore_loadSourceEdges <- function(sourceId){
         from = "ram", 
         create = "asNeeded", 
         createFn = function(...) {
-            startSpinner(session, message = "loading edges from disk")
+            startSpinner(session, message = "loading edges .")
             edges <- readRDS(getSourceFilePath(sourceId, "edgesFile")) 
 #  [1] "junctionKey"           "sample"                "readI"
 #  [4] "blockN"                "edgeN"                 "qName"
@@ -33,6 +33,7 @@ svPore_loadSourceEdges <- function(sourceId){
 # [46] "nCanonical"            "nNonCanonical"         "icRefPos1"
 # [49] "icRefPos2"             "iInsertSize"           "clustered"
 # [52] "iRefPos1"              "iRefPos2"              "segmentN"
+            startSpinner(session, message = "loading edges ..")
             edges <- edges[, .SD, .SDcols = c(
                 "sample","readI","channel",
                 "clusterN","nStrands",
@@ -46,6 +47,7 @@ svPore_loadSourceEdges <- function(sourceId){
             edges[, ":="(
                 readKey = paste(sample, readI, sep = ":")
             )]
+            startSpinner(session, message = "loading edges ...")
             setkey(edges, readKey, edgeN) 
             edges
         }
@@ -69,17 +71,18 @@ svPore_loadEdges <- function(sourceId, clusterN_){
     )$value
 }
 
+
 # set the genomic locus of all alignments; different loci plot in different plot "rows"
 setAlignmentLoci <- function(edges, locusPadding){
     startSpinner(session, message = "setAlignmentLoci")
-    maxQSize <- edges[edgeType == edgeTypes$ALIGNMENT, max(qEnd)]
+    maxQSize <- edges[edgeType == svx_edgeTypes$ALIGNMENT, max(qEnd)]
     getAlnRefPos <- function(readKey_, edgeN_) {
         if(edgeN_ == 1) edges[readKey_][edgeN_ + 1, refPos1] 
                    else edges[readKey_][edgeN_ - 1, refPos2] 
     }
     nLoci <- 0
     fillLocus <- function(edges){
-        pending <- edges[, edgeType == edgeTypes$ALIGNMENT & is.na(locus)]
+        pending <- edges[, edgeType == svx_edgeTypes$ALIGNMENT & is.na(locus)]
         i <- edges[, min(which(pending), na.rm = TRUE)]
         chrom <- edges[i, chrom1]  
         refPos  <- edges[i, getAlnRefPos(readKey, edgeN)]
@@ -96,7 +99,7 @@ setAlignmentLoci <- function(edges, locusPadding){
         edges
     }
     edges[, locus := NA_integer64_]    
-    while(edges[edgeType == edgeTypes$ALIGNMENT, any(is.na(locus))]) edges <- fillLocus(edges)
+    while(edges[edgeType == svx_edgeTypes$ALIGNMENT, any(is.na(locus))]) edges <- fillLocus(edges)
     edges
 }
 
@@ -105,10 +108,10 @@ parseEdgeForMolPlot <- function(edges){
     startSpinner(session, message = "parseEdgeForMolPlot")
     maxI <- nrow(edges)
     dt <- do.call(rbind, lapply(1:maxI, function(i){
-        if(edges[i, edgeType == edgeTypes$ALIGNMENT]) data.table(
+        if(edges[i, edgeType == svx_edgeTypes$ALIGNMENT]) data.table(
             readKey = edges[i, readKey],
             edgeN  = edges[i, edgeN],
-            edgeType = edgeTypes$ALIGNMENT,
+            edgeType = svx_edgeTypes$ALIGNMENT,
             cigar   = edges[i, cigar],
             locus1  = edges[i, locus],
             locus2  = edges[i, locus],
@@ -139,14 +142,14 @@ parseEdgeForMolPlot <- function(edges){
             label   = NA_character_
         )
     }))
-    for(i in 1:maxI) if(dt[i, edgeType != edgeTypes$ALIGNMENT]){
+    for(i in 1:maxI) if(dt[i, edgeType != svx_edgeTypes$ALIGNMENT]){
         ln2 <- dt[i + 1, locus1]
         dt[i, locus2 := ln2]
     }
-    uniqueLoci <- dt[edgeType == edgeTypes$ALIGNMENT, unique(locus1)]
+    uniqueLoci <- dt[edgeType == svx_edgeTypes$ALIGNMENT, unique(locus1)]
     list(
         readKeys = edges[, unique(readKey)],
-        loci = dt[edgeType == edgeTypes$ALIGNMENT, locus1],
+        loci = dt[edgeType == svx_edgeTypes$ALIGNMENT, locus1],
         uniqueLoci = uniqueLoci,
         nLoci = length(uniqueLoci),
         dt = dt,

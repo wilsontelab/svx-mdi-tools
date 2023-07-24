@@ -8,74 +8,84 @@ svWGS_objectTable <- function(jxn){
         type = svx_jxnTypes[edgeType, name],
         size = SV_SIZE,
         insertSize = -MICROHOM_LEN,
-        # mapQ,
-        # identity = gapCompressedIdentity,
-        # alnBaseQual = as.integer(alnBaseQual),
+        mapQ = mapQ,
         nSamples,
         nInstances,
+        nSequenced = N_SPLITS,
         rStart = paste0(cChrom1, ":", cRefPos1, if(cStrand1 == 1) "+" else "-"),
         rEnd   = paste0(cChrom2, ":", cRefPos2, if(cStrand2 == 1) "+" else "-")
     )]
 }
-svWGS_expansionTable <- function(edges){
-    req(edges)
-    edges[, .(
-        readKey,
-        channel,
-        nStrands,
-        edge = paste(edgeN, edgeType, sep = ":"),
-        eventSize,
-        insertSize,
-        qStart,
-        qEnd,
-        rStart = paste0(chrom1, ":", refPos1, strand1),
-        rEnd   = paste0(chrom2, ":", refPos2, strand2)
-    )]
+svWGS_expansionTable <- function(molecules, jxn){
+    req(molecules)
+    cbind(
+        molecules[, .(
+            sample = SAMPLE,
+            isRef = as.logical(IS_REFERENCE),            
+            merge = IS_MERGED,
+            nodeClass = tolower(svx_nodeClasses_rev[NODE_CLASS + 1]),
+            strand = ifelse(MOL_STRAND == 1, "-", "+"),            
+            mapQ1 = MAPQ_1,
+            mapQ2 = MAPQ_2,
+            innerNode1 = NODE_1,
+            innerNode2 = NODE_2,
+            outerPos1 = OUT_POS1,
+            outerPos2 = OUT_POS2
+        )]
+    )
 }
 
 # show a detailed plot and table of the molecule support for a junction cluster
-svx_expandJunction_app <- function(jxn, track, layout){
+svWGS_expandJunction <- function(jxn, track, layout){
     req(jxn)
 
-    padding <- padding(track, layout)
-    height <- getBrowserTrackSetting(track, "Junctions", "Plot_Height", 3) # height in inches
-    locusPadding <- getBrowserTrackSetting(track, "Junctions", "Locus_Padding", 50000)
+    # collect molecules that provided evidence for the junction call
+    molecules <- svWGS_loadMolecules(jxn$sourceId, jxn$SV_ID)
 
-    # use the mdiTrackImage helper function to create the track image
-    mai <- NULL
-    image <- mdiTrackImage(layout, height, message = "svWGS_triangle zoom", function(...){
-        mai <<- setMdiTrackMai(layout, padding, mar = list(top = 0, bottom = 0))
+    # write the one-line object table with additional junction metadata
+    jxn %>% 
+    svWGS_getJunction() %>% 
+    svWGS_objectTable() %>% 
+    app$browser$objectTableData() # junction metadata    
 
-        jxn %>% 
-        svWGS_getJunction() %>% 
-        svWGS_objectTable() %>% 
-        app$browser$objectTableData() # junction metadata
+    # write the multi-line table with one line per supporting molecule
+    molecules %>% 
+    svWGS_expansionTable(jxn) %>% 
+    app$browser$expansionTableData()
 
-        plot(1:10)
-
-        # edges <- loadClusterEdges(jxn$sourceId, jxn$clusterN) 
-
-        # jxn %>% 
-        # svWGS_getJunction() %>% 
-        # svWGS_objectTable() %>% 
-        # app$browser$objectTableData() # junction cluster metadata
-
-        # edges %>% 
-        # svWGS_expansionTable() %>% 
-        # app$browser$expansionTableData() # supporting junctions metadata
-        
-        # edges %>% 
-        # setAlignmentLoci(locusPadding) %>% 
-        # parseEdgeForMolPlot() %>% 
-        # renderMoleculePlot(height, getBrowserTrackSetting(track, "Junctions", "Plot_Speed", "fast")) # supporting junction image
+    # if the junction was sequence, create the expansion2 elements
+    # a map and an alignment at base-level detail
+    junctionMap <- tryCatch({
+        getJunctionMap(list(sv = jxn, mols = molecules[sample.int(.N)]))
+    }, error = function(e) {
+        stopSpinner(session)
+        NULL
     })
-    stopSpinner(session)  
+    if(is.null(junctionMap)){
+        app$browser$expansionUI("")
+    } else {
+        startSpinner(session, message = "analyzing junction")
+        app$browser$expansionUI(tagList(
+            tryCatch({       junctionMapTrackExpansionUI(track, junctionMap) }, error = function(e) ""),
+            tryCatch({ junctionAlignmentTrackExpansionUI(track, junctionMap) }, error = function(e) { print(e); "" })
+        ))     
+    }
 
-    # return the track's magick image and associated metadata
-    list(
-        # xlim  = xlim, # will be rescaled to c(0, 1) across all stacked zoom images
-        ylim  = NA,
-        mai   = mai,
-        image = image
-    )
+    # do not show an in-browser track expansion, it is all too big and shown in expansionUI
+    # leave code block below in case we come up with some else to plot as a track...
+    req(FALSE)
+
+    # # set the expansion track layout
+    # padding <- padding(track, layout)
+    # height <- getBrowserTrackSetting(track, "Junctions", "Junction_Plot_Height", 3) # height in inches
+
+    # # use the mdiTrackImage helper function to create the track image
+    # mai <- NULL
+    # image <- mdiTrackImage(layout, height, message = "svWGS_triangle zoom", function(...){
+    #     mai <<- setMdiTrackMai(layout, padding, mar = list(top = 0, bottom = 0))
+    # })
+    # stopSpinner(session)  
+
+    # # return the track's magick image and associated metadata
+    # list(ylim  = NA, mai   = mai, image = image)
 }

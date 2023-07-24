@@ -15,18 +15,22 @@ items.svPore_nodesTrack <- function(...) showTrackSamplesDialog(...)
 
 # build method for the S3 class; REQUIRED
 build.svPore_nodesTrack <- function(...){
-    build.svx_nodes_track(..., svPore_nodesTrackBuffer, idCol = "clusterN")
+    build.svx_nodes_track(..., svPore_nodesTrackBuffer, svPore_loadJunctions, idCol = "clusterN")
 }
 
 # method for the S3 class to populate one or more trackNav inputs above the browser output
 navigation.svPore_nodesTrack <- function(...){
-    svx_junctionNavTable(..., svPore_nodesExpand)
+    svx_junctionNavTable(..., svPore_nodesExpand, svPore_loadJunctions, svPore_navTable_display, svPore_expandJunction)
 }
 
 # plot interaction methods for the S3 class
 # called by trackBrowser if track$click, $hover, or $brush is TRUE, above
 click.svPore_nodesTrack <- function(...){
-    svx_handleJunctionClick(..., svPore_nodesTrackBuffer, svPore_nodesExpand, distType = "nodes")
+    svx_handleJunctionClick(
+        ..., svPore_nodesTrackBuffer, 
+        svPore_nodesExpand, svPore_expandJunction, svPore_summarizeJunctions,
+        distType = "nodes"
+    )                           
 }
 
 # expand method for the S3 class

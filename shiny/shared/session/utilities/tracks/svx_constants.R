@@ -61,12 +61,12 @@ svx_jxnTypes <- data.table(
         NA
     ),
     lineN = c(
-        "D" = 1,
-        "U" = 2,    
-        "V" = 3,
-        "T" = 4,
-        "I" = -1,    
-        "?" = -1  
+        1,
+        -100,
+        2,
+        3,
+        4,
+        -100
     )
 )
 setkey(svx_jxnTypes, code)
@@ -78,7 +78,15 @@ svx_filterDefaults <- list(
     Min_Samples_With_SV = 1,
     Max_Samples_With_SV = 0,
     Min_Source_Molecules = 1,
-    Max_Source_Molecules = 0,    
-    SV_Type = c("Del","Dup","Inv"),
-    Show_ChrM = "never"
+    Max_Source_Molecules = 0,  
+    Min_Map_Quality = 50,
+    Show_ChrM = "never",      
+    SV_Type = c("Del","Dup","Inv")
 )
+
+svx_nodeClasses <- list(
+   'GAP'='0',
+   'SPLIT'='1',
+   'CLIP'='2'
+)
+svx_nodeClasses_rev <- names(svx_nodeClasses)

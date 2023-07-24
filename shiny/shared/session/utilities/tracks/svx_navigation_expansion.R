@@ -1,26 +1,27 @@
 # construct a junction cluster trackNav table
-svx_junctionNavTable <- function(track, session, browserId, reference, coord, expandReactive){
+svx_junctionNavTable <- function(track, session, browserId, reference, coord, 
+                                 expandReactive, loadFn, navTableFn, expandFn){
     navTableName <- initTrackNav(track, session, "navTable") # table reactive functions are provided below  
     trackNavDataUnformatted <- reactive({
         selectedSources <- getSourcesFromTrackSamples(track$settings$items())
-        jxns <- svx_getTrackJunctions(track, selectedSources)
+        jxns <- svx_getTrackJunctions(track, selectedSources, loadFn, chromOnly = FALSE)
         req(nrow(jxns) <= 10000)
         jxns
     })
     trackNavDataFormatted <- reactive({
-        svx_navTable_display_app(trackNavDataUnformatted())
+        navTableFn(trackNavDataUnformatted())
     })
     handleRowClick <- function(selectedRow){
         req(selectedRow)
         jxn <- trackNavDataUnformatted()[selectedRow]
-        expandFn <- function(jobId){
-            expandReactive(list(jxn = jxn, fnName = "svx_expandJunction_app"))
-            app$browser$expandingTrackId(track$id)  
+        expandFn_ <- function(jobId){
+            expandReactive(list(d = jxn, fn = expandFn))
+            app$browser$expandingTrack(list(trackId = track$id, object = jxn) )
         }
         if(jxn$edgeType == svx_edgeTypes$TRANSLOCATION){
-            handleTrackNavTableClick(track, "all", abs(jxn$node1), abs(jxn$node2), expandFn = expandFn)
+            handleTrackNavTableClick(track, "all", abs(jxn$node1), abs(jxn$node2), expandFn = expandFn_)
         } else {
-            handleTrackNavTableClick(track, jxn$cChrom1, jxn$cRefPos1, jxn$cRefPos2, expandFn = expandFn)
+            handleTrackNavTableClick(track, jxn$cChrom1, jxn$cRefPos1, jxn$cRefPos2, expandFn = expandFn_)
         }
     }
     tagList(
@@ -45,9 +46,12 @@ svx_jumpToJunction <- function(jxn){
 }
 
 # appropriately disperse a nodes or triangle plot click event
-svx_handleJunctionClick <- function(track, click, buffer, expandReactive, distFn = NULL, distType = NULL){
+svx_handleJunctionClick <- function(track, click, buffer, 
+                                    expandReactive, expandFn, summarizeFn,
+                                    distFn = NULL, distType = NULL){
     jxns <- buffer[[track$id]]
     req(nrow(jxns) > 0) 
+    startSpinner(session)
     dist <- if(!is.null(distFn)) distFn(jxns) else switch(
         distType,
         triangle = jxns[, sqrt((center - click$coord$x) ** 2 + (size - click$coord$y) ** 2)],
@@ -61,18 +65,18 @@ svx_handleJunctionClick <- function(track, click, buffer, expandReactive, distFn
     )
     jxn <- jxns[which.min(dist)]  
     if(click$keys$ctrl){
-        expandReactive(list(jxn = jxn, fnName = "svx_expandJunction_app"))
-        app$browser$expandingTrackId(track$id)  
+        expandReactive(list(d = jxn, fn = expandFn))
+        app$browser$expandingTrack(list(trackId = track$id, object = jxn) )
     } else if(click$keys$shift){
-        expandReactive(list(jxn = jxns, fnName = "svx_summarizeJunctions_app"))
-        app$browser$expandingTrackId(track$id) 
+        expandReactive(list(d = jxns, fn = summarizeFn))
+        app$browser$expandingTrack(list(trackId = track$id, object = jxns) )
     } else {
         svx_jumpToJunction(jxn)       
     }
 }
 svx_handleJunctionExpansion <- function(track, layout, expandReactive){
     x <- expandReactive()
-    get(x$fnName)(x$jxn, track, layout)
+    x$fn(x$d, track, layout)
 }
 
 # execute second-level expansion of a specific read, from an expansion table click

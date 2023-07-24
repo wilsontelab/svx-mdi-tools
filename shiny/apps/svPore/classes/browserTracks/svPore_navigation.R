@@ -1,5 +1,5 @@
 # svPore track navigation
-svx_navTable_display_app <- function(jxns){
+svPore_navTable_display <- function(jxns){
     req(jxns)
     jxns[, .(
         cluster = clusterN,

@@ -15,18 +15,22 @@ items.svPore_triangleTrack <- function(...) showTrackSamplesDialog(...)
 
 # build method for the S3 class; REQUIRED
 build.svPore_triangleTrack <- function(...){
-    build.svx_triangle_track(..., svPore_triangleTrackBuffer)
+    build.svx_triangle_track(..., svPore_triangleTrackBuffer, svPore_loadJunctions)
 }
 
 # method for the S3 class to populate one or more trackNav inputs above the browser output
 navigation.svPore_triangleTrack <- function(...){
-    svx_junctionNavTable(..., svPore_triangleExpand)
+    svx_junctionNavTable(..., svPore_triangleExpand, svPore_loadJunctions, svPore_navTable_display, svPore_expandJunction)
 }
 
 # plot interaction methods for the S3 class
 # called by trackBrowser if track$click, $hover, or $brush is TRUE, above
 click.svPore_triangleTrack <- function(...){
-    svx_handleJunctionClick(..., svPore_triangleTrackBuffer, svPore_triangleExpand, distType = "triangle")
+    svx_handleJunctionClick(
+        ..., svPore_triangleTrackBuffer, 
+        svPore_triangleExpand, svPore_expandJunction, svPore_summarizeJunctions,
+        distType = "triangle"
+    )    
 }
 
 # expand method for the S3 class

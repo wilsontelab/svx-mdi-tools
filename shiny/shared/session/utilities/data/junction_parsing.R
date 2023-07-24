@@ -27,7 +27,7 @@ CONSTANTS$clipBases <- c('a', 'c', 'g', 't', 'n')
 getJunctionMap <- function(x, clipMode = "Faded Colors"){
     req(x)
     req(x$sv$JXN_BASES != "*")
-    startSpinner(session, 'getJunctionMap') 
+    startSpinner(session, message = 'mapping molecules') 
 
     # initialize map and dimensions
     refWidth <- nchar(x$sv$GEN_REF_1)
@@ -114,7 +114,7 @@ getJunctionMap <- function(x, clipMode = "Faded Colors"){
     imgMap[is.na(imgMap)] <- 1
 
     # finish and return the results
-    stopSpinner(session, 'getJunctionMap') 
+    stopSpinner(session) 
     list(
         sv      = x$sv,
         mols    = x$mols,  

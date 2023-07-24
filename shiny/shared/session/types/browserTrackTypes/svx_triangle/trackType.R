@@ -21,7 +21,7 @@ new_svx_triangleTrack <- function(trackId, expandReactive) {
 }
 
 # track build function
-build.svx_triangle_track <- function(track, reference, coord, layout, trackBuffer){    
+build.svx_triangle_track <- function(track, reference, coord, layout, trackBuffer, loadFn){    
     req(coord, coord$chromosome)
 
     # get the data to plot
@@ -43,7 +43,7 @@ build.svx_triangle_track <- function(track, reference, coord, layout, trackBuffe
             xlim = coord$range, xlab = "", xaxt = "n", # nearly always set `xlim`` to `coord$range`
             ylim = ylim, ylab = "Unique Junctions", #yaxt = "n",
             xaxs = "i", yaxs = "i") # always set `xaxs` and `yaxs` to "i" 
-        jxns <- svx_getTrackJunctions(track, selectedSources, coord, "center")[sample(.N)]
+        jxns <- svx_getTrackJunctions(track, selectedSources, loadFn, coord, "center", chromOnly = TRUE)[sample(.N)]
         if(Color_By == "sample") jxns <- dt_colorBySelectedSample(jxns, selectedSources)
         points(
             jxns$center, 

@@ -37,12 +37,19 @@ Filters:
         step:   1  
     # SPACER_1:
     #     type: spacer       
-    # Min_Map_Quality:
-    #     type:   numericInput
-    #     value:  50
-    #     min:    0
-    #     max:    60
-    #     step:   5    
+    Min_Map_Quality:
+        type:   numericInput
+        value:  50
+        min:    0
+        max:    60
+        step:   5   
+    Show_ChrM:
+        type:   selectInput
+        choices:
+            - always
+            - translocations_only
+            - never
+        value: never
     SV_Type:
         type:   checkboxGroupInput
         choices:
@@ -55,10 +62,3 @@ Filters:
             - Dup
             - Inv
         inline: TRUE
-    Show_ChrM:
-        type:   selectInput
-        choices:
-            - always
-            - translocations_only
-            - never
-        selected: never

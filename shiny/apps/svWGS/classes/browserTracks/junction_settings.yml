@@ -1,0 +1,20 @@
+Junctions:
+    Pixels_Per_Base:
+        type:   numericInput
+        value:  2
+        min:    1
+        max:    10
+        step:   1
+    Bases_Per_Line:
+        type:   numericInput
+        value:  100
+        min:    50
+        max:    200
+        step:   10
+    Alignment_Mode:
+        type:   selectInput
+        choices:
+            - "Evidence Consensus"
+            - "Reference Molecule"
+            - "All Molecules"
+        value: "Evidence Consensus"

@@ -1,52 +1,15 @@
-#----------------------------------------------------------------------
-# handle unique junction loading and filtering
-#----------------------------------------------------------------------
-
-# app-specific junction loading
-# here, coerce svWGS format toward svPore format (result is cached upstream)
-svWGS_loadJunctions <- function(sourceId){
-    startSpinner(session, message = "loading jxns")
-    jxns <- readRDS(getSourceFilePath(sourceId, "structuralVariants")) 
-    chroms <- readRDS(getSourceFilePath(sourceId, "chromosomesFile"))
-    samples_ <- read_yaml(getSourceFilePath(sourceId, "metadata"))$SAMPLES
-    jt <- svx_jxnTypes
-    setkey(jt, altCode)
-    startSpinner(session, message = "loading jxns .")
-    jxns[, ":="(
-        edgeType = jt[JXN_TYPE, code],
-        chromIndex1 = unlist(chroms$chromIndex[CHROM_1]),
-        chromIndex2 = unlist(chroms$chromIndex[CHROM_2]),
-        strand1 = ifelse(SIDE_1 == "L", "+", "-"),
-        strand2 = ifelse(SIDE_2 == "R", "+", "-"),
-        nInstances = N_TOTAL, 
-        nSamples = N_SAMPLES,
-        mapQ = pmin(
-            sapply(MAPQ_1, function(m) max(as.integer(strsplit(m, ",")[[1]]))),
-            sapply(MAPQ_2, function(m) max(as.integer(strsplit(m, ",")[[1]])))
-        )
-    )]
-    startSpinner(session, message = "loading jxns ..")
-    jxns[, samples := paste(sapply(samples_, function(x) if(.SD[[x]] > 0) x else NULL), collapse = ","), by = .(SV_ID)]
-    jxns[, ":="(
-        node1 = getSignedNode(chroms$chromSizes, chromIndex1, POS_1, strand1),
-        node2 = getSignedNode(chroms$chromSizes, chromIndex2, POS_2, strand2) 
-    )]
-    startSpinner(session, message = "loading jxns ...")
-    jxns[, isCanonical := isCanonicalStrand_vectorized(node1, node2)]
-    jxns[, ":="(
-        cChromIndex1 = ifelse(isCanonical, chromIndex1, chromIndex2),
-        cChromIndex2 = ifelse(isCanonical, chromIndex2, chromIndex1),
-        cRefPos1     = ifelse(isCanonical, POS_1, POS_2),
-        cRefPos2     = ifelse(isCanonical, POS_2, POS_1),
-        cStrand1     = ifelse(ifelse(isCanonical, strand1, strand2) == "+", 1, -1),
-        cStrand2     = ifelse(ifelse(isCanonical, strand2, strand1) == "+", 1, -1)
-    )] 
-    jxns
-}
-
-# get a single junction cluster for the object table
-svWGS_getJunction <- function(x){
-    svx_loadJunctions(x$sourceId, svWGS_loadJunctions)[SV_ID == x$SV_ID]
+# svWGS summary of all filtered junctions
+svWGS_summarizeJunctions <- function(jxns, track, layout){
+    req(jxns)
+    startSpinner(session, message = "creating distributions")
+    jxns[, insertSize := -MICROHOM_LEN]
+    jxns[, nSequencedJxn := N_SPLITS]
+    jxns[, mergeLen := MERGE_LEN]
+    svx_summarizeJunctions(jxns, track, layout, list(
+        jxns[, .N, keyby = .(mapQ)],
+        jxns[, .N, keyby = .(nSequencedJxn)],
+        jxns[, .N, keyby = .(mergeLen)]
+    ))
 }
 
 # Classes ‘data.table’ and 'data.frame':  6016 obs. of  45 variables:

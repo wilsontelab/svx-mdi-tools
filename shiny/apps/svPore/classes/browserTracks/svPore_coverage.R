@@ -1,7 +1,7 @@
 #----------------------------------------------------------------------
 # handle svPore window coverage loading
 #----------------------------------------------------------------------
-svx_loadSampleCoverage_app <- function(sourceId, sample){
+svPore_loadSampleCoverage <- function(sourceId, sample){
     req(sourceId)
     startSpinner(session, message = "loading coverage")
     sessionCache$get(

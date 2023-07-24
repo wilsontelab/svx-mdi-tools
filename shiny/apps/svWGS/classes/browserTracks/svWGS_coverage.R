@@ -13,7 +13,7 @@ svWGS_loadSourceCoverage <- function(sourceId){
         }  
     )$value
 }
-svx_loadSampleCoverage_app <- function(sourceId, sample){
+svWGS_loadSampleCoverage <- function(sourceId, sample){
     req(sourceId)
     startSpinner(session, message = "loading coverage")
     sessionCache$get(

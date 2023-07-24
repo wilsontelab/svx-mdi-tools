@@ -1,6 +1,8 @@
 # ----------------------------------------------------------------------
 # colored-image representation of all molecules supporting and SV junction
 # ----------------------------------------------------------------------
+
+# functions used in a standard app page, e.g., in svCapture
 mapSettingsServer <- function(id, moduleOptions){
     globalSettingsDir <- file.path(app$sources$suiteGlobalDir, "settings")
     settingsServer( 
@@ -38,3 +40,22 @@ junctionMapServer <- function(output, junctionMap, mapSettings){
         list(src = pngFile)
     }, deleteFile = FALSE)
 }
+
+# alternative to fill app$browser$expansionUI when reacting to browser track click
+junctionMapTrackExpansionUI <- function(track, junctionMap){ 
+    req(junctionMap)
+    pngFile <- file.path(sessionDirectory, "junctionMapImage.png")
+    Pixels_Per_Base <- getTrackSetting(track, "Junctions", "Pixels_Per_Base", 2)
+    library(imager) # strangely, imager seems to call imager::as.cimg internally in a manner that assumes the library is attached
+    suppressWarnings(
+        imager::as.cimg(junctionMap$image[junctionMap$usedPos, , ]) %>% 
+        expandImg(h = Pixels_Per_Base, v = Pixels_Per_Base) %>%
+        imager::save.image(pngFile)        
+    )
+    base64 <- pngFileToBase64(pngFile)
+    unlink(pngFile)
+    tags$img(
+        src = base64, 
+        style = "vertical-align: top;"
+    )
+} 

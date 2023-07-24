@@ -13,5 +13,5 @@ items.svWGS_coverageTrack <- function(...) showTrackSamplesDialog(...)
 
 # build method for the S3 class; REQUIRED
 build.svWGS_coverageTrack <- function(...){
-    build.svx_coverageTrack(...)
+    build.svx_coverageTrack(..., svWGS_loadSampleCoverage)
 }
