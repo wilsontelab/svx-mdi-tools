@@ -34,8 +34,8 @@ use constant {
     baseQual => 12,   
     alnBaseQual => 13, 
     alnSize => 14, # added to edges by processRead_
-    sStart => 15,
-    sEnd => 16,
+    # sStart => 15,
+    # sEnd => 16,
     # #-------------
     # clip5 => 0, # adapter scores added to edges here by addAdaptersScores
     # score5 => 0,
@@ -256,12 +256,12 @@ sub processRead_ {
         # my ($readN)  = ($$read[_TAGS] =~ m/rn:i:(\S+)/); 
 
         # parse qPos to sPos (i.e, sample position)
-        my @baseSamples;
+        # my @baseSamples;
         # my ($nTotalSamples) = ($$read[_TAGS] =~ m/ns:i:(\S+)/);
-        my ($nTrimmedSamples) = ($$read[_TAGS] =~ m/ts:i:(\S+)/);
-        my ($downsampling, $moves) = ($$read[_TAGS] =~ m/\tmv:B:c,(\d+),(\S+)/);
-        my @moves = split(",", $moves);
-        map { $moves[$_] and  push @baseSamples, $_ * $downsampling + $nTrimmedSamples } 0..$#moves; 
+        # my ($nTrimmedSamples) = ($$read[_TAGS] =~ m/ts:i:(\S+)/);
+        # my ($downsampling, $moves) = ($$read[_TAGS] =~ m/\tmv:B:c,(\d+),(\S+)/);
+        # my @moves = split(",", $moves);
+        # map { $moves[$_] and  push @baseSamples, $_ * $downsampling + $nTrimmedSamples } 0..$#moves; 
 
         # first run sets baseQual for each alignment and junction itself; required to set alnBaseQual below
         foreach my $i(0..$#$edges){
@@ -285,8 +285,8 @@ sub processRead_ {
             my $isJunction = ($i % 2);
             $$edge[alnBaseQual] = $isJunction ? min($$edges[$i - 1][baseQual],   $$edges[$i + 1][baseQual])   : "NA";
             $$edge[alnSize]     = $isJunction ? min($$edges[$i - 1][EVENT_SIZE], $$edges[$i + 1][EVENT_SIZE]) : "NA";
-            $$edge[sStart] = $baseSamples[$$edge[QSTART]] || "NA";
-            $$edge[sEnd]   = $baseSamples[$$edge[QEND]]   || "NA"; 
+            # $$edge[sStart] = $baseSamples[$$edge[QSTART]] || "NA";
+            # $$edge[sEnd]   = $baseSamples[$$edge[QEND]]   || "NA"; 
             if($isJunction and $$edge[INSERT_SIZE] >= 5){
                 addAdaptersScores($read, $edge, 1, 1); 
             } else {
@@ -303,7 +303,7 @@ sub processRead_ {
     } else {
         my $aln = $$edges[0];
         $$aln[CIGAR] = "NA";
-        $$aln[baseQual] = $$aln[alnBaseQual] = $$aln[alnSize] = $$aln[sStart] = $$aln[sEnd] = "NA";
+        $$aln[baseQual] = $$aln[alnBaseQual] = $$aln[alnSize] = "NA"; #  = $$aln[sStart] = $$aln[sEnd]
         addAdaptersScores($read, $aln); 
         finishEdge($aln, 1, 1);
     }

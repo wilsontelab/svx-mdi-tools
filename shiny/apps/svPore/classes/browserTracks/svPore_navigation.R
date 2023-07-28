@@ -4,7 +4,7 @@ svPore_navTable_display <- function(jxns){
     jxns[, .(
         cluster = clusterN,
         samples = trimws(gsub(",", " ", samples)),
-        type = svx_jxnTypes[edgeType, name],
+        type = svx_jxnType_codeToX(edgeType, "name"),
         size = eventSize,
         insertSize,
         nSamples,

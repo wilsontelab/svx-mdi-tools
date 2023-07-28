@@ -42,7 +42,7 @@ svx_node_plotJxnLines <- function(jxns, lwd, idCol){
     }, by = idCol]
 }
 svx_node_plotChromosomeJxns <- function(jxns, lwd, idCol){
-    jxns[, y := svx_jxnTypes[edgeType, lineN] + 0.5 - (1:.N)/.N, by = .(edgeType)]
+    jxns[, y := svx_jxnType_codeToX(edgeType, "lineN") + 0.5 - (1:.N)/.N, by = .(edgeType)]
     svx_node_plotJxnNodes(jxns[pos1In == TRUE], "pos1")
     svx_node_plotJxnNodes(jxns[pos2In == TRUE], "pos2")
     svx_node_plotJxnLines(jxns[(pos1In == TRUE | pos2In == TRUE) & edgeType != svx_edgeTypes$TRANSLOCATION], lwd, idCol)

@@ -37,12 +37,12 @@ use constant {
 };
 
 # environment variables
+fillEnvVar(\our $N_CPU,   'N_CPU');
 fillEnvVar(\our $EXTRACT_PREFIX,   'EXTRACT_PREFIX');
 fillEnvVar(\our $PIPELINE_DIR,     'PIPELINE_DIR');
 fillEnvVar(\our $WINDOW_SIZE,      'WINDOW_SIZE');
 fillEnvVar(\our $GENOME_FASTA,     'GENOME_FASTA');
 fillEnvVar(\our $EDGES_NO_SV_FILE, 'EDGES_NO_SV_FILE');
-fillEnvVar(\our $QNAMES_FILE,      'QNAMES_FILE');
 
 # initialize the genome
 use vars qw(%chromIndex);
@@ -54,8 +54,7 @@ map { require "$PIPELINE_DIR/extract/$_.pl" } qw(initialize_windows);
 initializeWindowCoverage();
 
 # open output handles
-open my $nosvH,    "|-", "gzip -c | slurp -s 10M -o $EDGES_NO_SV_FILE" or die "could not open: $EDGES_NO_SV_FILE\n";
-open my $qNamesH,  "|-", "slurp -s 10M -o $QNAMES_FILE" or die "could not open: $QNAMES_FILE\n";
+open my $nosvH,  "|-", "pigz -p $N_CPU -c | slurp -s 10M -o $EDGES_NO_SV_FILE" or die "could not open: $EDGES_NO_SV_FILE\n";
 
 # process data
 my ($nReads, $nSv, $nNoSv, $prevQName, @lines) = (0, 0, 0);
@@ -74,7 +73,6 @@ while(my $line = <STDIN>){
 printMoleculeEdges();
 printWindowCoverage();
 close $nosvH;
-close $qNamesH;
 
 # print summary information
 printCount($nReads, 'nReads',   'total reads processed');
@@ -87,11 +85,11 @@ sub printMoleculeEdges {
     if(@lines == 1){
         $nNoSv++;
         my $line = join("\t", @{$lines[0]})."\n";
-        print $nosvH $line; # the record of all simple alignment edges at low base resolution, without CIGAR strings
+        print $nosvH $line; # the record of all simple alignment edges
         $nNoSv <= 10000 or return;
-        print $qNamesH $prevQName."\n"; # qNames of 10K non-SV reads for training adapter models
+        print $line; # 10K non-SV reads for training adapter models
     } else {
         $nSv++;
-        print $qNamesH $prevQName."\n"; # qNames of all initial candidate SV reads
+        print join("\n", map {join("\t", @$_)} @lines), "\n"; # all initial candidate SV reads
     }
 }

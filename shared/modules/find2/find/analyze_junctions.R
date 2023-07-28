@@ -77,15 +77,23 @@ mergeGapJunctions <- function(svIdx){
 # describe a consensus SV based on sequence data from a set of molecules discovered as evidence
 #-------------------------------------------------------------------------------------
 characterizeSvJunction <- function(svIdx){
-    jxnMols <- jxnMols[svIdx]
-    refMolI <- jxnMols[, .I[IS_REFERENCE == 1]]
-    refMol  <- jxnMols[refMolI]
-    gapSplitIs <- jxnMols[, .I[NODE_CLASS != nodeClasses$OUTER_CLIP]]
+    jxnMols_ <- jxnMols[svIdx]
+    jxnMolKeys <- jxnMols_[, paste(SAMPLE, MOL_ID, sep = ":")]
+    nClusteredJunctions <- jxnMols[ # No. of distinct junctions in molecules with this junction
+        paste(SAMPLE, MOL_ID, sep = ":") %in% jxnMolKeys, 
+        length(unique(svIndex))
+    ]
+    refMolI <- jxnMols_[, .I[IS_REFERENCE == 1]]
+    refMol  <- jxnMols_[refMolI]
+    gapSplitIs <- jxnMols_[, .I[NODE_CLASS != nodeClasses$OUTER_CLIP]]
 
     # characterize the SV junction when possible
-    jxnMols[, ':='(
+    jxnMols_[, ':='(
         MICROHOM_LEN = 0L,
-        JXN_BASES = "*"
+        JXN_BASES = "*",
+        FLANK_LEN1 = NA_integer_,
+        FLANK_LEN2 = NA_integer_,
+        N_CLUSTERED_JUNCTIONS = nClusteredJunctions
     )]
     if(refMol[, JXN_SEQ != "*"]){
         
@@ -98,16 +106,38 @@ characterizeSvJunction <- function(svIdx){
         ]
 
         # parse microhomology vs. inserted bases
-        jxnMols[refMolI, MICROHOM_LEN := readPos1 - readPos2 + 1L]  
-        jxnMols[refMolI, 
+        jxnMols_[refMolI, MICROHOM_LEN := readPos1 - readPos2 + 1L]  
+        jxnMols_[refMolI, 
             JXN_BASES := if(MICROHOM_LEN > 0) substr(JXN_SEQ, readPos2,      readPos1)      # microhomology
                     else if(MICROHOM_LEN < 0) substr(JXN_SEQ, readPos1 + 1L, readPos2 - 1L) # inserted bases
                     else "" # a blunt joint
         ]   
+
+        # determine how many bases flow in contiguous inferred alignment 
+        #   from the jxn pos 
+        #   to the furthest outer position on the same chrom/strand
+        #   on each side of the junction
+        #   NOT including the JXN_BASES
+        # acts as a measure of the information content that had to come from the unique junction side bases
+        # important, since alignment MAPQ includes microhomologous JXN_BASES, which can be misleading in repeat expansions as follows:
+        #   query allele1:      ---------TAATAATAATAATAATAATAATAATAATAA------------
+        #   alignment side 1:   ~~~~~~~~~~~~~~~~~~~~~
+        #   reference allele 1: ---------TAATAATAATAA------------
+        #   reference allele 2: =========TAATAATAATAATAATAATAATAATAATAA=========
+        #   alignment side 2:            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ (30 bp, can yield high MAPQ)
+        #   flanking bases:                          ~~~~~~~~~~~~~~~~~~
+        #                                                              ^ potential 2nd junction
+        refPos1 <- jxnMols_[refMolI, pos1]
+        refPos2 <- jxnMols_[refMolI, pos2]
+        mhCorrection <- jxnMols_[refMolI, max(0, MICROHOM_LEN)]
+        jxnMols_[NODE_CLASS != nodeClasses$OUTER_CLIP, ":="(
+            FLANK_LEN1 = getCigarRefSpan(CIGAR_1) - mhCorrection + abs(refPos1 - pos1),
+            FLANK_LEN2 = getCigarRefSpan(CIGAR_2) - mhCorrection + abs(refPos2 - pos2)
+        )]
     }
 
     # aggregate SV-level information
-    jxnMols[, .(
+    jxnMols_[, .(
         MAPQ_1          = paste(MAPQ_1, collapse = ","),
         UMI_1           = paste(UMI_1, collapse = ","),
         #-------------
@@ -155,6 +185,9 @@ characterizeSvJunction <- function(svIdx){
         #-------------
         MICROHOM_LEN    = MICROHOM_LEN[refMolI],
         JXN_BASES       = JXN_BASES[refMolI],
+        FLANK_LEN1      = if(all(is.na(FLANK_LEN1))) NA_integer_ else max(FLANK_LEN1, na.rm = TRUE),
+        FLANK_LEN2      = if(all(is.na(FLANK_LEN2))) NA_integer_ else max(FLANK_LEN2, na.rm = TRUE), 
+        N_CLUSTERED_JUNCTIONS = N_CLUSTERED_JUNCTIONS[refMolI],
         #-------------
         SV_SIZE         = if(JXN_TYPE[refMolI] == "T") 0 else abs(pos2[refMolI] - pos1[refMolI]),
         #-------------
@@ -171,7 +204,7 @@ characterizeSvJunction <- function(svIdx){
             collapse = ","
         ),
         TARGET_POS_1    = getTargetRegionI(chrom1[refMolI], pos1[refMolI]),
-        TARGET_POS_2    = getTargetRegionI(chrom2[refMolI], pos2[refMolI]) 
+        TARGET_POS_2    = getTargetRegionI(chrom2[refMolI], pos2[refMolI])
     )]
 }
 #=====================================================================================

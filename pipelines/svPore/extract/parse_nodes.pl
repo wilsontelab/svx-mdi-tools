@@ -39,7 +39,7 @@ use constant {
 };
 
 # working variables
-use vars qw($IS_FIRST_PASS $MIN_SV_SIZE 
+use vars qw($MIN_SV_SIZE 
             @alnNodes @alnMapQs @alnCigars @alnAlnQs @alnTypes @alnSizes @alnInsSizes @alnAlns
             @nodes    @mapQs    @cigars    @alnQs    @types    @sizes    @insSizes    @outAlns);   
 my $minCigarSvDigits = length($MIN_SV_SIZE);
@@ -64,13 +64,9 @@ sub processAlignedSegment {
     #   cg:Z:171M1D788M2I247M9D220M1I558M2D94M1I17M1I27M1D63M1D41M1D6M1D234M5D280M1I7M5D440M4D311M1D197M2I3M1D88M2D335M8D142M1I162M1D138M1D92M2D2M2D2...
     # Dorado basecall tags, only in 2nd pass
     #   qs:i:21 ns:i:136892      ts:i:10 ch:i:1104
-    if($IS_FIRST_PASS){
-        commitAlignmentEdges($aln, "NA", 0);     
-    } else {
-        my ($cigar) = ($$aln[PAF_TAGS] =~ m/cg:Z:(\S+)/);
-        my ($gapCompressedError) = ($$aln[PAF_TAGS] =~ m/de:f:(\S+)/); 
-        parseSvsInCigar($aln, RSTART, REND, $cigar, \&commitAlignmentEdges, 1 - $gapCompressedError); # , $$aln[N_MATCHES] / $$aln[N_BASES]
-    }
+    my ($cigar) = ($$aln[PAF_TAGS] =~ m/cg:Z:(\S+)/);
+    my ($gapCompressedError) = ($$aln[PAF_TAGS] =~ m/de:f:(\S+)/); 
+    parseSvsInCigar($aln, RSTART, REND, $cigar, \&commitAlignmentEdges, 1 - $gapCompressedError); # , $$aln[N_MATCHES] / $$aln[N_BASES]
 
     # maintain proper 5'-3' node order on bottom strand, since svPore tracks genome paths whereas alignment always come in left-right order
     if($$aln[STRAND] eq "-"){

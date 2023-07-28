@@ -4,5 +4,6 @@ shared:
     - svPoint_settings.yml
     - svLine_settings.yml
     - svFilter_settings.yml
-    - svZoom_settings.yml
+    - svJunction_settings.yml
+    - ../junction_settings.yml    
     - svSummarize_settings.yml

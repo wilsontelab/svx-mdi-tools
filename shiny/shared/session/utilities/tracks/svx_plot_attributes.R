@@ -2,7 +2,7 @@
 svx_setJunctionPointColors <- function(jxns, track){
     jxns[, color := switch(
         getBrowserTrackSetting(track, "Points", "Color_By", "edgeType"),
-        edgeType = svx_jxnTypes[edgeType, color],
+        edgeType = svx_jxnType_codeToX(edgeType, "color"),
         isSingleton    = ifelse(nInstances == 1, CONSTANTS$plotlyColors$red, CONSTANTS$plotlyColors$black),
         isSingleSample = ifelse(nSamples == 1,   CONSTANTS$plotlyColors$red, CONSTANTS$plotlyColors$black),
         "black" # will be corrected later when Color_By == "sample"

@@ -4,8 +4,7 @@
 # expects:
 #   sessionCache
 #   chromosomesFile provided in data.package
-#   loadFn(sourceId) that return a compatible data.table with at least columns
-#       edgeType, node1/2, cChromIndex1/2, cRefPos1/2, samples, nSamples, nInstances
+#   loadFn(sourceId) that returns a data.table with appropriately named display and filter columns
 #----------------------------------------------------------------------
 
 # load all unique junctions for a specific sourceId (not filtered by region, type, or sample yet)
@@ -73,10 +72,11 @@ svx_filterJunctionsBySettings <- function(track, sourceId, samples, loadFn){
             })
             names(filters) <- names(svx_filterDefaults)
 
-            if(filters$Min_Map_Quality > 0) jxns <- jxns[mapQ >= filters$Min_Map_Quality] 
-
             if(filters$Min_SV_Size > 1) jxns <- jxns[size >= filters$Min_SV_Size]
-            if(filters$Max_SV_Size > 0) jxns <- jxns[size <= filters$Max_SV_Size] #  & edgeType != "T"
+            if(filters$Max_SV_Size > 0) jxns <- jxns[size <= filters$Max_SV_Size] #  & edgeType != svx_edgeTypes$TRANSLOCATION
+
+            jxns <- jxns[insertSize >= filters$Min_Insert_Size] # can be negative
+            jxns <- jxns[insertSize <= filters$Max_Insert_Size]
 
             if(filters$Min_Samples_With_SV > 1) jxns <- jxns[nSamples >= filters$Min_Samples_With_SV]
             if(filters$Max_Samples_With_SV > 0) jxns <- jxns[nSamples <= filters$Max_Samples_With_SV]
@@ -84,8 +84,14 @@ svx_filterJunctionsBySettings <- function(track, sourceId, samples, loadFn){
             if(filters$Min_Source_Molecules > 1) jxns <- jxns[nInstances >= filters$Min_Source_Molecules]
             if(filters$Max_Source_Molecules > 0) jxns <- jxns[nInstances <= filters$Max_Source_Molecules]
 
+            if(filters$Min_Sequenced_Molecules > 0) jxns <- jxns[nSequenced >= filters$Min_Sequenced_Molecules]
+            if(filters$Max_Linked_Junctions > 0) jxns <- jxns[nLinkedJunctions <= filters$Max_Linked_Junctions]
+
+            if(filters$Min_Map_Quality > 0) jxns <- jxns[mapQ >= filters$Min_Map_Quality] 
+            if(filters$Min_Flank_Length > 0) jxns <- jxns[flankLength >= filters$Min_Flank_Length] 
+
             if(length(filters$SV_Type) > 0) {
-                edgeTypes <- svx_jxnTypes[name %in% filters$SV_Type, code]
+                edgeTypes <- svx_jxnType_nameToX(filters$SV_Type, "code")
                 jxns <- jxns[edgeType %in% edgeTypes]
             }
 

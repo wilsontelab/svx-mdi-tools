@@ -44,11 +44,11 @@ runWorkflowStep 4 vcf vcf/make_vcf.sh
 # clean up
 rm -fr $SHM_DIR_WRK
 rm -fr $TMP_DIR_WRK
-rm -f  $CONSENSUS_PREFIX.*.fq.gz
-rm -f  $EXTRACT_PREFIX.endpoints.*.gz
-rm -f  $EXTRACT_PREFIX.insert_sizes.*.gz
-rm -f  $EXTRACT_PREFIX.nodes.*.gz
-rm -f  $EXTRACT_PREFIX.strand_counts.*.gz
-rm -f  $COMPILE_PREFIX.junction_edges.gz
-rm -f  $COMPILE_PREFIX.matchedProper.gz
-rm -f  $COMPILE_PREFIX.outer_clips.gz
+# rm -f  $CONSENSUS_PREFIX.*.fq.gz
+# rm -f  $EXTRACT_PREFIX.endpoints.*.gz
+# rm -f  $EXTRACT_PREFIX.insert_sizes.*.gz
+# rm -f  $EXTRACT_PREFIX.nodes.*.gz
+# rm -f  $EXTRACT_PREFIX.strand_counts.*.gz
+# rm -f  $COMPILE_PREFIX.junction_edges.gz
+# rm -f  $COMPILE_PREFIX.matchedProper.gz
+# rm -f  $COMPILE_PREFIX.outer_clips.gz

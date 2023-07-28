@@ -5,7 +5,7 @@ svPore_objectTable <- function(jxn){
     req(jxn)
     jxn[, .(
         cluster = clusterN,
-        type = svx_jxnTypes[edgeType, name],
+        type = svx_jxnType_codeToX(edgeType, "name"),
         size = eventSize,
         insertSize,
         mapQ,

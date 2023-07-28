@@ -163,6 +163,10 @@ find$structural_variants <- list( # FOR REFERENCE ONLY; last columns are sample-
     #---------------
     'MICROHOM_LEN'  =  'integer',
     'JXN_BASES'     =  'character',
+    'FLANK_LEN1'    =  'integer',
+    'FLANK_LEN2'    =  'integer',
+    'N_CLUSTERED_JUNCTIONS' = 'integer',
+    #---------------
     'SV_SIZE'       =  'integer',
     #---------------
     'GEN_REF_1' =  'character',

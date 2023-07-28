@@ -199,7 +199,7 @@ write.table(
 
 message("characterizing final SV junction calls")
 setkey(jxnMols, svIndex)
-svCalls <- do.call(rbind, mclapply(jxnMols[, unique(svIndex)], characterizeSvJunction, mc.cores = env$N_CPU))
+svCalls <- do.call(rbind, mclapply(jxnMols[, unique(svIndex)], characterizeSvJunction, mc.cores = env$N_CPU)) # 
 
 message("counting SVs by sample")
 svCalls <- merge(svCalls, dcast(jxnMols, svIndex ~ SAMPLE, length), by.x = 'SV_ID', by.y = "svIndex")

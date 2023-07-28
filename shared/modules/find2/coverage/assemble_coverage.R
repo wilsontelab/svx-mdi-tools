@@ -1,12 +1,14 @@
-
 # merge samples and add normalization data
 
 #=====================================================================================
 # script initialization
 #-------------------------------------------------------------------------------------
 # load packages
-library(data.table)
-library(yaml)
+suppressPackageStartupMessages(suppressWarnings({
+    library(data.table)
+    library(yaml)
+    library(bit64)
+}))
 #-------------------------------------------------------------------------------------
 # load, parse and save environment variables
 env <- as.list(Sys.getenv())
@@ -31,6 +33,11 @@ checkEnvVars(list(
 setDTthreads(env$N_CPU)
 options(scipen = 999) # prevent 1+e6 in printed, which leads to read.table error when integer expected
 options(warn=2) ########################
+#-------------------------------------------------------------------------------------
+# source R scripts
+sourceScripts(rUtilDir, 'utilities')
+rUtilDir <- file.path(env$GENOMEX_MODULES_DIR, 'utilities', 'R')
+sourceScripts(file.path(rUtilDir, 'genome'), c('general', 'chroms'))
 #-------------------------------------------------------------------------------------
 # parse the project name and directory
 if(env$FIND_MODE == "find"){
@@ -58,46 +65,62 @@ metadata <- lapply(metadata, function(x) strsplit(as.character(x), "\\s+")[[1]])
 #-------------------------------------------------------------------------------------
 message("loading bin metadata")
 binsDir <- file.path(env$GENOMES_DIR, "bins", env$GENOME, "fixed_width_bins")
-binsFile <- paste(env$GENOME, "bins.size_65536.k_100.e_1.bed.gz", sep = ".")
+binSize <- 65536 # TODO: expose as options
+kmerLength <- 100
+nErrors <- 1
+binsFile <- paste0(env$GENOME, ".bins.size_", binSize, ".k_", kmerLength, ".e_", nErrors, ".bed.gz")
 binsFile <- file.path(binsDir, binsFile)
-bins <- fread(
-    binsFile,
-    sep = "\t",
-    header = FALSE,
-    colClasses = c(
-        "character", 
-        "integer", 
-        "integer", 
-        "integer", 
-        "numeric", 
-        "character", 
-        "integer", 
-        "integer", 
-        "integer", 
-        "numeric", 
-        "numeric"
-    ),
-    col.names = c(
-        "chrom", 
-        "start", 
-        "end", 
-        "cumIndex", 
-        "gc", 
-        "strand", 
-        "excluded", 
-        "gap", 
-        "bad", 
-        "umap", 
+bins <- if(file.exists(binsFile)) {
+    fread(
+        binsFile,
+        sep = "\t",
+        header = FALSE,
+        colClasses = c(
+            "character", 
+            "integer", 
+            "integer", 
+            "integer", 
+            "numeric", 
+            "character", 
+            "integer", 
+            "integer", 
+            "integer", 
+            "numeric", 
+            "numeric"
+        ),
+        col.names = c(
+            "chrom", 
+            "start", 
+            "end", 
+            "cumIndex", 
+            "gc", 
+            "strand", 
+            "excluded", 
+            "gap", 
+            "bad", 
+            "umap", 
+            "genmap"
+        )
+    )[, .SD, .SDcols = c(
+        "chrom",
+        "start",
+        "gc",
+        "excluded",
         "genmap"
-    )
-)
-bins <- bins[, .SD, .SDcols = c(
-    "chrom",
-    "start",
-    "gc",
-    "excluded",
-    "genmap"
-)]
+    )]
+} else {
+    message("WARNING: missing bins file")
+    message(paste0("    ", binsFile))
+    message(paste0("    ", "proceeding with dummy values for gc, excluded, genmap"))
+    setCanonicalChroms()
+    chromSizes <- loadChromSizes(windowSize = binSize)
+    chromSizes[, .(
+        start = (1:as.integer(nChromWindows) - 1) * binSize,
+        gc = 0.5,
+        excluded = 0,
+        genmap = 1 
+    ), by = .(chrom)]
+}
 #=====================================================================================
 
 #=====================================================================================

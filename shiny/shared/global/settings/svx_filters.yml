@@ -64,5 +64,4 @@ SV_Filters:
             - Del
             - Dup
             - Inv
-            - Trans
         inline: TRUE

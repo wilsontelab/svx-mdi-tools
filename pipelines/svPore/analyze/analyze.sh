@@ -7,6 +7,7 @@
 
 # score, filter and aggregate edges by molecule and junction
 mkdir -p $PLOTS_DIR
+export ACTION_DIR=$ACTION_DIR/../analyze
 Rscript $ACTION_DIR/analyze_edges.R
 checkPipe
 

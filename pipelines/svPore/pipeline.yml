@@ -34,44 +34,10 @@ actions:
     extract:
         order: 5
         optionFamilies:
-            - size-limits
-        resources:
-            required:
-                total-ram: 16G
-            recommended: 
-                n-cpu: 2
-                ram-per-cpu: 8G
-        job-manager:
-            recommended:
-                time-limit: 4:00:00
-        description: "pull molecules that provisionally nominate SV junctions and create a coverage map"
-    # rebasecall:
-    #     order: 6
-    #     module: genomex-mdi-tools//nanopore/basecall
-    #     override:
-    #         description: use Dorado to perform slower, super-accuracy basecalling of target reads, mostly SV candidates
-    #         ont-model:   dna_r10.4.1_e8.2_400bps_sup@v4.1.0 # the sup (super-accuracy) is recommended for best base-level analysis of SV reads and adapters
-    #     env-vars:
-    #         dorado-output-type:   target_reads        
-    #         dorado-output-format: usam # retain tags, including moves for correlating time-current squiggle traces to base and junction calls
-    #         dorado-emit-moves: true
-    #         dorado-read-ids: true # i.e., read QNAMES from extract.target.qNames.txt
-    # realign:
-    #     order: 7
-    #     module: genomex-mdi-tools//align/dna-long-read
-    #     override:
-    #         description: align super-accuracy target long reads to genome at high resolution using minimap2
-    #     env-vars:
-    #         input-file-type: target_reads
-    #         paf-file-type: target_reads        
-    #         minimap2-accuracy: high
-    analyze:
-        order: 8
-        optionFamilies:
             - genomex-mdi-tools//fastq-dir
-            - genomex-mdi-tools//read-filtering               
+            - genomex-mdi-tools//read-filtering 
             - size-limits
-            - sv-finding   
+            - sv-finding  
         resources:
             required:
                 total-ram: 32G
@@ -80,10 +46,10 @@ actions:
                 ram-per-cpu: 4G
         job-manager:
             recommended:
-                time-limit: 8:00:00
-        description: "apply read-level and molecule-level artifact filters"
+                time-limit: 3:00:00
+        description: "pull and filter molecules that nominate SV junctions, create a coverage map"
     find:
-        order: 9
+        order: 6
         optionFamilies:
             - genomex-mdi-tools//read-filtering               
             - size-limits
@@ -97,7 +63,7 @@ actions:
         job-manager:
             recommended:
                 time-limit: 4:00:00
-        description: "characterize novel SV paths in one or more input samples or nanopores"   
+        description: "characterize novel SV paths in one or more input samples"   
 condaFamilies:
     svPore:
         dependencies:

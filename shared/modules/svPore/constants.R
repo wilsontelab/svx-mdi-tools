@@ -20,9 +20,10 @@ coreEdgeCols <- c(
 edgeExtensions1 <- c(
     "baseQual",
     "alnBaseQual",
-    "alnSize",
-    "sStart",
-    "sEnd"    
+    "alnSize"
+    # ,
+    # "sStart",
+    # "sEnd"    
 )
 edgeAdapterScores <- c(
     "clip5",
@@ -77,8 +78,8 @@ edgesColClasses <- c(
     "numeric",
     "numeric",
     "integer",
-    "integer",
-    "integer",
+    # "integer",
+    # "integer",
     #-------------,
     "integer",
     "numeric",

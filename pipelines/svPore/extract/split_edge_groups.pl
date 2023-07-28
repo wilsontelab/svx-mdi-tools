@@ -58,12 +58,13 @@ use constant {
 };
 
 # environment variables
+fillEnvVar(\our $N_CPU,  'N_CPU');
 fillEnvVar(\our $EDGES_TMP_FILE, 'EDGES_TMP_FILE'); # the non-SV adapter training set
 fillEnvVar(\our $EDGES_SV_FILE,  'EDGES_SV_FILE');
 
 # open output handles
-open my $tmpH,  "|-", "gzip -c | slurp -s 10M -o $EDGES_TMP_FILE" or die "could not open: $EDGES_TMP_FILE\n";
-open my $svH,   "|-", "gzip -c | slurp -s 10M -o $EDGES_SV_FILE"  or die "could not open: $EDGES_SV_FILE\n";
+open my $tmpH,  "|-", "pigz -p $N_CPU -c | slurp -s 10M -o $EDGES_TMP_FILE" or die "could not open: $EDGES_TMP_FILE\n";
+open my $svH,   "|-", "pigz -p $N_CPU -c | slurp -s 10M -o $EDGES_SV_FILE"  or die "could not open: $EDGES_SV_FILE\n";
 
 # process data
 my ($nReads, $nSv, $nNoSv, $prevQName, @edges) = (0, 0, 0);

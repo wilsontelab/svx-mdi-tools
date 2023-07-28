@@ -18,7 +18,6 @@ map { require "$perlUtilDir/sequence/$_.pl" } qw(general smith_waterman); # faid
 resetCountFile();
 
 # environment variables
-fillEnvVar(\our $EXTRACT_PASS,     'EXTRACT_PASS');
 fillEnvVar(\our $EXTRACT_PREFIX,   'EXTRACT_PREFIX');
 fillEnvVar(\our $PIPELINE_DIR,     'PIPELINE_DIR');
 fillEnvVar(\our $GENOMEX_MODULES_DIR, 'GENOMEX_MODULES_DIR');
@@ -26,14 +25,13 @@ fillEnvVar(\our $WINDOW_SIZE,      'WINDOW_SIZE');
 fillEnvVar(\our $MIN_SV_SIZE,      'MIN_SV_SIZE');
 fillEnvVar(\our $GENOME_FASTA,     'GENOME_FASTA');
 our $USE_CHR_M = 1;
-our $IS_FIRST_PASS = ($EXTRACT_PASS == 1);
 
 # initialize the genome
 use vars qw(%chromIndex);
 setCanonicalChroms();
 
 # load additional dependencies
-require "$GENOMEX_MODULES_DIR/align/dna-long-read/get_indexed_reads.pl";
+# require "$GENOMEX_MODULES_DIR/align/dna-long-read/get_indexed_reads.pl";
 $perlUtilDir = "$ENV{MODULES_DIR}/utilities/perl/svPore";
 map { require "$PIPELINE_DIR/extract/$_.pl" } qw(initialize_windows parse_nodes);
 $perlUtilDir = "$ENV{MODULES_DIR}/parse_nodes";
@@ -125,10 +123,10 @@ sub parseMolecule {
 
     # examine SV junctions for evidence of duplex reads
     # adjusts the output arrays as needed
-    my $nStrands = $IS_FIRST_PASS ?  0 : checkForDuplex(scalar(@types));
+    my $nStrands = checkForDuplex(scalar(@types));
 
     # set junction MAPQ as minimum MAPQ of the two flanking alignments
-    !$IS_FIRST_PASS and fillJxnQs();
+    fillJxnQs();
 
     # print one line per node pair, i.e., per edge, in the collapsed molecule sequence
     printMolecule($molId, $nStrands);

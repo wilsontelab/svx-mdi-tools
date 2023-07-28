@@ -11,6 +11,18 @@ Filters:
         min:    0
         max:    250000000
         step:   10000
+    Min_Insert_Size:
+        type:   numericInput
+        value:  -50
+        min:    -1000
+        max:    1000
+        step:   10
+    Max_Insert_Size:
+        type:   numericInput
+        value:  50
+        min:    -1000
+        max:    1000
+        step:   10
     Min_Samples_With_SV:
         type:   numericInput
         value:  1
@@ -35,21 +47,32 @@ Filters:
         min:    1
         max:    10000
         step:   1  
-    # SPACER_1:
-    #     type: spacer       
+    Min_Sequenced_Molecules:
+        type:   numericInput
+        value:  0
+        min:    0
+        max:    10
+        step:   1
+    Max_Linked_Junctions:
+        type:   numericInput
+        value:  0
+        min:    0
+        max:    100
+        step:   1  
     Min_Map_Quality:
         type:   numericInput
-        value:  50
+        value:  0
         min:    0
         max:    60
-        step:   5   
-    Show_ChrM:
-        type:   selectInput
-        choices:
-            - always
-            - translocations_only
-            - never
-        value: never
+        step:   5  
+    Min_Flank_Length:
+        type:   numericInput
+        value:  0
+        min:    0
+        max:    1000
+        step:   50  
+    # SPACER_1:
+    #     type: spacer       
     SV_Type:
         type:   checkboxGroupInput
         choices:
@@ -62,3 +85,10 @@ Filters:
             - Dup
             - Inv
         inline: TRUE
+    Show_ChrM:
+        type:   selectInput
+        choices:
+            - always
+            - translocations_only
+            - never
+        value: never

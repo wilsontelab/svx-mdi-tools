@@ -5,13 +5,15 @@ svWGS_objectTable <- function(jxn){
     req(jxn)
     jxn[, .(
         svId = SV_ID,
-        type = svx_jxnTypes[edgeType, name],
+        type = svx_jxnType_codeToX(edgeType, "name"),
         size = SV_SIZE,
         insertSize = -MICROHOM_LEN,
         mapQ = mapQ,
         nSamples,
         nInstances,
         nSequenced = N_SPLITS,
+        flankLen = min(FLANK_LEN1, FLANK_LEN2),
+        nLinkedJxns = nLinkedJunctions,
         rStart = paste0(cChrom1, ":", cRefPos1, if(cStrand1 == 1) "+" else "-"),
         rEnd   = paste0(cChrom2, ":", cRefPos2, if(cStrand2 == 1) "+" else "-")
     )]

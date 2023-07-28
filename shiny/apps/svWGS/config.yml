@@ -54,6 +54,11 @@ appSteps:
         options:
             tracks:
                 - bruseq-mdi-tools//BruSeq_generic
+            # presets:
+            #     BruSeq_generic:
+            #         TESTING:
+            #             Data:
+            #                 Plot_As: points
     # assign: # usually the 2nd step of every app
     #     module: assignSamples        
     #     options:
