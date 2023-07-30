@@ -117,7 +117,11 @@ svx_filterJunctionsByRange <- function(jxns, coord, rangeType, chromOnly = FALSE
     switch(
         rangeType,
         center = {
-            jxns <- jxns[between(if(isWholeGenome) as.numeric(nodeCenter) else refPosCenter, coord$start, coord$end)]
+            jxns <- jxns[data.table::between(
+                as.numeric(if(isWholeGenome) nodeCenter else refPosCenter), 
+                as.numeric(coord$start), 
+                as.numeric(coord$end)
+            )]
             jxns[ , center := if(isWholeGenome) nodeCenter else refPosCenter]
             jxns
         },
@@ -127,8 +131,8 @@ svx_filterJunctionsByRange <- function(jxns, coord, rangeType, chromOnly = FALSE
                 pos2 = if(isWholeGenome) abs(node2) else cRefPos2
             )]
             jxns[ , ":="(
-                pos1In = (isWholeGenome | cChrom1 == coord$chrom) & between(as.numeric(pos1), coord$start, coord$end),
-                pos2In = (isWholeGenome | cChrom2 == coord$chrom) & between(as.numeric(pos2), coord$start, coord$end)
+                pos1In = (isWholeGenome | cChrom1 == coord$chrom) & data.table::between(as.numeric(pos1), as.numeric(coord$start), as.numeric(coord$end)),
+                pos2In = (isWholeGenome | cChrom2 == coord$chrom) & data.table::between(as.numeric(pos2), as.numeric(coord$start), as.numeric(coord$end))
             )]
             jxns[pos1In | pos2In]
         },

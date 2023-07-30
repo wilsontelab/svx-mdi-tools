@@ -43,7 +43,7 @@ svx_junctionsLegend <- function(track, coord, ylim, selectedSources){
             color  = c(CONSTANTS$plotlyColors$black, CONSTANTS$plotlyColors$red)
         ),
         sample = {
-            sampleCols <- getColorsBySelectedSample(selectedSources)            
+            sampleCols <- getColorsBySelectedSample(selectedSources)          
             list(
                 legend = c(gsub(",", "", names(sampleCols)), ">1 sample"),
                 color  = c(unlist(CONSTANTS$plotlyColors[unlist(sampleCols)]), CONSTANTS$plotlyColors$black)
@@ -52,6 +52,6 @@ svx_junctionsLegend <- function(track, coord, ylim, selectedSources){
     )
     trackLegend(
         track, coord, ylim, 
-        legend = x$legend, pch = 19, col = x$color
+        legend = x$legend, pch = 19, pt.cex = 1.25, col = x$color
     )
 }

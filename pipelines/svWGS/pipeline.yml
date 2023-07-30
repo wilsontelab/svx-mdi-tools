@@ -14,7 +14,10 @@ actions:
         module: extract
     find:
         order: 3
-        module: find2
+        module: find2        
+    pileup:
+        order: 4
+        module: genomex-mdi-tools//pileup  
 package:
     find: # the pipeline action after which a data package should assembled
         uploadType: svWGS # a signal to the Stage 2 framework regarding the package contents

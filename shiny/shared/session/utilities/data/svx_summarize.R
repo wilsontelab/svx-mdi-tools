@@ -6,7 +6,7 @@ svx_summarizeJunctions <- function(jxns, track, layout, customPlots = NULL, ncol
     distributions <- c(list(
         jxns[, .N, keyby = .(nSamples)],
         jxns[, .N, keyby = .(nInstances)], # nInstances <= 50
-        jxns[between(insertSize, -50, 50), .N, keyby = .(insertSize)]
+        jxns[data.table::between(insertSize, -50, 50), .N, keyby = .(insertSize)]
     ), customPlots)
     nPlots <- length(distributions) + 2
 

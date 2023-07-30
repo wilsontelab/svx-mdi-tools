@@ -64,8 +64,8 @@ svx_filterCoverageByRange <- function(sourceId, sample, coord, maxBins, loadFn){
         else passingPowers[1] - 1 # thus, if possible, return the first density that did NOT pass, to allow partial aggregation below
     x <- coverage[[paste0("x", power)]] 
     isWholeGenome <- coord$chromosome == "all" 
-    x <- if(isWholeGenome) x[between(as.numeric(genomeStart), coord$start, coord$end)]
-                      else x[between(start,                   coord$start, coord$end) & chrom == coord$chromosome]
+    x <- if(isWholeGenome) x[data.table::between(as.numeric(genomeStart), as.numeric(coord$start), as.numeric(coord$end))]
+                      else x[data.table::between(start,                   as.numeric(coord$start), as.numeric(coord$end)) & chrom == coord$chromosome]
     list(
         binSize = coverage$binSizes[power + 1],
         medianCoverage = coverage$medianCoverage,

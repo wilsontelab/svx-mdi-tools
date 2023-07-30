@@ -9,6 +9,7 @@ svWGS_loadJunctions <- function(sourceId){
     jxns <- readRDS(getSourceFilePath(sourceId, "structuralVariants")) 
     chroms <- readRDS(getSourceFilePath(sourceId, "chromosomesFile"))
     samples_ <- read_yaml(getSourceFilePath(sourceId, "metadata"))$SAMPLES
+    samples_ <- unlist(strsplit(samples_, "\\s"))
     startSpinner(session, message = "loading jxns .")
     # NOTE: several derivative column values are set downstream by svx_loadJunctions
     # this function must set values whose input columns might differ between data sources
@@ -30,7 +31,10 @@ svWGS_loadJunctions <- function(sourceId){
         nLinkedJunctions = N_CLUSTERED_JUNCTIONS
     )]
     startSpinner(session, message = "loading jxns ..")
-    jxns[, samples := paste(sapply(samples_, function(x) if(.SD[[x]] > 0) x else NULL), collapse = ","), by = .(SV_ID)]
+    jxns[, samples := paste(
+        samples_[sapply(samples_, function(x) .SD[[x]] > 0)], 
+        collapse = ","
+    ), by = .(SV_ID)]
     jxns[, ":="(
         node1 = getSignedNode(chroms$chromSizes, chromIndex1, POS_1, strand1),
         node2 = getSignedNode(chroms$chromSizes, chromIndex2, POS_2, strand2) 
