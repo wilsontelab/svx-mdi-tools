@@ -46,6 +46,13 @@ svx_node_plotChromosomeJxns <- function(jxns, lwd, idCol){
     svx_node_plotJxnNodes(jxns[pos1In == TRUE], "pos1")
     svx_node_plotJxnNodes(jxns[pos2In == TRUE], "pos2")
     svx_node_plotJxnLines(jxns[(pos1In == TRUE | pos2In == TRUE) & edgeType != svx_edgeTypes$TRANSLOCATION], lwd, idCol)
+    axisCodes <- c("D","U","V","T")
+    axis(
+        side = 2, 
+        at = svx_jxnType_codeToX(axisCodes, "lineN"), 
+        labels = svx_jxnType_codeToX(axisCodes, "name"), 
+        las = 1
+    )
     jxns
 }
 svx_node_plotGenomeJxns <- function(jxns, lwd, idCol){
@@ -78,7 +85,7 @@ build.svx_nodes_track <- function(track, reference, coord, layout, trackBuffer, 
         mai <<- setMdiTrackMai(layout, padding, mar = list(top = 0, bottom = 0))
         plot(0, 0, type = "n", bty = "n",
             xlim = coord$range, xlab = "", xaxt = "n", # nearly always set `xlim`` to `coord$range`
-            ylim = ylim, ylab = "Unique Junctions", #yaxt = "n",
+            ylim = ylim, ylab = if(isWholeGenome) "SV Size" else "Unique Junctions", yaxt = if(isWholeGenome) "s" else "n",
             xaxs = "i", yaxs = "i") # always set `xaxs` and `yaxs` to "i" 
         jxns <- svx_getTrackJunctions(track, selectedSources, loadFn, coord, "endpoint", chromOnly = FALSE)[order(if(isWholeGenome) sample(.N) else -size)]
         if(Color_By == "sample") jxns <- dt_colorBySelectedSample(jxns, selectedSources)
@@ -89,6 +96,7 @@ build.svx_nodes_track <- function(track, reference, coord, layout, trackBuffer, 
         )]
         jxns <- if(isWholeGenome) svx_node_plotGenomeJxns(jxns, Line_Width, idCol) 
                              else svx_node_plotChromosomeJxns(jxns, Line_Width, idCol)
+        if(nrow(jxns) == 0) trackNoData(coord, ylim, "no matching junctions in window")
         svx_junctionsLegend(track, coord, ylim, selectedSources)
         trackBuffer[[track$id]] <<- jxns
     })

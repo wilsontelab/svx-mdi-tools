@@ -41,7 +41,7 @@ build.svx_triangle_track <- function(track, reference, coord, layout, trackBuffe
         mai <<- setMdiTrackMai(layout, padding, mar = list(top = 0, bottom = 0))
         plot(0, 0, type = "n", bty = "n",
             xlim = coord$range, xlab = "", xaxt = "n", # nearly always set `xlim`` to `coord$range`
-            ylim = ylim, ylab = "Unique Junctions", #yaxt = "n",
+            ylim = ylim, ylab = "SV Size", #yaxt = "n",
             xaxs = "i", yaxs = "i") # always set `xaxs` and `yaxs` to "i" 
         jxns <- svx_getTrackJunctions(track, selectedSources, loadFn, coord, "center", chromOnly = TRUE)[sample(.N)]
         if(Color_By == "sample") jxns <- dt_colorBySelectedSample(jxns, selectedSources)
@@ -52,6 +52,7 @@ build.svx_triangle_track <- function(track, reference, coord, layout, trackBuffe
             cex = jxns$cex,
             col = jxns$color
         )
+        if(nrow(jxns) == 0) trackNoData(coord, ylim, "no matching junctions in window")
         svx_junctionsLegend(track, coord, ylim, selectedSources)
         trackBuffer[[track$id]] <- jxns
     })
