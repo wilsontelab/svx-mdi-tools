@@ -79,12 +79,17 @@ sub parseSignedWindow {
 # called by extract_nodes.pl and window_coverage.pl
 sub initializeWindowCoverage {
     open my $inH, "<", "$GENOME_FASTA.fai" or die "$error: file not found: $GENOME_FASTA.fai\n";
-    my $nBasesBefore = 0;
-    my $nWindowsBefore = 0;
-    while(my $line = <$inH>){
+    my %chromData;
+    while(my $line = <$inH>){ # do in two steps, since fasta index may not already be in chromIndex order
         chomp $line;
         my ($chrom, $nChromBases) = split("\t", $line);
         my $chromIndex = $chromIndex{$chrom};
+        $chromData{$chromIndex} = [$chrom, $nChromBases];
+    }
+    my $nBasesBefore = 0;
+    my $nWindowsBefore = 0;
+    foreach my $chromIndex(sort { $a <=> $b } keys %chromData){
+        my ($chrom, $nChromBases) = @{$chromData{$chromIndex}};
         my $nChromWindows = coordinateToWindowIndex($nChromBases) + 1;     
         $chromSizes{$chrom} = $chromSizes[$chromIndex] = [
             $nChromBases,   $nBasesBefore,   $nChromBases   + $nBasesBefore,

@@ -19,7 +19,7 @@ rm -f $EDGE_GLOB
 # assemble the node path of every molecule to yield 
 # one line per 2-node edge, one or more edges per molecule, in molecule order
 slurp -s 10M gunzip -c $NAME_PAF_FILE |
-perl $PIPELINE_DIR/extract/extract_nodes.pl | 
+perl $EXTRACT_STEP_DIR/extract_nodes.pl | 
 sed 's/ZZ/\t/g' | 
 
 # adjust the edge type when an insertion is present
@@ -34,16 +34,16 @@ awk 'BEGIN{OFS="\t"}{
 
 # finalize a low-resolution fragment coverage map over all aggregated molecules
 # prints non-sv edges to file and sv and training edges to stream
-perl $PIPELINE_DIR/extract/window_coverage.pl |
+perl $EXTRACT_STEP_DIR/window_coverage.pl |
 
 # add information used for adapter finding, SV analysis, etc.
-perl $PIPELINE_DIR/extract/extend_edges.pl
+perl $EXTRACT_STEP_DIR/extend_edges.pl
 checkPipe
 
 # print edges to various files in preparation for analyze_edges.R
 echo "splitting edge groups for downstream analysis"
 zcat $EDGE_GLOB | 
-perl $PIPELINE_DIR/extract/split_edge_groups.pl 
+perl $EXTRACT_STEP_DIR/split_edge_groups.pl 
 checkPipe
 rm -f $EDGE_GLOB
 

@@ -87,13 +87,20 @@ checkJunctionsForAdapters <- function(svms, d){
 
 # update edges with adapter splitting flags
 # no edge are dropped yet, at this point we only set hasAdapter5 and hasAdapter3
-updateEdgesForAdapters <- function(edges, adapterCheck){
+updateEdgesForAdapters <- function(edges, adapterCheck = NULL){
     message("updating edges")
-    edges <- merge(edges, adapterCheck, by = c("readI","edgeN"), all.x = TRUE)
-    edges[, c(edgeAdapterScores) := NULL]
-    edges[edgeType != edgeTypes$ALIGNMENT & is.na(hasAdapter5), ":="(
-        hasAdapter5 = FALSE, # these are junctions with short or no insertions for which SW+SVM was skipped
-        hasAdapter3 = FALSE
-    )]
+    if(is.null(adapterCheck)){ # SKIP_ADAPTER_CHECK
+        edges[edgeType != edgeTypes$ALIGNMENT, ":="(
+            hasAdapter5 = FALSE,
+            hasAdapter3 = FALSE
+        )]
+    } else {
+        edges <- merge(edges, adapterCheck, by = c("readI","edgeN"), all.x = TRUE)
+        edges[, c(edgeAdapterScores) := NULL]
+        edges[edgeType != edgeTypes$ALIGNMENT & is.na(hasAdapter5), ":="(
+            hasAdapter5 = FALSE, # these are junctions with short or no insertions for which SW+SVM was skipped
+            hasAdapter3 = FALSE
+        )]
+    }
     setkey(edges, readI, blockN, edgeN)
 }

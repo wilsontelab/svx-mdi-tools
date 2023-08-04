@@ -1,0 +1,23 @@
+---
+version: v0.0.0 # optional, for internal tracking
+action: # required
+    condaFamilies:
+        - genomex-mdi-tools//base
+        - genomex-mdi-tools//genome
+        - r-4.2
+        - svPore
+    optionFamilies:
+        - genomex-mdi-tools//fastq-dir
+        - genomex-mdi-tools//read-filtering 
+        - size-limits
+        - sv-finding  
+    resources:
+        required:
+            total-ram: 32G
+        recommended: 
+            n-cpu: 8
+            ram-per-cpu: 4G
+    job-manager:
+        recommended:
+            time-limit: 3:00:00
+    description: "pull and filter molecules that nominate SV junctions, create a coverage map"

@@ -53,7 +53,7 @@ checkEnvVars(list(
     string = c(
         'MODULES_DIR',
         'GENOMEX_MODULES_DIR',
-        'ACTION_DIR',
+        'EXTRACT_STEP_DIR',
         'DATA_NAME',
         'EDGES_SV_FILE',
         'EDGES_TMP_FILE',
@@ -77,7 +77,7 @@ sourceScripts(rUtilDir, 'utilities')
 rUtilDir <- file.path(env$GENOMEX_MODULES_DIR, 'utilities', 'R')
 sourceScripts(file.path(rUtilDir, 'sequence'),   c('general')) # , 'IUPAC', 'smith_waterman'
 sourceScripts(file.path(rUtilDir, 'genome'),   c('chroms'))
-sourceScripts(env$ACTION_DIR, c(
+sourceScripts(env$EXTRACT_STEP_DIR, c(
     'edges','svm','duplex'
 ))
 svPoreSharedDir <- file.path(env$MODULES_DIR, 'svPore')
@@ -108,23 +108,29 @@ edges <- checkReadBandwidth(edges)
 # adapter splitting of chimeric molecules that derive from failure of the 
 # basecaller to recognize that a new molecule had entered the pore
 #-------------------------------------------------------------------------------------
-trainingEdges <- loadEdges("tmp")
-trainingEdges[, cigar := NULL]
-trainingSet <- extractSvmTrainingSet(trainingEdges)
-svms <- trainAdapterClassifiers(trainingSet)
-rm(trainingEdges)
-adapterCheck <- checkJunctionsForAdapters(svms, edges[insertSize >= 5])
-edges <- updateEdgesForAdapters(edges, adapterCheck)
-rm(trainingSet, svms, adapterCheck)
+if(is.null(env$SKIP_ADAPTER_CHECK)){
+    trainingEdges <- loadEdges("tmp")
+    trainingEdges[, cigar := NULL]
+    trainingSet <- extractSvmTrainingSet(trainingEdges)
+    svms <- trainAdapterClassifiers(trainingSet)
+    rm(trainingEdges)
+    adapterCheck <- checkJunctionsForAdapters(svms, edges[insertSize >= 5])
+    edges <- updateEdgesForAdapters(edges, adapterCheck)
+    rm(trainingSet, svms, adapterCheck)    
+} else {
+    edges <- updateEdgesForAdapters(edges)
+}
 #=====================================================================================
 
 #=====================================================================================
 # remove redundant duplex reads that were not fused during sequencing/basecalling
-# -------------------------------------------------------------------------------------
-reads <- collapseReads(edges, chromSizes)
-readMatches <- findMatchingReads(reads) 
-edges <- analyzeReadsNetwork(readMatches, reads, edges)
-rm(reads, readMatches)
+# ------------------------------------------------------------------------------------
+if(is.null(env$SKIP_DUPLEX_CHECK)){
+    reads <- collapseReads(edges, chromSizes)
+    readMatches <- findMatchingReads(reads) 
+    edges <- analyzeReadsNetwork(readMatches, reads, edges)
+    rm(reads, readMatches)
+}
 #=====================================================================================
 
 #=====================================================================================
