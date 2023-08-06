@@ -6,15 +6,7 @@ pipeline:
 suiteVersions:
     genomex-mdi-tools: main 
 actions:
-    _global:  
-        # environment: svPore # only switch to svDJ name if we need tools distinct from svPore (unlikely)
-        # condaFamilies:
-        #     - genomex-mdi-tools//base
-        #     - genomex-mdi-tools//genome
-        #     - r-4.2
-        #     - svPore
-        optionFamilies:
-            - genomex-mdi-tools//genome
+    # the following actions are ~the same as svPore
     download:
         order: 1
         module: genomex-mdi-tools//nanopore/download      
@@ -35,95 +27,35 @@ actions:
         order: 4
         module: svPore/extract 
         env-vars:
-            - skip-adapter-check: true
-            - skip-duplex-check: true
-    # find:
-    #     order: 5
-    #     optionFamilies:
-    #         - genomex-mdi-tools//read-filtering               
-    #         - size-limits
-    #         - sv-finding   
-    #     resources:
-    #         required:
-    #             total-ram: 32G
-    #         recommended: 
-    #             n-cpu: 8
-    #             ram-per-cpu: 4G
-    #     job-manager:
-    #         recommended:
-    #             time-limit: 4:00:00
-    #     description: "characterize novel SV paths in one or more input samples"   
-condaFamilies:
-    svPore:
-        dependencies:
-            - r-e1071  # provides support vector machines for adapter finding
-            - r-igraph # provies graph analysis for junction and read clustering
-optionFamilies:
-    size-limits:
-        options:
-            window-size:
-                order: 1
-                short: P
-                type: integer
-                required: false
-                default: 1000
-                description: "group SV endpoints and make coverage maps at a resolution of --window-size bp"   
-            min-sv-size:
-                order: 2
-                short: Z
-                type: integer
-                required: false
-                default: 10000
-                description: "only report SVs >= --min-sv-size bp (ideally, --min-sv-size ~ 3 * --bandwidth)"
-    sv-finding:
-        options:
-            min-alignment-size:
-                order: 3
-                short: a
-                type: integer
-                required: false
-                default: 100
-                description: "ignore junctions if either flanking alignment is <a bp long"
-            min-alignment-identity:
-                order: 4
-                short: I
-                type: double
-                required: false
-                default: 0.9
-                description: "ignore junctions if either flanking alignment has <I gap-compressed match rate"       
-            junction-bandwidth:
-                order: 5
-                short: b
-                type: integer
-                required: false
-                default: 20
-                description: "junction pairs with up to -b bp Euclidean distance are considered the same SV"                         
-# package:
-#     find: # the pipeline action after which a data package should assembled
-#         uploadType: svPore # a signal to the Stage 2 framework regarding the package contents
-#         files:
-#             chromosomesFile:
-#                 type: rds
-#                 file: $FIND_PREFIX.chromosome_metadata.rds        
-#             manifestFile:
-#                 type: comma-delimited
-#                 manifestType: simple
-#                 file: $MANIFEST_PREFIX.sample_manifest.csv
-#             coverageFile:
-#                 type: zip
-#                 file: $FIND_PREFIX.windowCoverage.zip
-#             junctionClustersFile:
-#                 type: rds
-#                 file: $FIND_PREFIX.junctionClusters.rds
-#             edgesFile:
-#                 type: rds
-#                 file: $FIND_PREFIX.edges.rds
-#             segmentClustersFile:
-#                 type: rds
-#                 file: $FIND_PREFIX.segmentClusters.rds                  
-#             segmentsFile:
-#                 type: rds
-#                 file: $FIND_PREFIX.segments.rds
+            skip-adapter-check: true
+            skip-duplex-check: true
+    # the following actions diverge from svPore 
+    parse:
+        order: 5
+        module: svDJ/parse                     
+package:
+    parse: # the pipeline action after which a data package should assembled
+        uploadType: svDJ # a signal to the Stage 2 framework regarding the package contents
+        files:
+            chromosomesFile:
+                type: rds
+                file: $PARSE_PREFIX.chromosome_metadata.rds        
+            manifestFile:
+                type: comma-delimited
+                manifestType: simple
+                file: $PARSE_PREFIX.sample_manifest.csv
+            primersFile:
+                type: zip
+                file: $PARSE_PREFIX.primers.zip
+            edgesFile:
+                type: rds
+                file: $PARSE_PREFIX.edges.rds
+            junctionsFile:
+                type: zip
+                file: $PARSE_PREFIX.junctions.zip
+            networksFile:
+                type: rds
+                file: $PARSE_PREFIX.networks.rds
 # container:
 #     supported: false    # set to true if you maintain a container registry for this pipeline [false]
 #     registry:  ghcr.io  # domain name of your OCI-compatible, oras-accessible, container registry [ghcr.io]

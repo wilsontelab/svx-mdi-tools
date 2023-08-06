@@ -7,7 +7,7 @@
 
 # characterize novel SV paths in one or more input samples or nanopores
 mkdir -p $PLOTS_DIR
-Rscript $ACTION_DIR/find_svs.R
+Rscript $FIND_MODULE_DIR/find_svs.R
 checkPipe
 
 echo "done"

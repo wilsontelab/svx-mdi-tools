@@ -40,6 +40,7 @@ use constant {
 fillEnvVar(\our $N_CPU,   'N_CPU');
 fillEnvVar(\our $EXTRACT_PREFIX,   'EXTRACT_PREFIX');
 fillEnvVar(\our $PIPELINE_DIR,     'PIPELINE_DIR');
+fillEnvVar(\our $EXTRACT_STEP_DIR, 'EXTRACT_STEP_DIR');
 fillEnvVar(\our $WINDOW_SIZE,      'WINDOW_SIZE');
 fillEnvVar(\our $GENOME_FASTA,     'GENOME_FASTA');
 fillEnvVar(\our $EDGES_NO_SV_FILE, 'EDGES_NO_SV_FILE');
@@ -49,8 +50,7 @@ use vars qw(%chromIndex);
 setCanonicalChroms();
 
 # load additional dependencies
-$perlUtilDir = "$ENV{MODULES_DIR}/utilities/perl/svPore";
-map { require "$PIPELINE_DIR/extract/$_.pl" } qw(initialize_windows);
+map { require "$EXTRACT_STEP_DIR/$_.pl" } qw(initialize_windows);
 initializeWindowCoverage();
 
 # open output handles

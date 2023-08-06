@@ -18,6 +18,7 @@ coreEdgeCols <- c(
     "nStrands"
 )
 edgeExtensions1 <- c(
+    "jxnSeq",
     "baseQual",
     "alnBaseQual",
     "alnSize"
@@ -75,6 +76,7 @@ edgesColClasses <- c(
     "integer",
     "integer",
     #-------------,
+    "character",
     "numeric",
     "numeric",
     "integer",

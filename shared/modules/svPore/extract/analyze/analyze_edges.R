@@ -118,6 +118,7 @@ if(is.null(env$SKIP_ADAPTER_CHECK)){
     edges <- updateEdgesForAdapters(edges, adapterCheck)
     rm(trainingSet, svms, adapterCheck)    
 } else {
+    message("skipping adapter check")
     edges <- updateEdgesForAdapters(edges)
 }
 #=====================================================================================
@@ -130,6 +131,8 @@ if(is.null(env$SKIP_DUPLEX_CHECK)){
     readMatches <- findMatchingReads(reads) 
     edges <- analyzeReadsNetwork(readMatches, reads, edges)
     rm(reads, readMatches)
+} else {
+    message("skipping duplex check")
 }
 #=====================================================================================
 

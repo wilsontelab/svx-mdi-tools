@@ -90,7 +90,7 @@ checkJunctionsForAdapters <- function(svms, d){
 updateEdgesForAdapters <- function(edges, adapterCheck = NULL){
     message("updating edges")
     if(is.null(adapterCheck)){ # SKIP_ADAPTER_CHECK
-        edges[edgeType != edgeTypes$ALIGNMENT, ":="(
+        edges[, ":="(
             hasAdapter5 = FALSE,
             hasAdapter3 = FALSE
         )]

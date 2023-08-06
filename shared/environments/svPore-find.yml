@@ -1,0 +1,6 @@
+---
+# enable snakemake for coordinating a pipeline action's workflow
+# versions current as of January 2022
+dependencies:
+    - r-e1071  # provides support vector machines for adapter finding
+    - r-igraph # provies graph analysis for junction and read clustering

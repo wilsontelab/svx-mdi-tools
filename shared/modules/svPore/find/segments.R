@@ -20,9 +20,11 @@ getSplitSegmentN <- function(N, splitAt){
         segmentNs
     }    
 }
-splitReadsToSegments <- function(edges){
-    message("splitting reads at low-quality, chimeric, or unconfirmed junctions")
-    fusable <- getFusableJunctions(edges)
+splitReadsToSegments <- function(edges, fusableFn = NULL, msg = NULL){
+    if(is.null(fusableFn)) fusableFn <- getFusableJunctions
+    if(is.null(msg)) msg <- "splitting reads at low-quality, chimeric, or unconfirmed junctions"
+    message(msg)    
+    fusable <- fusableFn(edges)
     edges[, segmentN := getSplitSegmentN(.N, !fusable[.I]), by = .(sample, readI)]
     edges <- edges[!is.na(segmentN)] # drop the false/untrusted junctions
     setkey(edges, sample, readI, segmentN)
@@ -37,12 +39,14 @@ splitReadsToSegments <- function(edges){
     # remove split segments that do not contain any potential SV junctions
     # e.g., in A[T]A[T]A or A[T]AdA[T]A (where "d" was rejected but not split)
     # TODO: save these segments as alignments for haplotype assembly?
-    segmentsToKeep <- edges[clustered == TRUE, unique(segmentName)] # segments with at least one clustered junction
+    isClustered <- "clusterN" %in% names(edges)
+    clustered_ <- if(isClustered) edges$clustered else TRUE
+    segmentsToKeep <- edges[clustered_, unique(segmentName)] # segments with at least one clustered junction
     edges <- edges[segmentName %in% segmentsToKeep]
     setkey(edges, segmentName, blockN, edgeN)
 
     # prepare for assembly segment matching
-    edges[clustered == TRUE, ":="( 
+    if(isClustered) edges[clustered == TRUE, ":="( 
         matchingSegments = list(unique(segmentName))
     ), by = .(clusterN)]
     edges

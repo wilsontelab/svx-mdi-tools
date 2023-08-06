@@ -20,10 +20,12 @@ resetCountFile();
 # environment variables
 fillEnvVar(\our $EXTRACT_PREFIX,   'EXTRACT_PREFIX');
 fillEnvVar(\our $PIPELINE_DIR,     'PIPELINE_DIR');
+fillEnvVar(\our $EXTRACT_STEP_DIR, 'EXTRACT_STEP_DIR');
 fillEnvVar(\our $GENOMEX_MODULES_DIR, 'GENOMEX_MODULES_DIR');
 fillEnvVar(\our $WINDOW_SIZE,      'WINDOW_SIZE');
 fillEnvVar(\our $MIN_SV_SIZE,      'MIN_SV_SIZE');
 fillEnvVar(\our $GENOME_FASTA,     'GENOME_FASTA');
+fillEnvVar(\our $SKIP_DUPLEX_CHECK,'SKIP_DUPLEX_CHECK', 1, 0);
 our $USE_CHR_M = 1;
 
 # initialize the genome
@@ -31,9 +33,7 @@ use vars qw(%chromIndex);
 setCanonicalChroms();
 
 # load additional dependencies
-# require "$GENOMEX_MODULES_DIR/align/dna-long-read/get_indexed_reads.pl";
-$perlUtilDir = "$ENV{MODULES_DIR}/utilities/perl/svPore";
-map { require "$PIPELINE_DIR/extract/$_.pl" } qw(initialize_windows parse_nodes);
+map { require "$EXTRACT_STEP_DIR/$_.pl" } qw(initialize_windows parse_nodes);
 $perlUtilDir = "$ENV{MODULES_DIR}/parse_nodes";
 map { require "$perlUtilDir/$_.pl" } qw(parse_nodes_support);
 initializeWindowCoverage();
@@ -110,20 +110,12 @@ sub parseMolecule {
         push @types,    @alnTypes;        
         push @sizes,    @alnSizes;
         push @insSizes, @alnInsSizes;
-        # map { 
-        #     if($alnInsSizes[$_] !~ m/\t/){ # add query positions in xStart and xEnd in CIGAR junctions (hopefully will be few of these)
-        #         my $nodePos1 = $alnAlns[$_ - 1]         eq "+" ? $alnAlns[$_ - 1][REND] : $alnAlns[$_ - 1][RSTART] + 1;
-        #         my $nodePos2 = $alnAlns[$_ + 1][STRAND] eq "-" ? $alnAlns[$_ + 1][REND] : $alnAlns[$_ + 1][RSTART] + 1;
-        #         $alnInsSizes[$_] = join("\t", $alnInsSizes[$_], $nodePos1, $nodePos2, FROM_CIGAR);
-        #     }
-        #     $alnInsSizes[$_];
-        # } 0..$#alnInsSizes;
         push @outAlns,  @alnAlns;
     }
 
     # examine SV junctions for evidence of duplex reads
     # adjusts the output arrays as needed
-    my $nStrands = checkForDuplex(scalar(@types));
+    my $nStrands = $SKIP_DUPLEX_CHECK ? 1 : checkForDuplex(scalar(@types));
 
     # set junction MAPQ as minimum MAPQ of the two flanking alignments
     fillJxnQs();

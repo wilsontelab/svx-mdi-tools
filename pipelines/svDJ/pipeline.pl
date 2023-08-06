@@ -14,7 +14,4 @@ use warnings;
 
 # all task environment variables may be accessed here
 
-# set options for read alignment
-# $ENV{DEFAULT_ALIGNMENT_MODE} = "map-ont";
-
 1;

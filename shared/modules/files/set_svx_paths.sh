@@ -21,6 +21,9 @@ export COMPILE_GLOB_PREFIX=$TASK_DIR/*/*.$GENOME.compile
 export ANALYZE_PREFIX=$DATA_GENOME_PREFIX.analyze
 export ANALYZE_GLOB_PREFIX=$TASK_DIR/*/*.$GENOME.analyze
 
+# parse 
+export PARSE_PREFIX=$DATA_GENOME_PREFIX.parse
+
 # coverage 
 export COVERAGE_PREFIX=$DATA_GENOME_PREFIX.coverage
 

@@ -35,5 +35,7 @@ checkReadBandwidth <- function(edges){
             passed
         }
     }, by = .(readI)]
+    isJunction <- getJunctionEdges(edges)
+    edges[isJunction & is.na(passedBandwidth), passedBandwidth := TRUE] # finish up the multi-junction paths
     edges
 }

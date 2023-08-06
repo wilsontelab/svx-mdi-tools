@@ -7,6 +7,8 @@
 dropReadsWithNoJunctions <- function(edges, matchFilterFn){
     message("dropping reads with no usable junctions")
     matchable <- matchFilterFn(edges)
+    I <- edges[, any(matchable[.I]), by = .(readI)][[2]] # count and report reads with any matchable jxn
+    message(paste(length(I), "reads ->", sum(I), "reads with >=1 matchable junctions"))
     I <- edges[, rep(any(matchable[.I]), .N), by = .(readI)][[2]] # keep or drop all edges from the read
     edges[I]
 }

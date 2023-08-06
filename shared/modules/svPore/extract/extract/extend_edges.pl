@@ -31,9 +31,10 @@ use constant {
     INSERT_SIZE => 10,
     N_STRANDS => 11,
     #-------------
-    baseQual => 12,   
-    alnBaseQual => 13, 
-    alnSize => 14, # added to edges by processRead_
+    jxnSeq => 12, # in query orientation, not reverse-complemented yet
+    baseQual => 13,   
+    alnBaseQual => 14, 
+    alnSize => 15, # added to edges by processRead_
     # sStart => 15,
     # sEnd => 16,
     # #-------------
@@ -268,12 +269,16 @@ sub processRead_ {
             my $edge = $$edges[$i];
             my $isJunction = ($i % 2);
             if(!$isJunction){
+                $$edge[jxnSeq] = "NA";
                 $$edge[baseQual] = getAvgQual(substr($$read[_QUAL], $$edge[QSTART], $$edge[EVENT_SIZE]));
             } elsif($$edge[INSERT_SIZE] > 0){
+                $$edge[jxnSeq] = substr($$read[_SEQ], $$edges[$i - 1][QEND], $$edge[INSERT_SIZE]);
                 $$edge[baseQual] = getAvgQual(substr($$read[_QUAL], $$edges[$i - 1][QEND], $$edge[INSERT_SIZE]));
             } elsif($$edge[INSERT_SIZE] < 0){
+                $$edge[jxnSeq] = substr($$read[_SEQ], $$edges[$i + 1][QSTART], -$$edge[INSERT_SIZE]);
                 $$edge[baseQual] = getAvgQual(substr($$read[_QUAL], $$edges[$i + 1][QSTART], -$$edge[INSERT_SIZE]));
             } else {
+                $$edge[jxnSeq] = "*";
                 $$edge[baseQual] = "NA";
             } 
         }
@@ -302,8 +307,7 @@ sub processRead_ {
     # for training molecules, just calculate adapter scores
     } else {
         my $aln = $$edges[0];
-        $$aln[CIGAR] = "NA";
-        $$aln[baseQual] = $$aln[alnBaseQual] = $$aln[alnSize] = "NA"; #  = $$aln[sStart] = $$aln[sEnd]
+        $$aln[CIGAR] = $$aln[jxnSeq] = $$aln[baseQual] = $$aln[alnBaseQual] = $$aln[alnSize] = "NA"; #  = $$aln[sStart] = $$aln[sEnd]
         addAdaptersScores($read, $aln); 
         finishEdge($aln, 1, 1);
     }

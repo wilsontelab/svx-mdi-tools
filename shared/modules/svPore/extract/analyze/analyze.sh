@@ -7,7 +7,7 @@
 
 # score, filter and aggregate edges by molecule and junction
 mkdir -p $PLOTS_DIR
-Rscript $STEP_DIR/analyze_edges.R
+Rscript $EXTRACT_STEP_DIR/analyze_edges.R
 checkPipe
 
 echo "done"

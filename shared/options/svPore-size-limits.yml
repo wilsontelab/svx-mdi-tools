@@ -1,0 +1,17 @@
+---
+# options used during svPore extract and find
+options:
+    window-size:
+        order: 1
+        short: P
+        type: integer
+        required: false
+        default: 1000
+        description: "group SV endpoints and make coverage maps at a resolution of --window-size bp"   
+    min-sv-size:
+        order: 2
+        short: Z
+        type: integer
+        required: false
+        default: 10000
+        description: "only report SVs >= --min-sv-size bp (ideally, --min-sv-size ~ 3 * --bandwidth)"

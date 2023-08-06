@@ -6,15 +6,6 @@ pipeline:
 suiteVersions:
     genomex-mdi-tools: main 
 actions:
-    _global:  
-        environment: svPore  
-        condaFamilies:
-            - genomex-mdi-tools//base
-            - genomex-mdi-tools//genome
-            - r-4.2
-            - svPore
-        optionFamilies:
-            - genomex-mdi-tools//genome
     download:
         order: 1
         module: genomex-mdi-tools//nanopore/download      
@@ -30,71 +21,15 @@ actions:
             dorado-output-format: usam # retain tags
     align:
         order: 4
-        module: genomex-mdi-tools//align/dna-long-read      
+        module: genomex-mdi-tools//align/dna-long-read
+        env-vars:
+            default-alignment-mode: map-ont   
     extract:
         order: 5
         module: svPore/extract 
     find:
         order: 6
-        optionFamilies:
-            - genomex-mdi-tools//read-filtering               
-            - size-limits
-            - sv-finding   
-        resources:
-            required:
-                total-ram: 32G
-            recommended: 
-                n-cpu: 8
-                ram-per-cpu: 4G
-        job-manager:
-            recommended:
-                time-limit: 4:00:00
-        description: "characterize novel SV paths in one or more input samples"   
-condaFamilies:
-    svPore:
-        dependencies:
-            - r-e1071  # provides support vector machines for adapter finding
-            - r-igraph # provies graph analysis for junction and read clustering
-optionFamilies:
-    size-limits:
-        options:
-            window-size:
-                order: 1
-                short: P
-                type: integer
-                required: false
-                default: 1000
-                description: "group SV endpoints and make coverage maps at a resolution of --window-size bp"   
-            min-sv-size:
-                order: 2
-                short: Z
-                type: integer
-                required: false
-                default: 10000
-                description: "only report SVs >= --min-sv-size bp (ideally, --min-sv-size ~ 3 * --bandwidth)"
-    sv-finding:
-        options:
-            min-alignment-size:
-                order: 3
-                short: a
-                type: integer
-                required: false
-                default: 100
-                description: "ignore junctions if either flanking alignment is <a bp long"
-            min-alignment-identity:
-                order: 4
-                short: I
-                type: double
-                required: false
-                default: 0.9
-                description: "ignore junctions if either flanking alignment has <I gap-compressed match rate"       
-            junction-bandwidth:
-                order: 5
-                short: b
-                type: integer
-                required: false
-                default: 20
-                description: "junction pairs with up to -b bp Euclidean distance are considered the same SV"                         
+        module: svPore/find                       
 package:
     find: # the pipeline action after which a data package should assembled
         uploadType: svPore # a signal to the Stage 2 framework regarding the package contents

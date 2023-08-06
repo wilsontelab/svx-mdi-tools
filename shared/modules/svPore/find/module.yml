@@ -1,14 +1,13 @@
 ---
 version: v0.0.0 # optional, for internal tracking
 action: # required
-    condaFamilies: # matched to svPore find to minimize number of environments
+    condaFamilies: # matched to svPore extract to minimize number of environments
         - genomex-mdi-tools//base
         - genomex-mdi-tools//genome
         - r-4.2
         - svPore-find
     optionFamilies:
-        - genomex-mdi-tools//fastq-dir
-        - genomex-mdi-tools//read-filtering 
+        - genomex-mdi-tools//read-filtering               
         - svPore-size-limits
         - svPore-find
     resources:
@@ -19,5 +18,5 @@ action: # required
             ram-per-cpu: 4G
     job-manager:
         recommended:
-            time-limit: 3:00:00
-    description: "pull and filter molecules that nominate SV junctions, create a coverage map"
+            time-limit: 4:00:00
+    description: "characterize novel SV paths in one or more input samples"  

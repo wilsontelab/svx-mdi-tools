@@ -21,7 +21,7 @@ checkEnvVars(list(
     string = c(
         'MODULES_DIR',
         'GENOMEX_MODULES_DIR',
-        'ACTION_DIR',
+        'FIND_MODULE_DIR',
         'GENOME',
         'GENOME_FASTA',
         'DATA_NAME',
@@ -47,7 +47,7 @@ sourceScripts(rUtilDir, 'utilities')
 rUtilDir <- file.path(env$GENOMEX_MODULES_DIR, 'utilities', 'R')
 sourceScripts(file.path(rUtilDir, 'sequence'),   c('general')) # , 'IUPAC', 'smith_waterman'
 sourceScripts(file.path(rUtilDir, 'genome'),   c('chroms'))
-sourceScripts(env$ACTION_DIR, c(
+sourceScripts(env$FIND_MODULE_DIR, c(
     'segments'
 ))
 svPoreSharedDir <- file.path(env$MODULES_DIR, 'svPore')
@@ -84,8 +84,19 @@ edges <- loadEdgesRds()
 # -------------------------------------------------------------------------------------
 edges <- setMatchableFlag(edges)
 edges <- setCanonicalNodes(edges, chromSizes)
+
+str(edges[edgeType != edgeTypes$ALIGNMENT])
+str(edges[edgeType != edgeTypes$ALIGNMENT][is.na(cStrand1)])
+print(edges[edgeType != edgeTypes$ALIGNMENT, .N, by = .(cChromIndex1, cStrand1, cChromIndex2, cStrand2)])
+print(edges[edgeType != edgeTypes$ALIGNMENT & cChromIndex1 == 5 & cStrand1 == 1, .N, keyby = .(cRefPos1)])
+
+print(edges[edgeType != edgeTypes$ALIGNMENT, .(nJunctions = .N), by = .(readI)][, .N, keyby = .(nJunctions)])
+
+stop("XXXXXXXXXXXXXXXXXX")
+
 junctionsToMatch <- getJunctionsToMatch(edges)
 junctionHardCounts <- getJunctionHardCounts(junctionsToMatch)
+
 junctionMatches <- findMatchingJunctions(junctionsToMatch) 
 junctionsNetwork <- analyzeJunctionNetwork(junctionMatches, junctionHardCounts)
 edges <- finalizeJunctionClustering(edges, junctionHardCounts, junctionsNetwork)

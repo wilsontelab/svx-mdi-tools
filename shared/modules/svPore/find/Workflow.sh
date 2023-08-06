@@ -5,6 +5,7 @@ export GENOMEX_MODULES_DIR=$SUITES_DIR/genomex-mdi-tools/shared/modules
 source $GENOMEX_MODULES_DIR/genome/set_genome_vars.sh
 source $GENOMEX_MODULES_DIR/align/set_alignment_vars.sh
 source $MODULES_DIR/files/set_svx_paths.sh
+export FIND_MODULE_DIR=$MODULES_DIR/svPore/find
 
 # set the size units and thresholds
 export USE_CHR_M=1
@@ -25,4 +26,4 @@ fi
 echo "  $FIND_MODE"
 
 # pull SV reads and representative non-SV reads from pre-aligned long reads (high accuracy, CIGAR required)
-runWorkflowStep 1 find find_svs.sh
+runWorkflowStep 1 find $FIND_MODULE_DIR/find_svs.sh
