@@ -286,14 +286,14 @@ isEditDistance1 <- function(qryJxnI, seedJxn){
     if(is.na(editDistance)) editDistance <- adist(seedJxn$fakeSeq, qryJxn$fakeSeq) # catch rare problems with vector overruns in assembly above
     editDistance <= 1 # should never be zero...
 }
-processSeedJxn <- function(seedJxnI, parentJxnI, parentEditDistance){
+processSeedJxn <- function(seedJxnI, parentJxnI, parentEditDistance_){
     seedJxn <- junctions[seedJxnI]    
     qryJxnIs <- junctions[is.na(parentJunctionI), junctionI]
     if(length(qryJxnIs) == 0) return(NULL)
     isEditDist1 <- unlist(mclapply(qryJxnIs, isEditDistance1, seedJxn, mc.cores = env$N_CPU))
     if(any(isEditDist1)){  
-        junctions[qryJxnIs[isEditDist1], ":="(parentJunctionI = parentJxnI, parentEditDistance = parentEditDistance)]
-        for(childJxnI in qryJxnIs[isEditDist1]) processSeedJxn(childJxnI, parentJxnI, parentEditDistance + 1) # iteratively use each matched child junction as a new seed in the network
+        junctions[qryJxnIs[isEditDist1], ":="(parentJunctionI = parentJxnI, parentEditDistance = parentEditDistance_)]
+        for(childJxnI in qryJxnIs[isEditDist1]) processSeedJxn(childJxnI, parentJxnI, parentEditDistance_ + 1) # iteratively use each matched child junction as a new seed in the network
     }
     NULL
 }
@@ -313,7 +313,7 @@ while(any(pendingJxns)){
 junctions[pendingJxns, ":="(parentJunctionI = junctionI, parentEditDistance = 0)]
 networks <- junctions[, .(
     networkKey = jxnKey[1], # first is the parent junction due to prior sorting
-    maxEditDistance = max(parentEditDistance),
+    maxEditDistance = max(parentEditDistance, na.rm = TRUE),
     nMatchingJunctions = .N,
     parentNMatchingSegments = nMatchingSegments[1],
     nextNMatchingSegments = if(.N == 1) NA_integer_ else nMatchingSegments[2],
