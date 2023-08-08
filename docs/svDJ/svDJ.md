@@ -27,7 +27,8 @@ single flow cell, but upstream processing (e.g., by MinKNOW) must have
 already demultiplexed the libraries into separate file sets.
 Thus, there should be separate folders that each hold one or more sequence
 files with reads from one PCR reaction performed with one forward
-and one reverse primer.
+and one reverse primer. In the future, it could be possible to have 
+mixed amplicons, but this is not presently supported.
 
 As its name implies, svDJ was developed to analyze V(D)J recombination
 junctions. However, it could be applied equally well to any amplicon
@@ -74,11 +75,12 @@ outerNode1  junctionNode1  junctionNode2   outerNode2
 |                       |  |               | 
 *=========>-------------*//*-------------<=* 
 </pre>
+
 svDJ seeks to:
-- keep and characterize single-junction and multi-junction reads- 
-- split chimeric amplicon fusions into their respective parts, which are each kept and analyzed as indepent molecules- 
-- keep just one half of duplex reads, to prevent double-counting of non-independent source molecules- 
-- discard truncated and off-target reads as untrustworthy- 
+- keep and characterize single-junction and multi-junction reads 
+- split chimeric amplicon fusions into their respective parts, which are each kept and analyzed as indepent molecules
+- keep just one half of duplex reads, to prevent double-counting of non-independent source molecules
+- discard truncated and off-target reads as untrustworthy
 
 ### Read processing
 To facilitate analysis and characterization of all molecules types, svDJ uses
@@ -86,9 +88,8 @@ a node-edge graph structure. Each aligned segment
 of a read has two node positions, one at each end (see above). These nodes define two kinds
 of edges between them:
 
-
-- **alignments (A)**, the expected reference genome contiguity found by the aligner- 
-- **junctions (J)**, the unexpected fusion of two distant genomic positions, called as a split read by the aligner- 
+- **alignments (A)**, the expected reference genome contiguity found by the aligner
+- **junctions (J)**, the unexpected fusion of two distant genomic positions, called as a split read by the aligner
 
 Alignments have properties such as the CIGAR strings that describe their
 exact base matches to the reference genome.
@@ -167,23 +168,20 @@ During processing by action <code>extract</code>, each read is converted to a se
 </tr>
 </tbody>
 </table>
+
 where:
-
-
-- a read always has an odd number of edges of the form A-J[-A-J...]-A- 
-- node positions are 64-bit base coordinates along the entire concatenated genome- 
-- negative node positions denote reads corresponding to the bottom reference strand- 
-- most reads are expected to have one of the two possible strandedness configurations of the same outer node positions, as fixed by the amplification primers (shown in bold)- 
+- a read always has an odd number of edges of the form A-J[-A-J...]-A
+- node positions are 64-bit base coordinates along the entire concatenated genome
+- negative node positions denote reads corresponding to the bottom reference strand
+- most reads are expected to have one of the two possible strandedness configurations of the same outer node positions, as fixed by the amplification primers (shown in bold)
 
 After extracting the complete edges table, svDJ <code>parse</code>:
-
-
-- performs <em>ab initio</em> discovery of the two primer outer node positions- 
-- splits chimeric reads at internal junctions that match abutted primer nodes, to yield one or more <code>segments</code>- 
-- discards segments where the outer nodes do not match the expected primer1/primer2 amplicon- 
-- discards one split segment when a duplex chimeric read repeats the same SV junction(s) in opposite orientation- 
-- performs exact junction matching between segments to highlight biological or technical replicates- 
-- assembles unique junction sequences into networks of similar junction sequences (see below)- 
+- performs <em>ab initio</em> discovery of the two primer outer node positions 
+- splits chimeric reads at internal junctions that match abutted primer nodes, to yield one or more <code>segments</code>
+- discards segments where the outer nodes do not match the expected primer1/primer2 amplicon
+- discards one split segment when a duplex chimeric read repeats the same SV junction(s) in opposite orientation
+- performs exact junction matching between segments to highlight biological or technical replicates
+- assembles unique junction sequences into networks of similar junction sequences (see below)
 
 ### Matching nodes and junctions
 Importantly, sequencing errors lead to imprecision in the assigned values of node positions.
@@ -191,7 +189,7 @@ svDJ therefore sometimes uses an adjancency tolerance when matching nodes. For e
 molecules with outer nodes 12/-56 and 12/-57 would both be considered a match to
 primer nodes 12/-56.
 
-In its first attempt at junction matching, <code>parse</code> uses exact matching based on the
+In its layer of junction matching, <code>parse</code> uses exact matching based on the
 actual node positions and any novel inserted bases. This yields the following table of
 <code>junctions</code>.
 
@@ -237,6 +235,7 @@ actual node positions and any novel inserted bases. This yields the following ta
 </tr>
 </tbody>
 </table>
+
 However, this might undercall true replicates that diverged due to PCR or
 sequencing errors and are thus still found in different junction rows.
 The following examples illustrate some of the ways that even a single basecalling error
@@ -275,13 +274,23 @@ an edit distance of 1 to the seed. When the network stops growing, the process
 repeats starting with the next most abundant junction that is not yet part of a
 network, ending when every unique junction has been added to a network
 (even if it is the sole member of that network).
+For efficiency svDJ does not attempt to build networks from seed junctions
+that were found in only one segment.
 
 The process is essentially the same as the directional model reported by
 <a href="https://www.ncbi.nlm.nih.gov/pmc/articles/PMC5340976/">Smith et al.</a>
 for the analysis of unique molecular identifers (UMIs), where we
-essentially treat each unique junction signature as a UMI.
-One difference is that svDJ does not attempt to build networks from seeds
-that were found in only one segment.
+essentially treat each distinct junction signature as a UMI.
+Importantly, only the bases at the junction are used when comparing junctions to each other.
+Base differences in the amplicon "stems" on each side of the junction are assumed to be sequencing errors and are disregarded by assembling a "fake" representative sequence for each read segment,
+where the flanks are replaced with the corresponding amount of reference genome sequence (i.e., from outer primer node to the junction node).
+
+Also important is the fact that a given read might correspond to either strand
+of a source DNA amplicon molecule, which must be accounted for during junction matching.
+svDJ achieves this by defining a **canonical orientation** for every junction, i.e.,
+for every possible combination of node pairs. A read segment is on the canonical strand
+if it begins at the primer1 node, as defined by the primers table. Noncanonical segments
+are reverse complement prior to junction comparison.
 
 The final level of aggregation is thus the table of junction <code>networks</code>, as follows.
 All tables (primers, edges, junctions, and networks) are returned as RDS files for furhter

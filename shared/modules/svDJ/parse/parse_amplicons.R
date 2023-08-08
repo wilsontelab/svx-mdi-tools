@@ -251,9 +251,9 @@ junctions[, fakeSeq := unlist(mclapply(jxnKey, getJxnSeq, mc.cores = env$N_CPU))
 # pFile <- file.path(dir, "DEBUG.primers.rds")
 # jFile <- file.path(dir, "DEBUG.junctions.rds")
 # nFile <- file.path(dir, "DEBUG.networks.rds")
-# saveRDS(edges, file = eFile)
-# saveRDS(primers, file = pFile)
-# saveRDS(junctions, file = jFile)
+# # saveRDS(edges, file = eFile)
+# # saveRDS(primers, file = pFile)
+# # saveRDS(junctions, file = jFile)
 # edges <- readRDS(eFile)
 # primers <- readRDS(pFile)
 # junctions <- readRDS(jFile)
@@ -265,62 +265,58 @@ message("building junction networks from edit distances between unique junction 
 junctions <- junctions[order(-nMatchingSegments)]
 junctions[, ":="(
     junctionI = 1:.N,
-    parentJunctionI = NA_integer_
+    parentJunctionI = NA_integer_,
+    parentEditDistance = NA_integer_
 )]
 isEditDistance1 <- function(qryJxnI, seedJxn){
     qryJxn <- junctions[qryJxnI]
-    nodeDist <- sqrt((seedJxn$node1 - qryJxn$node1)**2 + (seedJxn$node2 - qryJxn$node2)**2) # first check if nodes are close enough to warrent edit distance calc
-    if(nodeDist > 5) return(FALSE) # TODO: optimal threshold? expose as parameter?
-    tryCatch({
-        rawSeed <- charToRaw(seedJxn$fakeSeq) # adopt a simplified edit distance that builds on the specific construction of our sequences
-        rawQry  <- charToRaw(qryJxn$fakeSeq)
-        lengthSeed <- length(rawSeed)
-        lengthQry  <- length(rawQry)
-        minLength  <- min(lengthSeed, lengthQry)
-        firstDiverged <- which(     rawSeed[1:minLength] !=      rawQry[1:minLength])[1]
-        flank2        <- which(rev(rawSeed)[1:minLength] != rev(rawQry)[1:minLength])[1] - 1            
-        adist(
-            substr(seedJxn$fakeSeq, firstDiverged - 5, lengthSeed - flank2 + 5), # deliberately include extra shared bases if it helps adist find the best match
-            substr(qryJxn$fakeSeq,  firstDiverged - 5, lengthQry  - flank2 + 5)
-        ) == 1
-    }, error = function(e){
-        print(e)        
-        message(paste(lengthSeed, lengthQry, minLength, firstDiverged, flank2))
-        adist(seedJxn$fakeSeq, qryJxn$fakeSeq) == 1
-    })
+    nodeDist <- sqrt((seedJxn$refPos1 - qryJxn$refPos1)**2 + (seedJxn$refPos2 - qryJxn$refPos2)**2) # first check if nodes are close enough to warrent edit distance calc
+    if(nodeDist > env$JUNCTION_BANDWIDTH) return(FALSE)
+    rawSeed <- charToRaw(seedJxn$fakeSeq) # adopt a simplified edit distance that builds on the specific construction of our sequences
+    rawQry  <- charToRaw(qryJxn$fakeSeq)
+    lengthSeed <- length(rawSeed)
+    lengthQry  <- length(rawQry)
+    minLength  <- min(lengthSeed, lengthQry)
+    firstDiverged <- which(     rawSeed[1:minLength] !=      rawQry[1:minLength])[1]
+    flank2        <- which(rev(rawSeed)[1:minLength] != rev(rawQry)[1:minLength])[1] - 1 
+    editDistance <- adist(
+        substr(seedJxn$fakeSeq, firstDiverged - 5, lengthSeed - flank2 + 5), # deliberately include extra shared bases to help adist find the best edit path
+        substr(qryJxn$fakeSeq,  firstDiverged - 5, lengthQry  - flank2 + 5)
+    )
+    if(is.na(editDistance)) editDistance <- adist(seedJxn$fakeSeq, qryJxn$fakeSeq) # catch rare problems with vector overruns in assembly above
+    editDistance <= 1 # should never be zero...
 }
-processSeedJxn <- function(seedJxnI, parentJxnI){
-    junctions[seedJxnI, parentJunctionI := parentJxnI]
-    qryJxnI <- junctions[is.na(parentJunctionI), junctionI]
-    if(length(qryJxnI) == 0) return(NULL)
-
-    # isEditDist1 <- unlist(lapply(qryJxnI, isEditDistance1, junctions[seedJxnI]))
-    isEditDist1 <- unlist(mclapply(qryJxnI, isEditDistance1, junctions[seedJxnI], mc.cores = env$N_CPU))
-
-    if(any(isEditDist1)){    
-        junctions[qryJxnI[isEditDist1], parentJunctionI := parentJxnI]
-        for(seedJxnI in qryJxnI[isEditDist1]) processSeedJxn(seedJxnI, parentJxnI) # iteratively use each matched child junction as a new seed in the network
+processSeedJxn <- function(seedJxnI, parentJxnI, parentEditDistance){
+    seedJxn <- junctions[seedJxnI]    
+    qryJxnIs <- junctions[is.na(parentJunctionI), junctionI]
+    if(length(qryJxnIs) == 0) return(NULL)
+    isEditDist1 <- unlist(mclapply(qryJxnIs, isEditDistance1, seedJxn, mc.cores = env$N_CPU))
+    if(any(isEditDist1)){  
+        junctions[qryJxnIs[isEditDist1], ":="(parentJunctionI = parentJxnI, parentEditDistance = parentEditDistance)]
+        for(childJxnI in qryJxnIs[isEditDist1]) processSeedJxn(childJxnI, parentJxnI, parentEditDistance + 1) # iteratively use each matched child junction as a new seed in the network
     }
+    NULL
 }
-while(junctions[, any(is.na(parentJunctionI))]){
-    parentJxnI <- junctions[is.na(parentJunctionI), junctionI[1]] # get the next network parent as the next most abundant but unassigned junction
-
-    # parentJxnI <- 12
-
+# message(paste("parentJxnI", "nMatchingSegments", "nRemaining"))
+pendingJxns <- junctions[, is.na(parentJunctionI)]
+while(any(pendingJxns)){
+    parentJxnI <- which(pendingJxns)[1] # get the next network parent as the next most abundant but unassigned junction   
     nMatchingSegments <- junctions[parentJxnI, nMatchingSegments]
     if(nMatchingSegments == 1) break # stop assembling networks when down to singletons, they can't reasonably act as parents
-    nRemaining <- junctions[, sum(is.na(parentJunctionI))]
-    message(paste(parentJxnI, nMatchingSegments, nRemaining))
-    processSeedJxn(parentJxnI, parentJxnI)
+    # message(paste(parentJxnI, nMatchingSegments, sum(pendingJxns)))
+    junctions[parentJxnI, ":="(parentJunctionI = parentJxnI, parentEditDistance = 0)]
+    processSeedJxn(parentJxnI, parentJxnI, 1)
+    pendingJxns <- junctions[, is.na(parentJunctionI)]
     ################
     # break
-    # if(parentJxnI == 2) break
 }
-junctions[is.na(parentJunctionI), parentJunctionI := junctionI]
+junctions[pendingJxns, ":="(parentJunctionI = junctionI, parentEditDistance = 0)]
 networks <- junctions[, .(
     networkKey = jxnKey[1], # first is the parent junction due to prior sorting
+    maxEditDistance = max(parentEditDistance),
     nMatchingJunctions = .N,
     parentNMatchingSegments = nMatchingSegments[1],
+    nextNMatchingSegments = if(.N == 1) NA_integer_ else nMatchingSegments[2],
     nMatchingSegments = sum(nMatchingSegments),
     nCanonical = sum(nCanonical),
     nNonCanonical = sum(nNonCanonical),
@@ -349,6 +345,10 @@ message("number of kept SV junctions per kept segment")
 print(edges[, .(nKeptJunctions = nKeptJunctions[1]), by = .(segmentName)][, .N, by = .(nKeptJunctions)][order(nKeptJunctions)])
 message("number of matching junctions per unique kept junction")
 print(junctions[, .(nMatchingSegments), by = .(jxnKey)][, .N, by = .(nMatchingSegments)][order(nMatchingSegments)])
+message("number of junctions per network")
+print(networks[, .(nMatchingJunctions), by = .(networkKey)][, .N, by = .(nMatchingJunctions)][order(nMatchingJunctions)])
+message("maximum edit distance per network")
+print(networks[, .(maxEditDistance), by = .(networkKey)][, .N, by = .(maxEditDistance)][order(maxEditDistance)])
 #=====================================================================================
 
 #=====================================================================================

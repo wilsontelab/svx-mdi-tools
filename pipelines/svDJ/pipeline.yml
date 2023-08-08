@@ -46,13 +46,13 @@ package:
                 file: $PARSE_PREFIX.sample_manifest.csv
             primersFile:
                 type: zip
-                file: $PARSE_PREFIX.primers.zip
+                file: $PARSE_PREFIX.primers.rds
             edgesFile:
                 type: rds
                 file: $PARSE_PREFIX.edges.rds
             junctionsFile:
                 type: zip
-                file: $PARSE_PREFIX.junctions.zip
+                file: $PARSE_PREFIX.junctions.rds
             networksFile:
                 type: rds
                 file: $PARSE_PREFIX.networks.rds
