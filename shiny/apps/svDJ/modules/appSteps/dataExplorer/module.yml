@@ -10,7 +10,7 @@ longLabel:        "Data Explorer" # shown at top of appStep page
 #----------------------------------------------------------------------
 types: # names of the type(s) of this module ...
     - dataExplorer
-sourceTypes: null # ... and of the module(s) on which it depends
+sourceTypes: upload # ... and of the module(s) on which it depends
 
 #----------------------------------------------------------------------
 # dependencies

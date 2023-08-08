@@ -53,7 +53,7 @@ dataExplorerUI <- function(id, options) {
                     radioButtons(ns("sourceObjectChoices"), NULL, inline = TRUE, choices = names(options$sourceObjects))
                 ),
                 tags$div(
-                    style = "height: 400px; border-top: 1px solid grey;", 
+                    style = "height: 400px; border-top: 1px solid grey; overflow: auto;", 
                     verbatimTextOutput(ns("sourceObjectStructure"))
                 )     
             )

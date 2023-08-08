@@ -34,12 +34,32 @@ sourceHasChanged <- reactiveVal(0)
 observeEvent(sourceId(), {
     sourceId <- sourceId()
     req(sourceId)
+    startSpinner(session, message = "load source data objects")
     for(sourceObject in names(options$sourceObjects)) assign(
         sourceObject, 
         readRDS(getSourceFilePath(sourceId, options$sourceObjects[[sourceObject]])), # TODO: extend beyond RDS files
         envir =  moduleEnv
     )
     sourceHasChanged( sourceHasChanged() + 1 )
+    invalidateTable( invalidateTable() + 1 )
+    invalidatePlot( invalidatePlot() + 1 )
+    stopSpinner(session)
+})
+
+#----------------------------------------------------------------------
+# show requested data object structures
+#----------------------------------------------------------------------
+output$sourceObjectStructure <- renderPrint({
+    sourceId <- sourceId()
+    req(sourceId)
+    req(input$sourceObjectChoices)
+    tryCatch({
+        x <- get(input$sourceObjectChoices, envir =  moduleEnv)
+        str(x)
+    }, error = function(e){
+        print(e)
+        NULL
+    })
 })
 
 #----------------------------------------------------------------------
@@ -56,6 +76,7 @@ codeBuffer[[tableDataEditorContentsId]] <- "# write code here\n# e.g., my_table[
 codeBuffer[[plotEditorContentsId]]      <- "# write code here\n# use `dt` for the data.table above\n\n\n"
 initializeCodeEditors <- function(){
     isolate({ 
+        startSpinner(session, message = "initializing code editors")
         session$sendCustomMessage("initializeAceCodeEditor", tableDataEditorCssId) 
         session$sendCustomMessage("initializeAceCodeEditor", plotEditorCssId) 
         session$sendCustomMessage("setAceCodeContents", list(
@@ -66,6 +87,7 @@ initializeCodeEditors <- function(){
             editorId = plotEditorCssId,
             code = codeBuffer[[plotEditorContentsId]] 
         )) 
+        stopSpinner(session)
     })    
 }
 initializeCodeEditors()
@@ -109,7 +131,7 @@ plotFile <- file.path(sessionDirectory, "svDJ_dataExplorer.png")
 plotWidth <- 600
 plotHeight <- 435
 plotRes <- 96
-pointSize <- 8
+pointSize <- 10
 observeEvent(input$updatePlot, {
     session$sendCustomMessage("getAceCodeContents", list(editorId = plotEditorCssId))
 })
@@ -174,7 +196,7 @@ list(
     input = input,
     # settings = settings$all_,
     outcomes = codeBuffer,
-    # isReady = reactive({ getStepReadiness(options$source, ...) }),
+    isReady = reactive({ getStepReadiness(options$source) }),
     NULL
 )
 
