@@ -117,10 +117,12 @@ combination of `node1`, `node2`, `insertSize` and, if insertSize > 0, `jxnBases`
 | refPos2 | integer | the unsigned reference position on `chrom2` |
 | strand2 | character | the strand on side 2 of the junction, either "+" or "-" |
 | fakeSeq | character | an idealized sequence for this read where flanking alignments are replaced with reference genome bases but the junction itself is as it was sequenced |
+| fakeLength | integer | number of bases in fakeSeq, best estimate of the original source molecule length |
 | **network membership** | | |
 | junctionI | integer | sequential number of this junction, sorted by decreasing value of `nMatchingSegments` |
 | parentJunctionI | integer | `junctionI` of the parent junction of the network to which this junction belongs |
 | parentEditDistance | integer | the number of edits, i.e., seed levels, from this junction to the parent junction of the network |
+| parentSWScoreDelta | double | difference in the Smith Waterman alignment score of this read to its parent vs. that of the parent to itself |
 
 ### Networks
 
@@ -146,9 +148,10 @@ reliable quantification of the data, whether to trust single-junction networks, 
 | ------ | --------- | ----------- |
 | networkKey | character | the `jxnKey` of the parent junction of the network |
 | parentJunctionI | integer | the `junctionI` of the parent junction of the network |
-| maxEditDistance | integer | the number of edits between the network parent and the most highly diverged junction in the network |
+| maxEditDistance | integer | max(`parentEditDistance`) over all junctions in the network |
+| maxSWScoreDelta | double | max(`parentSWScoreDelta`) over all junctions in the network |
 | nMatchingJunctions | integer | number of `junctions` rows aggregated into this network | 
 | parentNMatchingSegments | integer | `nMatchingSegments` of the parent junction | 
 | nextNMatchingSegments | integer | `nMatchingSegments` of the first non-parent junction added to the network |
 | nMatchingSegments | integer | sum(`nMatchingSegments`) over all contributing junctions |
-| nCanonical to fakeSeq | various | as defined for the `junctions` table |
+| nCanonical to fakeLength | various | as defined for the `junctions` table |

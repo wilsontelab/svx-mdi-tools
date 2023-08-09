@@ -40,7 +40,7 @@ checkEnvVars(list(
 # source R scripts
 sourceScripts(rUtilDir, 'utilities')
 rUtilDir <- file.path(env$GENOMEX_MODULES_DIR, 'utilities', 'R')
-sourceScripts(file.path(rUtilDir, 'sequence'),   c('general')) # , 'IUPAC', 'smith_waterman'
+sourceScripts(file.path(rUtilDir, 'sequence'),   c('general' , 'IUPAC', 'smith_waterman'))
 sourceScripts(file.path(rUtilDir, 'genome'),   c('chroms','faidx'))
 svPoreSharedDir <- file.path(env$MODULES_DIR, 'svPore')
 sourceScripts(svPoreSharedDir, c(
@@ -243,6 +243,7 @@ getJxnSeq <- function(jxnKey_){
     paste0(flankSeq1, if(jxn$insertSize > 0) jxn$jxnSeq else "", flankSeq2)
 }
 junctions[, fakeSeq := unlist(mclapply(jxnKey, getJxnSeq, mc.cores = env$N_CPU))]
+junctions[, fakeLength := nchar(fakeSeq)]
 #=====================================================================================
 
 # #########################
@@ -266,12 +267,18 @@ junctions <- junctions[order(-nMatchingSegments)]
 junctions[, ":="(
     junctionI = 1:.N,
     parentJunctionI = NA_integer_,
-    parentEditDistance = NA_integer_
+    parentEditDistance = 0,
+    parentSWScoreDelta = 0.0
 )]
 isEditDistance1 <- function(qryJxnI, seedJxn){
     qryJxn <- junctions[qryJxnI]
     nodeDist <- sqrt((seedJxn$refPos1 - qryJxn$refPos1)**2 + (seedJxn$refPos2 - qryJxn$refPos2)**2) # first check if nodes are close enough to warrent edit distance calc
-    if(nodeDist > env$JUNCTION_BANDWIDTH) return(FALSE)
+    
+    # the criteria on this line are important for controlling the sensitivity, specificity and efficiency of network growth
+    # they refuse to even consider a child junction unless its endpoints and apparent molecule length are close to the seed
+    # these parameters may need optimization
+    if(nodeDist > env$JUNCTION_BANDWIDTH || abs(qryJxn$fakeLength - seedJxn$fakeLength) > 2) return(FALSE)
+
     rawSeed <- charToRaw(seedJxn$fakeSeq) # adopt a simplified edit distance that builds on the specific construction of our sequences
     rawQry  <- charToRaw(qryJxn$fakeSeq)
     lengthSeed <- length(rawSeed)
@@ -285,6 +292,9 @@ isEditDistance1 <- function(qryJxnI, seedJxn){
     )
     if(is.na(editDistance)) editDistance <- adist(seedJxn$fakeSeq, qryJxn$fakeSeq) # catch rare problems with vector overruns in assembly above
     editDistance <= 1 # should never be zero...
+
+    # if networks grow too aggressively, they may start to merge two true networks into one
+    # a possible additional check against this would be to always recheck each (grand...)child against the network parent
 }
 processSeedJxn <- function(seedJxnI, parentJxnI, parentEditDistance_){
     seedJxn <- junctions[seedJxnI]    
@@ -297,23 +307,31 @@ processSeedJxn <- function(seedJxnI, parentJxnI, parentEditDistance_){
     }
     NULL
 }
-# message(paste("parentJxnI", "nMatchingSegments", "nRemaining"))
+message(paste("parentJxnI", "nMatchingSegments", "nRemaining"))
 pendingJxns <- junctions[, is.na(parentJunctionI)]
+maxShift <- env$JUNCTION_BANDWIDTH
 while(any(pendingJxns)){
     parentJxnI <- which(pendingJxns)[1] # get the next network parent as the next most abundant but unassigned junction   
     nMatchingSegments <- junctions[parentJxnI, nMatchingSegments]
     if(nMatchingSegments == 1) break # stop assembling networks when down to singletons, they can't reasonably act as parents
-    # message(paste(parentJxnI, nMatchingSegments, sum(pendingJxns)))
+    message(paste(parentJxnI, nMatchingSegments, sum(pendingJxns)))
     junctions[parentJxnI, ":="(parentJunctionI = parentJxnI, parentEditDistance = 0)]
     processSeedJxn(parentJxnI, parentJxnI, 1)
+    parentFakeSeq <- junctions[parentJxnI, fakeSeq] # reassess the exact alignment of each child to is parent junction
+    parentFakeLength <- junctions[parentJxnI, fakeLength]
+    networkJxnI <- junctions[parentJunctionI == parentJxnI, junctionI]
+    junctions[networkJxnI, parentSWScoreDelta := unlist(mclapply(networkJxnI, function(jxnI){
+        parentFakeLength - smith_waterman(junctions[jxnI, fakeSeq], parentFakeSeq, fast = TRUE)$bestScore
+    }, mc.cores = env$N_CPU))]
     pendingJxns <- junctions[, is.na(parentJunctionI)]
     ################
     # break
 }
-junctions[pendingJxns, ":="(parentJunctionI = junctionI, parentEditDistance = 0)]
+junctions[pendingJxns, ":="(parentJunctionI = junctionI)]
 networks <- junctions[, .(
     networkKey = jxnKey[1], # first is the parent junction due to prior sorting
     maxEditDistance = max(parentEditDistance, na.rm = TRUE),
+    maxSWScoreDelta = max(parentSWScoreDelta, na.rm = TRUE),
     nMatchingJunctions = .N,
     parentNMatchingSegments = nMatchingSegments[1],
     nextNMatchingSegments = if(.N == 1) NA_integer_ else nMatchingSegments[2],
@@ -332,7 +350,8 @@ networks <- junctions[, .(
     chromIndex2 = chromIndex2[1],
     refPos2 = refPos2[1],
     strand2 = strand2[1],
-    fakeSeq = fakeSeq[1]
+    fakeSeq = fakeSeq[1],
+    fakeLength = fakeLength[1]
 ), by = .(parentJunctionI)]
 #=====================================================================================
  
@@ -349,6 +368,8 @@ message("number of junctions per network")
 print(networks[, .(nMatchingJunctions), by = .(networkKey)][, .N, by = .(nMatchingJunctions)][order(nMatchingJunctions)])
 message("maximum edit distance per network")
 print(networks[, .(maxEditDistance), by = .(networkKey)][, .N, by = .(maxEditDistance)][order(maxEditDistance)])
+message("maximum SW delta per network")
+print(networks[, .(maxSWScoreDelta), by = .(networkKey)][, .N, by = .(maxSWScoreDelta)][order(maxSWScoreDelta)])
 #=====================================================================================
 
 #=====================================================================================
