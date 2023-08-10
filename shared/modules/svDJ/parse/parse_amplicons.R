@@ -61,298 +61,367 @@ options(scipen = 999) # prevent 1+e6 in printed, which leads to read.table error
 options(warn = 2) 
 #=====================================================================================
 
+# #=====================================================================================
+# # load edges as prepared by `extract`
+# #-------------------------------------------------------------------------------------
+# message("loading edges")
+# edges <- readRDS(paste(env$ANALYZE_PREFIX, "edges", "rds", sep = "."))
+# #=====================================================================================
+
+# #=====================================================================================
+# # discover and order the amplicon primer node positions
+# #-------------------------------------------------------------------------------------
+# message("performing ab initio discovery of primer nodes")
+# reads <- edges[, .(outerNode1 = node1[1], outerNode2 = node2[.N]), by = .(readI)] # get the outer nodes, expecting two predominant strand orientations
+# primerNodes <- reads[, .(primerNode = abs(c(outerNode1, outerNode2)))][, .N, by = .(primerNode)][order(-N)] # set primer nodes as the most frequent, but distinct, outer nodes
+# primerNode1 <- primerNodes[1, primerNode]
+# i2 <- 2
+# primerNode2 <- primerNodes[i2, primerNode]
+# while(abs(primerNode2 - primerNode1) < 100){ # just in case the second most frequent primer node is a variant of primer1 (not likely...)
+#     i2 <- i2 + 1
+#     primerNode2 <- primerNodes[i2, primerNode]
+# }
+# primerNode1 <- reads[abs(outerNode1) == primerNode1, outerNode1[1]] # set the orientation of the primer nodes as the sign of the 5', i.e., first primer node
+# primerNode2 <- reads[abs(outerNode1) == primerNode2, outerNode1[1]]
+# swap <- if(sign(primerNode1) != sign(primerNode2)){
+#     sign(primerNode1) == -1 # order the primer nodes to hopefully (for ease of use) to yield a +/-, F/R pair
+# } else {
+#     abs(primerNode1) > abs(primerNode2) # otherwise order along genome so that primer order is deterministic
+# }
+# if(swap){
+#     tmp <- primerNode1
+#     primerNode1 <- primerNode2
+#     primerNode2 <- tmp
+# }
+# primers <- cbind(
+#     data.table(
+#         primer = 1:2,
+#         node = c(primerNode1, primerNode2)
+#     ),
+#     parseSignedNodes(chromSizes, c(primerNode1, primerNode2))
+# )
+# primers[, refPos := abs(refPos)]
+# print(primers)
+# rm(reads, primerNodes, swap)
+# #=====================================================================================
+
+# #=====================================================================================
+# # split reads at all chimeric junctions
+# # thus, each read might yield one or more non-chimeric segments
+# #-------------------------------------------------------------------------------------
+# message("matching junction nodes to primers")
+# isJunction <- getJunctionEdges(edges)
+# isNodeMatch <- function(node1, node2) abs(abs(node2) - abs(node1)) <= env$JUNCTION_BANDWIDTH 
+# edges[isJunction, ":="(
+#     node1IsPrimer = isNodeMatch(node1, primerNode1) | isNodeMatch(node1, primerNode2), # chimeric junctions could fuse primer1 to primer1, primer1 to primer2, etc.
+#     node2IsPrimer = isNodeMatch(node2, primerNode1) | isNodeMatch(node2, primerNode2)
+# )]
+# edges[isJunction, ":="(isChimeric = node1IsPrimer & node2IsPrimer)]
+# edges <- splitReadsToSegments(edges, getNonChimericJunctions, "splitting reads at chimeric junctions")
+# message(paste(edges[, length(unique(qName))], "reads ->", edges[, length(unique(segmentName))], "non-chimeric segments"))
+# rm(isJunction)
+# #=====================================================================================
+
+# #=====================================================================================
+# # purge segments that don't match primer1/primer2 at their outermost alignment nodes
+# #-------------------------------------------------------------------------------------
+# message("discarding segments that don't match primer1/primer2 amplicons")
+# segments <- edges[, .(outerNode1 = node1[1], outerNode2 = node2[.N]), by = .(segmentName)]
+# goodSegmentI <- segments[,
+#     (isNodeMatch(outerNode1, primerNode1) & isNodeMatch(outerNode2, primerNode2)) | 
+#     (isNodeMatch(outerNode1, primerNode2) & isNodeMatch(outerNode2, primerNode1))
+# ]
+# edges <- edges[segmentName %in% segments[goodSegmentI, segmentName]]
+# message(paste(length(goodSegmentI), "segments ->", sum(goodSegmentI), "ampliconic, non-truncated segments"))
+# rm(segments, goodSegmentI)
+# #=====================================================================================
+
+# #=====================================================================================
+# # purge duplex segments from split chimeric molecules
+# # unlike svPore, do not purge duplex instances (yet) that arose from different reads
+# # as they may be truly independent sources molecules arising from biological or PCR replication
+# #-------------------------------------------------------------------------------------
+# message("discarding duplex segments (inverted segment orientations from the same read)")
+# edges[, nSegments := length(unique(segmentName)), by = .(qName)]
+# segmentPaths <- edges[nSegments > 1, .(
+#     nodePath    = paste(     c(node1, node2[.N]),  collapse = ":"),
+#     revNodePath = paste(-rev(c(node1, node2[.N])), collapse = ":")
+# ), by = .(qName, segmentName)]
+# duplexSegmentsI <- segmentPaths[, c(
+#     sapply(1:(.N - 1), function(i1){
+#         any(sapply((i1 + 1):.N, function(i2) nodePath[i1] == revNodePath[i2])) # i.e., inverted path matches, here being strict about node positions
+#     }),
+#     FALSE # always keep the last segment, at least
+# ), by = .(qName)][[2]]
+# duplexSegmentNames <- segmentPaths[duplexSegmentsI, segmentName]
+# edges <- edges[!(segmentName %in% duplexSegmentNames)]
+# message(paste(length(duplexSegmentsI), "segments from chimeric reads ->", sum(!duplexSegmentsI), "non-duplex segments"))
+# rm(segmentPaths, duplexSegmentsI, duplexSegmentNames)
+# #=====================================================================================
+
+# #=====================================================================================
+# # drop segments with no high-quality, matchable junctions
+# #-------------------------------------------------------------------------------------
+# message("dropping segments with no high-quality, usable junctions")
+# junctionI <- getJunctionEdges(edges)
+# keptJunctionI <- getMatchableJunctions(edges)
+# edges[, ":="( # set the count of total and kept junctions arising from each individual read segment
+#     nTotalJunctions = sum(junctionI[.I]),
+#     nKeptJunctions  = sum(keptJunctionI[.I])
+# ), by = .(segmentName)]
+# segments <- edges[, .(kept = nKeptJunctions[1] > 0), by = .(segmentName)]
+# keptSegmentNames <- segments[kept == TRUE, unique(segmentName)]
+# edges <- edges[segmentName %in% keptSegmentNames]
+# edges[, nKeptSegments := length(unique(segmentName)), by = .(qName)]
+# message(paste(nrow(segments), "segments ->", segments[, sum(kept)], "kept segments"))
+# rm(junctionI, keptJunctionI, segments, keptSegmentNames)
+# #=====================================================================================
+
+# #=====================================================================================
+# # perform _exact_ junction matching, i.e., any base difference at a junction will lead to match failure
+# #-------------------------------------------------------------------------------------
+# message("strictly grouping junctions based on exact junction sequence matches")
+# edges[, isCanonical := isNodeMatch(node1[1], primerNode1), by = .(segmentName)] # canonical segments are primer1/primer2, non-canonical are primer2/primer1
+# isSingletonMatchable <- getSingletonMatchableJunctions(edges)
+# edges[isSingletonMatchable, jxnKey := ifelse(
+#     isCanonical, # microhomology bases are NOT used in jxnKey - the aligner already decided they were a match to reference
+#     paste( node1,  node2, insertSize, ifelse(insertSize > 0,    jxnSeq,  ""), sep = ":"),
+#     paste(-node2, -node1, insertSize, ifelse(insertSize > 0, rc(jxnSeq), ""), sep = ":")
+# )]
+# edges[isSingletonMatchable, cJxnSeq := ifelse(isCanonical, jxnSeq, rc(jxnSeq))] # keep information that may not be present in jxnKey
+# junctions <- edges[isSingletonMatchable, { # restrict to single-junction segments to facilitate edit distance, below
+#     x <- strsplit(jxnKey, ":")[[1]]
+#     .(
+#         nMatchingSegments = .N, # valid, since each segment has a single junction
+#         nCanonical = sum(isCanonical),
+#         nNonCanonical = sum(!isCanonical),
+#         node1 = as.integer64(x[1]),
+#         node2 = as.integer64(x[2]),
+#         insertSize = as.integer(x[3]),
+#         jxnSeq = paste(unique(cJxnSeq), collapse = ",") # preserves any variability found in microhomologous bases omitted from jxnKey
+#     )                                                   # always a single value for insertions since those jxnBases are part of jxnKey
+# }, by = .(jxnKey)]
+# junctions <- cbind(
+#     junctions, 
+#     junctions[, parseSignedNodes(chromSizes, node1, 1)], 
+#     junctions[, parseSignedNodes(chromSizes, node2, 2)]
+# )
+# rm(isSingletonMatchable)
+# #=====================================================================================
+
+# #=====================================================================================
+# # prepare for junction network analysis
+# #-------------------------------------------------------------------------------------
+# message("extracting genomic sequences at primer nodes")
+# primer1RefPos <- primers[1, refPos]
+# primer2RefPos <- primers[2, refPos]
+# maxFlank1 <- junctions[, max(abs(refPos1 - primer1RefPos) + 1)]
+# maxFlank2 <- junctions[, max(abs(refPos2 - primer2RefPos) + 1)]
+# loadFaidx()
+# primers[, sequence := {
+#     maxSize <- if(primer == 1) maxFlank1 else maxFlank2
+#     range <- if(strand == "+") c(refPos, refPos + maxSize - 1) 
+#                           else c(refPos - maxSize + 1, refPos)
+#     getRefSeq(chrom, range)
+# }, by = .(primer)]
+# primers[, rcSequence := rc(sequence)]
+# primers[, seqLength := nchar(sequence)]
+# unlink(genome_index$chromFile)
+# rm(genome_index, primer1RefPos, primer2RefPos, maxFlank1, maxFlank2)
+
+# # construct a fictitious, idealized read sequence in which any bases aligned as reference by the aligner
+# # are returned as reference (not read) bases, to ignore inconsequential errors in flanking sequences or microhomologies
+# # in contrast, inserted, non-reference bases are included as found in the read; we must still asses the impact of errors at these junction bases
+# message("assembling idealized junction sequences for junction network analysis")
+# getJxnSeq <- function(jxnKey_){
+#     jxn <- junctions[jxnKey == jxnKey_]
+#     microhomologyAdjustment <- max(0, -jxn$insertSize)
+#     flankSize1 <- abs(jxn$refPos1 - primers[1, refPos]) + 1 - microhomologyAdjustment
+#     flankSize2 <- abs(jxn$refPos2 - primers[2, refPos]) + 1 
+#     flankSeq1 <- primers[1, substr(if(jxn$strand1 == "+") sequence else rcSequence, 1, flankSize1)]
+#     flankSeq2 <- primers[2, substr(if(jxn$strand1 == "+") sequence else rcSequence, seqLength - flankSize2 + 1, seqLength)]
+#     paste0(flankSeq1, if(jxn$insertSize > 0) jxn$jxnSeq else "", flankSeq2)
+# }
+# junctions[, fakeSeq := unlist(mclapply(jxnKey, getJxnSeq, mc.cores = env$N_CPU))]
+# junctions[, fakeLength := nchar(fakeSeq)]
+# #=====================================================================================
+
+#########################
+dir <- "/nfs/turbo/umms-daviferg/jobFiles/TEW-svPore-test"
+eFile <- file.path(dir, "DEBUG.edges.rds")
+pFile <- file.path(dir, "DEBUG.primers.rds")
+jFile <- file.path(dir, "DEBUG.junctions.rds")
+nFile <- file.path(dir, "DEBUG.networks.rds")
+dFile <- file.path(dir, "DEBUG.distances.rds")
+# saveRDS(edges, file = eFile)
+# saveRDS(primers, file = pFile)
+# saveRDS(junctions, file = jFile)
+edges <- readRDS(eFile)
+primers <- readRDS(pFile)
+junctions <- readRDS(jFile)
+
 #=====================================================================================
-# load edges as prepared by `extract`
+# calculates a Smith Waterman distance matrix between all unique junction sequences
+# TODO: consider an alternative: use minimap2 to perform all pairwise alignments?
 #-------------------------------------------------------------------------------------
-message("loading edges")
-edges <- readRDS(paste(env$ANALYZE_PREFIX, "edges", "rds", sep = "."))
-#=====================================================================================
+message("calculating pairwise Smith-Waterman distance between all unique junction sequences")
+junctions <- junctions[order(-nMatchingSegments)]
+
+# matchScore          <-  1
+# mismatchPenalty     <- -1 # -1.5
+# gapOpenPenalty      <- -1.001 # -2.501 # 0.001 ajustment gives slight preference to not opening a single-base terminal gap
+# gapExtensionPenalty <- -1
+# maxShift            <- env$JUNCTION_BANDWIDTH
+# pairedBaseScores <- initializePairScores()
+# swFlankBases <- 10
+# SWDist <- function(seq2, seq1, i1){ # 2/1 order reflect the call from pDist
+#     tryCatch({
+#         if(seq1 == seq2) return(0) # unclear why this happens, presumably minimap2 isn't determinsitic in its clipping, etc.
+#         n1 <- nchar(seq1)
+#         n2 <- nchar(seq2)
+#         deltaN <- abs(n1 - n2)
+#         if(deltaN > maxShift){
+#             abs( # fast approximation when we expect gaps to predominate the score
+#                 gapOpenPenalty * (deltaN / maxShift) + # scale gap open penalties to a fraction of total gap bases
+#                 deltaN * gapExtensionPenalty
+#             )
+#         } else {
+#             raw1 <- charToRaw(seq1) # speed up fast Smith-Waterman even more by trimming shared flanks
+#             raw2 <- charToRaw(seq2)
+#             minN <- min(n1, n2)
+#             firstDiverged <- which(     raw1[1:minN] !=      raw2[1:minN])[1]
+#             flank2        <- which(rev(raw1)[1:minN] != rev(raw2)[1:minN])[1] - 1 
+#             seq1 <- substr(seq1, firstDiverged - swFlankBases, n1 - flank2 + swFlankBases)
+#             seq2 <- substr(seq2, firstDiverged - swFlankBases, n2 - flank2 + swFlankBases)
+#             max(nchar(seq1), nchar(seq2)) - smith_waterman(seq1, seq2, fast = TRUE)$bestScore
+#         }
+#     }, error = function(e){
+#         print(e)
+#         print(i1)
+#         print(seq1)
+#         print(seq2)
+#         99
+#     })
+# }
+# pDist <- function(x, distFn, diag = FALSE, upper = FALSE){ # TODO: move this to a utilities script
+#     n <- length(x)
+#     v <- unlist(mclapply(1:(n-1), function(i1) {
+#         sapply(x[(i1 + 1):n], distFn, x[i1], i1)
+#     }, mc.cores = env$N_CPU))
+#     attr(v, "Size") <- n 
+#     attr(v, "Diag") <- diag
+#     attr(v, "Upper") <- upper
+#     class(v) <- "dist"
+#     names(v) <- NULL as.character(1:n)
+#     v
+# }
+# distances <- unname(pDist(junctions$fakeSeq, SWDist))
+# saveRDS(distances, file = dFile)
+distances <- readRDS(dFile)
+
+distances <- unname(distances)
+str(distances)
+
+xx <- as.integer(distances / 10)
+print(aggregate(xx, list(xx), length))
 
 #=====================================================================================
-# discover and order the amplicon primer node positions
-#-------------------------------------------------------------------------------------
-message("performing ab initio discovery of primer nodes")
-reads <- edges[, .(outerNode1 = node1[1], outerNode2 = node2[.N]), by = .(readI)] # get the outer nodes, expecting two predominant strand orientations
-primerNodes <- reads[, .(primerNode = abs(c(outerNode1, outerNode2)))][, .N, by = .(primerNode)][order(-N)] # set primer nodes as the most frequent, but distinct, outer nodes
-primerNode1 <- primerNodes[1, primerNode]
-i2 <- 2
-primerNode2 <- primerNodes[i2, primerNode]
-while(abs(primerNode2 - primerNode1) < 100){ # just in case the second most frequent primer node is a variant of primer1 (not likely...)
-    i2 <- i2 + 1
-    primerNode2 <- primerNodes[i2, primerNode]
-}
-primerNode1 <- reads[abs(outerNode1) == primerNode1, outerNode1[1]] # set the orientation of the primer nodes as the sign of the 5', i.e., first primer node
-primerNode2 <- reads[abs(outerNode1) == primerNode2, outerNode1[1]]
-swap <- if(sign(primerNode1) != sign(primerNode2)){
-    sign(primerNode1) == -1 # order the primer nodes to hopefully (for ease of use) to yield a +/-, F/R pair
-} else {
-    abs(primerNode1) > abs(primerNode2) # otherwise order along genome so that primer order is deterministic
-}
-if(swap){
-    tmp <- primerNode1
-    primerNode1 <- primerNode2
-    primerNode2 <- tmp
-}
-primers <- cbind(
-    data.table(
-        primer = 1:2,
-        node = c(primerNode1, primerNode2)
-    ),
-    parseSignedNodes(chromSizes, c(primerNode1, primerNode2))
-)
-primers[, refPos := abs(refPos)]
-print(primers)
-rm(reads, primerNodes, swap)
-#=====================================================================================
 
-#=====================================================================================
-# split reads at all chimeric junctions
-# thus, each read might yield one or more non-chimeric segments
-#-------------------------------------------------------------------------------------
-message("matching junction nodes to primers")
-isJunction <- getJunctionEdges(edges)
-isNodeMatch <- function(node1, node2) abs(abs(node2) - abs(node1)) <= env$JUNCTION_BANDWIDTH 
-edges[isJunction, ":="(
-    node1IsPrimer = isNodeMatch(node1, primerNode1) | isNodeMatch(node1, primerNode2), # chimeric junctions could fuse primer1 to primer1, primer1 to primer2, etc.
-    node2IsPrimer = isNodeMatch(node2, primerNode1) | isNodeMatch(node2, primerNode2)
-)]
-edges[isJunction, ":="(isChimeric = node1IsPrimer & node2IsPrimer)]
-edges <- splitReadsToSegments(edges, getNonChimericJunctions, "splitting reads at chimeric junctions")
-message(paste(edges[, length(unique(qName))], "reads ->", edges[, length(unique(segmentName))], "non-chimeric segments"))
-rm(isJunction)
-#=====================================================================================
-
-#=====================================================================================
-# purge segments that don't match primer1/primer2 at their outermost alignment nodes
-#-------------------------------------------------------------------------------------
-message("discarding segments that don't match primer1/primer2 amplicons")
-segments <- edges[, .(outerNode1 = node1[1], outerNode2 = node2[.N]), by = .(segmentName)]
-goodSegmentI <- segments[,
-    (isNodeMatch(outerNode1, primerNode1) & isNodeMatch(outerNode2, primerNode2)) | 
-    (isNodeMatch(outerNode1, primerNode2) & isNodeMatch(outerNode2, primerNode1))
-]
-edges <- edges[segmentName %in% segments[goodSegmentI, segmentName]]
-message(paste(length(goodSegmentI), "segments ->", sum(goodSegmentI), "ampliconic, non-truncated segments"))
-rm(segments, goodSegmentI)
-#=====================================================================================
-
-#=====================================================================================
-# purge duplex segments from split chimeric molecules
-# unlike svPore, do not purge duplex instances (yet) that arose from different reads
-# as they may be truly independent sources molecules arising from biological or PCR replication
-#-------------------------------------------------------------------------------------
-message("discarding duplex segments (inverted segment orientations from the same read)")
-edges[, nSegments := length(unique(segmentName)), by = .(qName)]
-segmentPaths <- edges[nSegments > 1, .(
-    nodePath    = paste(     c(node1, node2[.N]),  collapse = ":"),
-    revNodePath = paste(-rev(c(node1, node2[.N])), collapse = ":")
-), by = .(qName, segmentName)]
-duplexSegmentsI <- segmentPaths[, c(
-    sapply(1:(.N - 1), function(i1){
-        any(sapply((i1 + 1):.N, function(i2) nodePath[i1] == revNodePath[i2])) # i.e., inverted path matches, here being strict about node positions
-    }),
-    FALSE # always keep the last segment, at least
-), by = .(qName)][[2]]
-duplexSegmentNames <- segmentPaths[duplexSegmentsI, segmentName]
-edges <- edges[!(segmentName %in% duplexSegmentNames)]
-message(paste(length(duplexSegmentsI), "segments from chimeric reads ->", sum(!duplexSegmentsI), "non-duplex segments"))
-rm(segmentPaths, duplexSegmentsI, duplexSegmentNames)
-#=====================================================================================
-
-#=====================================================================================
-# drop segments with no high-quality, matchable junctions
-#-------------------------------------------------------------------------------------
-message("dropping segments with no high-quality, usable junctions")
-junctionI <- getJunctionEdges(edges)
-keptJunctionI <- getMatchableJunctions(edges)
-edges[, ":="( # set the count of total and kept junctions arising from each individual read segment
-    nTotalJunctions = sum(junctionI[.I]),
-    nKeptJunctions  = sum(keptJunctionI[.I])
-), by = .(segmentName)]
-segments <- edges[, .(kept = nKeptJunctions[1] > 0), by = .(segmentName)]
-keptSegmentNames <- segments[kept == TRUE, unique(segmentName)]
-edges <- edges[segmentName %in% keptSegmentNames]
-edges[, nKeptSegments := length(unique(segmentName)), by = .(qName)]
-message(paste(nrow(segments), "segments ->", segments[, sum(kept)], "kept segments"))
-rm(junctionI, keptJunctionI, segments, keptSegmentNames)
-#=====================================================================================
-
-#=====================================================================================
-# perform _exact_ junction matching, i.e., any base difference at a junction will lead to match failure
-#-------------------------------------------------------------------------------------
-message("strictly grouping junctions based on exact junction sequence matches")
-edges[, isCanonical := isNodeMatch(node1[1], primerNode1), by = .(segmentName)] # canonical segments are primer1/primer2, non-canonical are primer2/primer1
-isSingletonMatchable <- getSingletonMatchableJunctions(edges)
-edges[isSingletonMatchable, jxnKey := ifelse(
-    isCanonical, # microhomology bases are NOT used in jxnKey - the aligner already decided they were a match to reference
-    paste( node1,  node2, insertSize, ifelse(insertSize > 0,    jxnSeq,  ""), sep = ":"),
-    paste(-node2, -node1, insertSize, ifelse(insertSize > 0, rc(jxnSeq), ""), sep = ":")
-)]
-edges[isSingletonMatchable, cJxnSeq := ifelse(isCanonical, jxnSeq, rc(jxnSeq))] # keep information that may not be present in jxnKey
-junctions <- edges[isSingletonMatchable, { # restrict to single-junction segments to facilitate edit distance, below
-    x <- strsplit(jxnKey, ":")[[1]]
-    .(
-        nMatchingSegments = .N, # valid, since each segment has a single junction
-        nCanonical = sum(isCanonical),
-        nNonCanonical = sum(!isCanonical),
-        node1 = as.integer64(x[1]),
-        node2 = as.integer64(x[2]),
-        insertSize = as.integer(x[3]),
-        jxnSeq = paste(unique(cJxnSeq), collapse = ",") # preserves any variability found in microhomologous bases omitted from jxnKey
-    )                                                   # always a single value for insertions since those jxnBases are part of jxnKey
-}, by = .(jxnKey)]
-junctions <- cbind(
-    junctions, 
-    junctions[, parseSignedNodes(chromSizes, node1, 1)], 
-    junctions[, parseSignedNodes(chromSizes, node2, 2)]
-)
-rm(isSingletonMatchable)
-#=====================================================================================
-
-#=====================================================================================
-# prepare for junction network analysis
-#-------------------------------------------------------------------------------------
-message("extracting genomic sequences at primer nodes")
-primer1RefPos <- primers[1, refPos]
-primer2RefPos <- primers[2, refPos]
-maxFlank1 <- junctions[, max(abs(refPos1 - primer1RefPos) + 1)]
-maxFlank2 <- junctions[, max(abs(refPos2 - primer2RefPos) + 1)]
-loadFaidx()
-primers[, sequence := {
-    maxSize <- if(primer == 1) maxFlank1 else maxFlank2
-    range <- if(strand == "+") c(refPos, refPos + maxSize - 1) 
-                          else c(refPos - maxSize + 1, refPos)
-    getRefSeq(chrom, range)
-}, by = .(primer)]
-primers[, rcSequence := rc(sequence)]
-primers[, seqLength := nchar(sequence)]
-unlink(genome_index$chromFile)
-rm(genome_index, primer1RefPos, primer2RefPos, maxFlank1, maxFlank2)
-
-# construct a fictitious, idealized read sequence in which any bases aligned as reference by the aligner
-# are returned as reference (not read) bases, to ignore inconsequential errors in flanking sequences or microhomologies
-# in contrast, inserted, non-reference bases are included as found in the read; we must still asses the impact of errors at these junction bases
-message("assembling idealized junction sequences for junction network analysis")
-getJxnSeq <- function(jxnKey_){
-    jxn <- junctions[jxnKey == jxnKey_]
-    microhomologyAdjustment <- max(0, -jxn$insertSize)
-    flankSize1 <- abs(jxn$refPos1 - primers[1, refPos]) + 1 - microhomologyAdjustment
-    flankSize2 <- abs(jxn$refPos2 - primers[2, refPos]) + 1 
-    flankSeq1 <- primers[1, substr(if(jxn$strand1 == "+") sequence else rcSequence, 1, flankSize1)]
-    flankSeq2 <- primers[2, substr(if(jxn$strand1 == "+") sequence else rcSequence, seqLength - flankSize2 + 1, seqLength)]
-    paste0(flankSeq1, if(jxn$insertSize > 0) jxn$jxnSeq else "", flankSeq2)
-}
-junctions[, fakeSeq := unlist(mclapply(jxnKey, getJxnSeq, mc.cores = env$N_CPU))]
-junctions[, fakeLength := nchar(fakeSeq)]
-#=====================================================================================
-
-# #########################
-# dir <- "/nfs/turbo/umms-daviferg/jobFiles/TEW-svPore-test"
-# eFile <- file.path(dir, "DEBUG.edges.rds")
-# pFile <- file.path(dir, "DEBUG.primers.rds")
-# jFile <- file.path(dir, "DEBUG.junctions.rds")
-# nFile <- file.path(dir, "DEBUG.networks.rds")
-# # saveRDS(edges, file = eFile)
-# # saveRDS(primers, file = pFile)
-# # saveRDS(junctions, file = jFile)
-# edges <- readRDS(eFile)
-# primers <- readRDS(pFile)
-# junctions <- readRDS(jFile)
 
 #=====================================================================================
 # extend junction matching by using edit distances between all unique junction pairs to create junction networks
 #-------------------------------------------------------------------------------------
-message("building junction networks from edit distances between unique junction sequences")
-junctions <- junctions[order(-nMatchingSegments)]
+message("building junction networks from junction distances")
 junctions[, ":="(
     junctionI = 1:.N,
     parentJunctionI = NA_integer_,
     parentEditDistance = 0,
     parentSWScoreDelta = 0.0
 )]
-isEditDistance1 <- function(qryJxnI, seedJxn){
-    qryJxn <- junctions[qryJxnI]
-    nodeDist <- sqrt((seedJxn$refPos1 - qryJxn$refPos1)**2 + (seedJxn$refPos2 - qryJxn$refPos2)**2) # first check if nodes are close enough to warrent edit distance calc
+# isEditDistance1 <- function(qryJxnI, seedJxn){
+#     qryJxn <- junctions[qryJxnI]
+#     nodeDist <- sqrt((seedJxn$refPos1 - qryJxn$refPos1)**2 + (seedJxn$refPos2 - qryJxn$refPos2)**2) # first check if nodes are close enough to warrent edit distance calc
     
-    # the criteria on this line are important for controlling the sensitivity, specificity and efficiency of network growth
-    # they refuse to even consider a child junction unless its endpoints and apparent molecule length are close to the seed
-    # these parameters may need optimization
-    if(nodeDist > env$JUNCTION_BANDWIDTH || abs(qryJxn$fakeLength - seedJxn$fakeLength) > 2) return(FALSE)
+#     # the criteria on this line are important for controlling the sensitivity, specificity and efficiency of network growth
+#     # they refuse to even consider a child junction unless its endpoints and apparent molecule length are close to the seed
+#     # these parameters may need optimization
+#     if(nodeDist > env$JUNCTION_BANDWIDTH || abs(qryJxn$fakeLength - seedJxn$fakeLength) > 2) return(FALSE)
 
-    rawSeed <- charToRaw(seedJxn$fakeSeq) # adopt a simplified edit distance that builds on the specific construction of our sequences
-    rawQry  <- charToRaw(qryJxn$fakeSeq)
-    lengthSeed <- length(rawSeed)
-    lengthQry  <- length(rawQry)
-    minLength  <- min(lengthSeed, lengthQry)
-    firstDiverged <- which(     rawSeed[1:minLength] !=      rawQry[1:minLength])[1]
-    flank2        <- which(rev(rawSeed)[1:minLength] != rev(rawQry)[1:minLength])[1] - 1 
-    editDistance <- adist(
-        substr(seedJxn$fakeSeq, firstDiverged - 5, lengthSeed - flank2 + 5), # deliberately include extra shared bases to help adist find the best edit path
-        substr(qryJxn$fakeSeq,  firstDiverged - 5, lengthQry  - flank2 + 5)
-    )
-    if(is.na(editDistance)) editDistance <- adist(seedJxn$fakeSeq, qryJxn$fakeSeq) # catch rare problems with vector overruns in assembly above
-    editDistance <= 1 # should never be zero...
+#     rawSeed <- charToRaw(seedJxn$fakeSeq) # adopt a simplified edit distance that builds on the specific construction of our sequences
+#     rawQry  <- charToRaw(qryJxn$fakeSeq)
+#     lengthSeed <- length(rawSeed)
+#     lengthQry  <- length(rawQry)
+#     minLength  <- min(lengthSeed, lengthQry)
+#     firstDiverged <- which(     rawSeed[1:minLength] !=      rawQry[1:minLength])[1]
+#     flank2        <- which(rev(rawSeed)[1:minLength] != rev(rawQry)[1:minLength])[1] - 1 
+#     editDistance <- adist(
+#         substr(seedJxn$fakeSeq, firstDiverged - 5, lengthSeed - flank2 + 5), # deliberately include extra shared bases to help adist find the best edit path
+#         substr(qryJxn$fakeSeq,  firstDiverged - 5, lengthQry  - flank2 + 5)
+#     )
+#     if(is.na(editDistance)) editDistance <- adist(seedJxn$fakeSeq, qryJxn$fakeSeq) # catch rare problems with vector overruns in assembly above
+#     editDistance <= 1 # should never be zero...
+# }
+# processSeedJxn <- function(seedJxnI, parentJxnI, parentEditDistance_){
+#     seedJxn <- junctions[seedJxnI]    
+#     qryJxnIs <- junctions[is.na(parentJunctionI), junctionI]
+#     if(length(qryJxnIs) == 0) return(NULL)
 
-    # if networks grow too aggressively, they may start to merge two true networks into one
-    # a possible additional check against this would be to always recheck each (grand...)child against the network parent
-}
-processSeedJxn <- function(seedJxnI, parentJxnI, parentEditDistance_){
-    seedJxn <- junctions[seedJxnI]    
-    qryJxnIs <- junctions[is.na(parentJunctionI), junctionI]
-    if(length(qryJxnIs) == 0) return(NULL)
-    isEditDist1 <- unlist(mclapply(qryJxnIs, isEditDistance1, seedJxn, mc.cores = env$N_CPU))
-    if(any(isEditDist1)){  
-        junctions[qryJxnIs[isEditDist1], ":="(parentJunctionI = parentJxnI, parentEditDistance = parentEditDistance_)]
-        for(childJxnI in qryJxnIs[isEditDist1]) processSeedJxn(childJxnI, parentJxnI, parentEditDistance_ + 1) # iteratively use each matched child junction as a new seed in the network
-    }
-    NULL
-}
-message(paste("parentJxnI", "nMatchingSegments", "nRemaining"))
-pendingJxns <- junctions[, is.na(parentJunctionI)]
-maxShift <- env$JUNCTION_BANDWIDTH
-while(any(pendingJxns)){
-    parentJxnI <- which(pendingJxns)[1] # get the next network parent as the next most abundant but unassigned junction   
-    nMatchingSegments <- junctions[parentJxnI, nMatchingSegments]
-    if(nMatchingSegments == 1) break # stop assembling networks when down to singletons, they can't reasonably act as parents
-    message(paste(parentJxnI, nMatchingSegments, sum(pendingJxns)))
-    junctions[parentJxnI, ":="(parentJunctionI = parentJxnI, parentEditDistance = 0)]
-    processSeedJxn(parentJxnI, parentJxnI, 1)
-    parentFakeSeq <- junctions[parentJxnI, fakeSeq] # reassess the exact alignment of each child to is parent junction
-    parentFakeLength <- junctions[parentJxnI, fakeLength]
-    networkJxnI <- junctions[parentJunctionI == parentJxnI, junctionI]
-    junctions[networkJxnI, parentSWScoreDelta := unlist(mclapply(networkJxnI, function(jxnI){
-        parentFakeLength - smith_waterman(junctions[jxnI, fakeSeq], parentFakeSeq, fast = TRUE)$bestScore
-    }, mc.cores = env$N_CPU))]
-    pendingJxns <- junctions[, is.na(parentJunctionI)]
-    ################
-    # break
-}
-junctions[pendingJxns, ":="(parentJunctionI = junctionI)]
-networks <- junctions[, .(
-    networkKey = jxnKey[1], # first is the parent junction due to prior sorting
-    maxEditDistance = max(parentEditDistance, na.rm = TRUE),
-    maxSWScoreDelta = max(parentSWScoreDelta, na.rm = TRUE),
-    nMatchingJunctions = .N,
-    parentNMatchingSegments = nMatchingSegments[1],
-    nextNMatchingSegments = if(.N == 1) NA_integer_ else nMatchingSegments[2],
-    nMatchingSegments = sum(nMatchingSegments),
-    nCanonical = sum(nCanonical),
-    nNonCanonical = sum(nNonCanonical),
-    node1 = node1[1],
-    node2 = node2[1],
-    insertSize = insertSize[1],
-    jxnSeq = jxnSeq[1],
-    chrom1 = chrom1[1],
-    chromIndex1 = chromIndex1[1],
-    refPos1 = refPos1[1],
-    strand1 = strand1[1],
-    chrom2 = chrom2[1],    
-    chromIndex2 = chromIndex2[1],
-    refPos2 = refPos2[1],
-    strand2 = strand2[1],
-    fakeSeq = fakeSeq[1],
-    fakeLength = fakeLength[1]
-), by = .(parentJunctionI)]
+#     isEditDist1 <- unlist(mclapply(qryJxnIs, isEditDistance1, seedJxn, mc.cores = env$N_CPU))
+#     if(any(isEditDist1)){  
+
+#         junctions[qryJxnIs[isEditDist1], ":="(parentJunctionI = parentJxnI, parentEditDistance = parentEditDistance_)]
+#         for(childJxnI in qryJxnIs[isEditDist1]) processSeedJxn(childJxnI, parentJxnI, parentEditDistance_ + 1) # iteratively use each matched child junction as a new seed in the network
+#     }
+#     NULL
+# }
+# message(paste("parentJxnI", "nMatchingSegments", "nRemaining"))
+# pendingJxns <- junctions[, is.na(parentJunctionI)]
+# maxShift <- env$JUNCTION_BANDWIDTH
+# while(any(pendingJxns)){
+#     parentJxnI <- which(pendingJxns)[1] # get the next network parent as the next most abundant but unassigned junction   
+#     nMatchingSegments <- junctions[parentJxnI, nMatchingSegments]
+#     if(nMatchingSegments == 1) break # stop assembling networks when down to singletons, they can't reasonably act as parents
+#     message(paste(parentJxnI, nMatchingSegments, sum(pendingJxns)))
+#     junctions[parentJxnI, ":="(parentJunctionI = parentJxnI, parentEditDistance = 0)]
+#     processSeedJxn(parentJxnI, parentJxnI, 1)
+
+#     # parentFakeSeq <- junctions[parentJxnI, fakeSeq] # reassess the exact alignment of each child to is parent junction
+#     # parentFakeLength <- junctions[parentJxnI, fakeLength]
+#     # networkJxnI <- junctions[parentJunctionI == parentJxnI, junctionI]
+#     # junctions[networkJxnI, parentSWScoreDelta := unlist(mclapply(networkJxnI, function(jxnI){
+#     #     parentFakeLength - smith_waterman(junctions[jxnI, fakeSeq], parentFakeSeq, fast = TRUE)$bestScore
+#     # }, mc.cores = env$N_CPU))]
+
+#     pendingJxns <- junctions[, is.na(parentJunctionI)]
+#     ################
+#     # break
+# }
+# junctions[pendingJxns, ":="(parentJunctionI = junctionI)]
+# networks <- junctions[, .(
+#     networkKey = jxnKey[1], # first is the parent junction due to prior sorting
+#     maxEditDistance = max(parentEditDistance, na.rm = TRUE),
+#     maxSWScoreDelta = max(parentSWScoreDelta, na.rm = TRUE),
+#     nMatchingJunctions = .N,
+#     parentNMatchingSegments = nMatchingSegments[1],
+#     nextNMatchingSegments = if(.N == 1) NA_integer_ else nMatchingSegments[2],
+#     nMatchingSegments = sum(nMatchingSegments),
+#     nCanonical = sum(nCanonical),
+#     nNonCanonical = sum(nNonCanonical),
+#     node1 = node1[1],
+#     node2 = node2[1],
+#     insertSize = insertSize[1],
+#     jxnSeq = jxnSeq[1],
+#     chrom1 = chrom1[1],
+#     chromIndex1 = chromIndex1[1],
+#     refPos1 = refPos1[1],
+#     strand1 = strand1[1],
+#     chrom2 = chrom2[1],    
+#     chromIndex2 = chromIndex2[1],
+#     refPos2 = refPos2[1],
+#     strand2 = strand2[1],
+#     fakeSeq = fakeSeq[1],
+#     fakeLength = fakeLength[1]
+# ), by = .(parentJunctionI)]
 #=====================================================================================
  
 #=====================================================================================
@@ -364,12 +433,12 @@ message("number of kept SV junctions per kept segment")
 print(edges[, .(nKeptJunctions = nKeptJunctions[1]), by = .(segmentName)][, .N, by = .(nKeptJunctions)][order(nKeptJunctions)])
 message("number of matching junctions per unique kept junction")
 print(junctions[, .(nMatchingSegments), by = .(jxnKey)][, .N, by = .(nMatchingSegments)][order(nMatchingSegments)])
-message("number of junctions per network")
-print(networks[, .(nMatchingJunctions), by = .(networkKey)][, .N, by = .(nMatchingJunctions)][order(nMatchingJunctions)])
-message("maximum edit distance per network")
-print(networks[, .(maxEditDistance), by = .(networkKey)][, .N, by = .(maxEditDistance)][order(maxEditDistance)])
-message("maximum SW delta per network")
-print(networks[, .(maxSWScoreDelta), by = .(networkKey)][, .N, by = .(maxSWScoreDelta)][order(maxSWScoreDelta)])
+# message("number of junctions per network")
+# print(networks[, .(nMatchingJunctions), by = .(networkKey)][, .N, by = .(nMatchingJunctions)][order(nMatchingJunctions)])
+# message("maximum edit distance per network")
+# print(networks[, .(maxEditDistance), by = .(networkKey)][, .N, by = .(maxEditDistance)][order(maxEditDistance)])
+# message("maximum SW delta per network")
+# print(networks[, .(maxSWScoreDelta), by = .(networkKey)][, .N, by = .(maxSWScoreDelta)][order(maxSWScoreDelta)])
 #=====================================================================================
 
 #=====================================================================================
@@ -378,10 +447,10 @@ print(networks[, .(maxSWScoreDelta), by = .(networkKey)][, .N, by = .(maxSWScore
 message("creating sample manifest")    
 nEdges <- nrow(edges)
 nJunctions <- nrow(junctions)
-nNetworks <- nrow(networks)
+# nNetworks <- nrow(networks)
 message(paste("nEdges", nEdges))
 message(paste("nJunctions", nJunctions))
-message(paste("nNetworks", nNetworks))
+# message(paste("nNetworks", nNetworks))
 isSingletonMatchable <- getSingletonMatchableJunctions(edges)
 manifest <- edges[isSingletonMatchable, .(
     Project = env$DATA_NAME,
@@ -390,8 +459,9 @@ manifest <- edges[isSingletonMatchable, .(
     Yield = .N,
     nSingletonMatchable = .N,
     nEdges = nEdges,
-    nJunctions = nJunctions,
-    nNetworks = nNetworks
+    nJunctions = nJunctions
+    # ,
+    # nNetworks = nNetworks
 )]
 fwrite(
     manifest,
@@ -430,8 +500,12 @@ saveRDS(
     junctions, 
     paste(env$PARSE_PREFIX, "junctions", "rds", sep = ".")
 )
+# saveRDS(
+#     networks, 
+#     paste(env$PARSE_PREFIX, "networks", "rds", sep = ".")
+# )
 saveRDS(
-    networks, 
-    paste(env$PARSE_PREFIX, "networks", "rds", sep = ".")
+    distances, 
+    paste(env$PARSE_PREFIX, "distances", "rds", sep = ".")
 )
 #=====================================================================================

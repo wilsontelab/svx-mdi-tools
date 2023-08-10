@@ -7,4 +7,5 @@ packages:
     - imager
     - abind
     - twosamples
+    - Rtsne
   Bioconductor: null
