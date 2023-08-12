@@ -29,8 +29,13 @@ uploadTypes:
                 required: true
             junctionsFile:  
                 required: true
-            networksFile:  
+            distancesFile:  
                 required: true     
+            networksFile:  
+                required: true  
+            graphImage:  
+                required: true  
+
 #----------------------------------------------------------------------
 # labels and definitions for all sequential analysis steps shown in sidebar
 #----------------------------------------------------------------------
@@ -46,6 +51,8 @@ uploadTypes:
 appSteps:
     upload: # nearly always the 1st step of every app
         module: sourceFileUpload
+    summarize:
+        module: sampleSummary
     explore:
         module: dataExplorer
         options:
