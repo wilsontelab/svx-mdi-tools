@@ -53,12 +53,15 @@ package:
             junctionsFile:
                 type: zip
                 file: $PARSE_PREFIX.junctions.rds
-            # networksFile:
-            #     type: rds
-            #     file: $PARSE_PREFIX.networks.rds
             distancesFile:
                 type: rds
-                file: $PARSE_PREFIX.distances.rds           
+                file: $PARSE_PREFIX.distances.rds                 
+            networksFile:
+                type: rds
+                file: $PARSE_PREFIX.networks.rds
+            graphImage:
+                type: png
+                file: $PARSE_PREFIX.junction_graph.png           
 # container:
 #     supported: false    # set to true if you maintain a container registry for this pipeline [false]
 #     registry:  ghcr.io  # domain name of your OCI-compatible, oras-accessible, container registry [ghcr.io]

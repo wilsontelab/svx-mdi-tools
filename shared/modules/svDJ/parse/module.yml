@@ -7,9 +7,11 @@ action: # required
         - r-4.2
         - svPore-find
     optionFamilies:
+        - genomex-mdi-tools//genome
         - genomex-mdi-tools//read-filtering               
         - svPore-size-limits
         - svPore-find
+        - junction-networks
     resources:
         required:
             total-ram: 32G

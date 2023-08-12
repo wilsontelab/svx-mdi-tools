@@ -3,4 +3,6 @@
 # versions current as of January 2022
 dependencies:
     - r-e1071  # provides support vector machines for adapter finding
-    - r-igraph # provies graph analysis for junction and read clustering
+    - r-igraph # provides graph analysis for junction and read clustering
+    - r-rtsne  # provides clustering and visualization for svDJ, others
+    - r-flexclust # provides weighted clustering for svDJ, others

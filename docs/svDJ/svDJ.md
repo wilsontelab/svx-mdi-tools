@@ -21,14 +21,16 @@ but at present have only been applied to nanopore data.
 
 ### Expectations
 svDJ assumes that each input library of molecules represents amplification
-of a **single amplicon** subjected to adapter ligation and sequencing.
+of a **single amplicon family** subjected to adapter ligation and sequencing.
 A set of such libraries may be barcoded and sequenced together on a
 single flow cell, but upstream processing (e.g., by MinKNOW) must have
 already demultiplexed the libraries into separate file sets.
 Thus, there should be separate folders that each hold one or more sequence
-files with reads from one PCR reaction performed with one forward
-and one reverse primer. In the future, it could be possible to have 
-mixed amplicons, but this is not presently supported.
+files with reads from one or more PCR reactions performed with one forward
+and one reverse primer. It is acceptable, in fact expected, that those primers
+will have amplified more than more one type of source molecule.
+In the future, it could be possible to have 
+mixed amplicons, i.e., primer sets, but this is not presently supported.
 
 As its name implies, svDJ was developed to analyze V(D)J recombination
 junctions. However, it could be applied equally well to any amplicon
@@ -189,7 +191,7 @@ svDJ therefore sometimes uses an adjancency tolerance when matching nodes. For e
 molecules with outer nodes 12/-56 and 12/-57 would both be considered a match to
 primer nodes 12/-56.
 
-In its layer of junction matching, <code>parse</code> uses exact matching based on the
+In its first layer of junction matching, <code>parse</code> uses exact matching based on the
 actual node positions and any novel inserted bases. This yields the following table of
 <code>junctions</code>.
 
@@ -261,26 +263,40 @@ junction with missing base "A", called as 4-base insertion:
     read sequence: ~~~Tacg~~~~~
     alignment 2:          *----
 </pre>
+
 To help match junctions impacted by these factors, a second
-round of matching is performed based on the edit distance between junctions.
+round of matching is performed based on the edit distance between junctions,
+irrespective of the node positions and insert size.
 The logic is that highly abundant junctions (based on exact matching)
 are likely to have spawned some reads that diverged from the parent molecule
 due to a method error at the junction.
 
 The <code>parse</code> action builds
-adjacency networks by starting with the most abundant junction
-and finding any other junctions with an edit distance of 1 to the parent junction. If any children are found, they are iteratively used as the seed to add junctions to the network, again accepting junctions with
-an edit distance of 1 to the seed. When the network stops growing, the process
-repeats starting with the next most abundant junction that is not yet part of a
-network, ending when every unique junction has been added to a network
-(even if it is the sole member of that network).
-For efficiency svDJ does not attempt to build networks from seed junctions
-that were found in only one segment.
+adjacency networks by analyzing a graph where 
+all unique junctions above a user-defined coverage threshold
+are the nodes and edge weights are the edit distance
+between them. The graph is directed, such that lower frequency
+junctions point toward higher frequency junctions. 
 
-The process is essentially the same as the directional model reported by
-<a href="https://www.ncbi.nlm.nih.gov/pmc/articles/PMC5340976/">Smith et al.</a>
-for the analysis of unique molecular identifers (UMIs), where we
-essentially treat each distinct junction signature as a UMI.
+The most abundant junction is declared as the parent node
+of a first subgraph expected to have less frequent derivative 
+junctions that arose by error processes.
+Each less frequent junction node is then analyzed to assess 
+whether it is best modeled as a new parent node representing
+a distinct junction or as a child, i.e., derivative, of
+an existing parent node. This decision is controlled
+by user parameters of the maximum edit distance from a parent
+to a child and how much to weight the junction coverage.
+Larger edit distances and higher junction coverage favor
+calling a query node as the parent of a new junction subgraph.
+
+Once all candidate junction nodes have been evaluated, `parse` can
+continue on, if instructed, to add the lowest coverage nodes to 
+existing junction networks, but they will not create new junction calls.
+Because this can entail processing large numbers of singleton sequences,
+the default behavior is to skip this process as it is slow and often has little impact
+on the final result.
+
 Importantly, only the bases at the junction are used when comparing junctions to each other.
 Base differences in the amplicon "stems" on each side of the junction are assumed to be sequencing errors and are disregarded by assembling a "fake" representative sequence for each read segment,
 where the flanks are replaced with the corresponding amount of reference genome sequence (i.e., from outer primer node to the junction node).
@@ -290,10 +306,10 @@ of a source DNA amplicon molecule, which must be accounted for during junction m
 svDJ achieves this by defining a **canonical orientation** for every junction, i.e.,
 for every possible combination of node pairs. A read segment is on the canonical strand
 if it begins at the primer1 node, as defined by the primers table. Noncanonical segments
-are reverse complement prior to junction comparison.
+are reverse complemented prior to junction comparison.
 
-The final level of aggregation is thus the table of junction <code>networks</code>, as follows.
-All tables (primers, edges, junctions, and networks) are returned as RDS files for furhter
+The resulting final level of aggregation is thus the table of junction <code>networks</code>, as follows.
+All tables (primers, edges, junctions, and networks) are returned as RDS files for further
 exploration.
 
 <table>

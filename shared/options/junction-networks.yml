@@ -1,0 +1,45 @@
+---
+# options used during svPore extract and find
+options:
+    min-parent-coverage:
+        order: 1
+        short: c
+        type: integer
+        required: false
+        default: 2
+        description: "minimum number of corresponding segments for a junction to become a network parent"   
+    max-edit-distance:
+        order: 2
+        short: e
+        type: integer
+        required: false
+        default: 5
+        description: "maximum edit distance allowed between a junction and its network parent" 
+    merge-coverage-sensitivity:
+        order: 3
+        short: C
+        type: double
+        required: false
+        default: 1.0
+        description: "how much junction coverage is considered when seeding networks; from 0 (no adjustment) to 1 (full adjustment)" 
+    add-rare-junctions:
+        order: 4
+        short: j
+        type: boolean
+        required: false
+        default: false
+        description: "if set, try to merge junctions with less than --min-parent-coverage into networks (slow)" 
+    tsne-perplexity:
+        order: 5
+        short: x
+        type: integer
+        required: false
+        default: 30
+        description: "value passed to Rtsne when assembling the junction network plot" 
+    tsne-theta:
+        order: 6
+        short: X
+        type: double
+        required: false
+        default: 0.5
+        description: "value passed to Rtsne when assembling the junction network plot"  

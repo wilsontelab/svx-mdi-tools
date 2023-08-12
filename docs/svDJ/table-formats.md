@@ -120,36 +120,34 @@ combination of `node1`, `node2`, `insertSize` and, if insertSize > 0, `jxnBases`
 | fakeLength | integer | number of bases in fakeSeq, best estimate of the original source molecule length |
 | **network membership** | | |
 | junctionI | integer | sequential number of this junction, sorted by decreasing value of `nMatchingSegments` |
-| parentJunctionI | integer | `junctionI` of the parent junction of the network to which this junction belongs |
-| parentEditDistance | integer | the number of edits, i.e., seed levels, from this junction to the parent junction of the network |
-| parentSWScoreDelta | double | difference in the Smith Waterman alignment score of this read to its parent vs. that of the parent to itself |
+| parentJunctionI | integer | `junctionI` of the parent junction of the network to which this junction belongs; NA for low frequency junctions not added to any network |
+| parentDistance | integer | the number of edits from this junction to the parent junction of the network; NA for low frequency junctions not added to any network |
+| junctionOnParent | character | map of this junction sequence onto its network parent, a string of same length as parent `fakeSeq` | 
 
 ### Networks
 
 The `networks` table further aggregates the junctions table after the 
 construction of junction networks. The junction rows aggregated into
-a given network row had an edit distance of 1 to at least one other junction
-in the same network. The inference is that they likely arose from the same
+a given network are inferred to have arisen from the same
 source molecule but diverged due to PCR or sequencing errors. 
+There may be some "collisions" where two independent source molecules
+fortuitously had a small edit distance and were inappropriately placed into the same network. 
+This outcome is infrequent due to the consideration of junction coverage during network analysis,
+but when it happens will reduce the true molecular complexity of the source sample in the networks table. 
 
-There 
-will undoubtedly be some "collisions" where two independent source molecules
-fortuitously had an edit distance of 1 and were inappropriately placed into the same network. This action can reduce the true molecular complexity of the source sample in the networks table. 
-
-However, especially in the case of nanopore sequencing with its higher error rate, it is also likely that some reads diverged from their parent source molecules because they acquired two errors in a single read. Such reads fail
-to be merged into their true network, falsely increasing the apparent molecular complexity of the source sample. Importantly, they might often result in single-junction networks that can be filtered against. They also likely arise
-from lower quality reads, and can be filtered against by option `--min-alignment-identity`, which demands that the alignments flanking a junction
+However, especially in the case of nanopore sequencing with its higher error rate, it is also likely that some reads diverged from their parent source molecules because they acquired multiple errors. Such reads fail
+to be merged into their true network, falsely increasing the apparent molecular complexity of the source sample. Importantly, these often result in junction networks with low coverage that can be filtered against. They also likely arise from lower quality reads, and can be filtered against by option `--min-alignment-identity`, which demands that the alignments flanking a junction
 had a high percentage of bases that matched the reference genome (implying that the junction sequence itself was also high quality).
 
 It is up to the user to decide whether junctions or networks give the most
-reliable quantification of the data, whether to trust single-junction networks, how aggressively to set quality filters, etc.
+reliable quantification of the data, whether to trust low-coverage networks, how aggressively to set quality filters, etc. In general, we think the network analysis is robust such that the
+networks table provides the fairest assessment of detected junctions and their relative abundance. 
 
 | column | data_type | description |
 | ------ | --------- | ----------- |
 | networkKey | character | the `jxnKey` of the parent junction of the network |
 | parentJunctionI | integer | the `junctionI` of the parent junction of the network |
-| maxEditDistance | integer | max(`parentEditDistance`) over all junctions in the network |
-| maxSWScoreDelta | double | max(`parentSWScoreDelta`) over all junctions in the network |
+| maxDistance | integer | max(`parentDistance`) over all junctions in the network |
 | nMatchingJunctions | integer | number of `junctions` rows aggregated into this network | 
 | parentNMatchingSegments | integer | `nMatchingSegments` of the parent junction | 
 | nextNMatchingSegments | integer | `nMatchingSegments` of the first non-parent junction added to the network |
