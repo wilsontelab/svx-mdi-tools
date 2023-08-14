@@ -59,6 +59,7 @@ checkPipe
 cat $AMPLICONS_FILE
 
 # reject molecules with too-large a position difference from and index and too low a count to become a new index
+# output is nodePair_amplicon, seq1, seq2 // qual1, qual2, merged, overlap, molId, isReference
 echo "counting and saving unique DNA sequences from kept amplicon molecules"
 zcat $INTERIM_FILE | 
 sed -e 's/ZZ/\t/g' | 
@@ -68,10 +69,15 @@ perl $ACTION_DIR/group/filter-read-pairs.pl |
 # parse the corresponding QUAL for passing to realignment
 # at this stage, N bases and sequencing errors still break molecule groups (will group later based on junctions)
 $SORT -k1,1n -k2,2 -k3,3 | 
-bedtools groupby -g 1,2,3 -c 4,5,6,7,8,9,9 -o first,first,max,first,first,first,count | # TODO: use better aggregate QUAL, e.g., via $val = ord ($char) - 33 ??
+bedtools groupby -g 1,2,3 -c 4,5,6,7,8,9,9 -o concat,concat,max,first,first,first,count | 
 perl $ACTION_DIR/group/assemble-fastq.pl | 
 pigz -p $N_CPU -c | 
 slurp -o $FASTQ_FILE
 checkPipe
+
+echo "cleaning up"
+# rm -f ${INTERIM_FILE}
+# rm -f ${DISCOVERY_FILE}
+# rm -f ${ALLOWED_FILE}
 
 echo "done"

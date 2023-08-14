@@ -28,6 +28,7 @@ actions:
             - genomex-mdi-tools//read-merging
             - amplicon-discovery
             - read-pair-filtering
+            - genomex-mdi-tools//aligner # for realignment
             - sv-finding
         resources:
             required:
