@@ -76,8 +76,8 @@ slurp -o $FASTQ_FILE
 checkPipe
 
 echo "cleaning up"
-# rm -f ${INTERIM_FILE}
-# rm -f ${DISCOVERY_FILE}
-# rm -f ${ALLOWED_FILE}
+rm -f ${INTERIM_FILE}
+rm -f ${DISCOVERY_FILE}
+rm -f ${ALLOWED_FILE}
 
 echo "done"

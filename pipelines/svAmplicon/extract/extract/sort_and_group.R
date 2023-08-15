@@ -112,17 +112,13 @@ edges[isJunction, ":="( # junction qualities are the lower of the two flanking a
 setkey(edges, molKey, i)
 #=====================================================================================
 
-# #=====================================================================================
-# message("  counting unique molecules")
-# nMolecules <- edges[, length(unique(molKey))]
-# nMergeFailure  <- edges[edgeType %in% c(edgeTypes$FUSED_MERGE_FAILURE, edgeTypes$FUSED_MERGE_FAILURE_REJECTED_INDEL), length(unique(molKey))]
-# nRejectedIndel <- edges[edgeType %in% c(edgeTypes$REJECTED_INDEL,      edgeTypes$FUSED_MERGE_FAILURE_REJECTED_INDEL), length(unique(molKey))]
-# nBoth <- edges[edgeType == edgeTypes$FUSED_MERGE_FAILURE_REJECTED_INDEL, length(unique(molKey))]
-# message(paste0("    ", paste(nMolecules,     "unique molecule sequences",     sep = "\t")))
-# message(paste0("    ", paste(nMergeFailure,  "molecules had merge failures",  sep = "\t")))
-# message(paste0("    ", paste(nRejectedIndel, "molecules had rejected indels", sep = "\t")))
-# message(paste0("    ", paste(nBoth,          "molecules had both merge failures and rejected indels", sep = "\t")))
-# #=====================================================================================
+#=====================================================================================
+message("  counting unique molecules")
+nMolecules     <- edges[,                                    length(unique(molKey))]
+nMergeFailure  <- edges[edgeType == edgeTypes$MERGE_FAILURE, length(unique(molKey))]
+message(paste0("    ", paste(nMolecules,     "unique molecule sequences",     sep = "\t")))
+message(paste0("    ", paste(nMergeFailure,  "molecules had merge failures",  sep = "\t")))
+#=====================================================================================
 
 #=====================================================================================
 message("  collapsing nodes and edges into molecules")
@@ -180,11 +176,10 @@ molecules <- edges[, {
 message("  aggregating molecules into types, i.e., shared SV paths")
 moleculeTypes <- molecules[
     order(
-        ampliconId, path, insSizes, # first columns are for moleculeType grouping (not currently using sequence, just insertSize)
-        -isReference, -mergeLevel, -nReadPairs, -minBaseQual, -minMapQ # last columns are for selecting the index molecule   
+        ampliconId, path, insertSizes, # first columns are for moleculeType grouping (not currently using sequence, just insertSize)
+        -isReference, -mergeLevel, -nReadPairs, -minBaseQual, -minMapQ # last columns are   
     )
-][,
-    .(
+][, .(
         # molecule-level information
         # ampliconId 
         # path
@@ -217,8 +212,7 @@ moleculeTypes <- molecules[
         seq2        = seq2[1],        
         qual1       = qual1[1],
         qual2       = qual2[1]
-    ), by = .(ampliconId, path, insertSizes)
-][
+), by = .(ampliconId, path, insertSizes)][
     order(ampliconId, -nReadPairs) # sort by molecule type frequency
 ]
 #=====================================================================================

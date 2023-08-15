@@ -55,6 +55,6 @@ Rscript $ACTION_DIR/extract/sort_and_group.R
 checkPipe
 
 echo "cleaning up"
-# rm -f ${INTERIM_FILE}
+rm -f ${INTERIM_FILE}
 
 echo "done"
