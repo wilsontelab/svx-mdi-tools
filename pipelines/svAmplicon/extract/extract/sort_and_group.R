@@ -4,8 +4,10 @@
 # script initialization
 #-------------------------------------------------------------------------------------
 message("  initializing")
-library(data.table)
-library(parallel)
+suppressPackageStartupMessages(suppressWarnings({
+    library(data.table)
+    library(parallel)
+}))
 #-------------------------------------------------------------------------------------
 # load, parse and save environment variables
 env <- as.list(Sys.getenv())
@@ -46,23 +48,23 @@ edgesColumns <- c(
     "pos1",
     "seq1",
     "qual1",    
-    "cigar1",
     "readN1",
     "chrom2",
     "strand2",
     "pos2",
     "seq2",
     "qual2",    
-    "cigar2",
     "readN2",
-    "edgeType",
     "mapQ",
-    "size",
-    "insSize",
+    "cigar",
+    "alnQ",
+    "edgeType",
+    "eventSize",
+    "insertSize",
     "ampliconId", 
     "mergeLevel", 
     "overlap", 
-    "isRef", 
+    "isReference", 
     "nReadPairs",
     "baseQual"
 )
@@ -75,10 +77,7 @@ edgeTypes <- list(
     UNKNOWN       = "?",
     INSERTION     = "I", 
     MERGE_FAILURE = "M",
-    PROPER        = "P",
-    FUSED_MERGE_FAILURE = "F",
-    REJECTED_INDEL = "R",
-    FUSED_MERGE_FAILURE_REJECTED_INDEL = "Q"
+    PROPER        = "P"
 )
 #=====================================================================================
 
@@ -87,102 +86,92 @@ message("  loading edges")
 edges <- fread(env$INTERIM_FILE, sep = "\t", header = FALSE)
 setnames(edges, edgesColumns)
 message("  calculating derivative values")
+isJunction <- edges[, edgeType != edgeTypes$ALIGNMENT]
+isMasked <-edges[, 
+    isJunction & 
+    (
+        edgeType == edgeTypes$MERGE_FAILURE |
+        (
+            eventSize  < env$MIN_SV_SIZE & 
+            insertSize < env$MIN_SV_SIZE 
+        )
+    )
+]
 edges[, ":="(
     i = .I,
     molKey = paste(ampliconId, molId, sep = ":"), # used for simplified sorting and grouping
-    edgeClass = ifelse(                           # molecules come to us sorted by molKey
-        edgeType %in% c(
-            edgeTypes$FUSED_MERGE_FAILURE, # edgeClass collapses all rejected edge types (F,R,Q) into a single alignment (A)
-            edgeTypes$REJECTED_INDEL, 
-            edgeTypes$FUSED_MERGE_FAILURE_REJECTED_INDEL
-        ), 
-        edgeTypes$ALIGNMENT, 
-        edgeType
-    )    
+    masked = isMasked,
+    node1 = paste(chrom1, strand1, pos1, sep = "/"),
+    node2 = paste(chrom2, strand2, pos2, sep = "/")
+)]
+edges[isJunction, ":="( # junction qualities are the lower of the two flanking alignment qualities
+    mapQ     = pmin(mapQ[i - 1],     mapQ[i + 1]),
+    alnQ     = pmin(alnQ[i - 1],     alnQ[i + 1]),
+    baseQual = pmin(baseQual[i - 1], baseQual[i + 1])
 )]
 setkey(edges, molKey, i)
 #=====================================================================================
 
-#=====================================================================================
-message("  counting unique molecules")
-nMolecules <- edges[, length(unique(molKey))]
-nMergeFailure  <- edges[edgeType %in% c(edgeTypes$FUSED_MERGE_FAILURE, edgeTypes$FUSED_MERGE_FAILURE_REJECTED_INDEL), length(unique(molKey))]
-nRejectedIndel <- edges[edgeType %in% c(edgeTypes$REJECTED_INDEL,      edgeTypes$FUSED_MERGE_FAILURE_REJECTED_INDEL), length(unique(molKey))]
-nBoth <- edges[edgeType == edgeTypes$FUSED_MERGE_FAILURE_REJECTED_INDEL, length(unique(molKey))]
-message(paste0("    ", paste(nMolecules,     "unique molecule sequences",     sep = "\t")))
-message(paste0("    ", paste(nMergeFailure,  "molecules had merge failures",  sep = "\t")))
-message(paste0("    ", paste(nRejectedIndel, "molecules had rejected indels", sep = "\t")))
-message(paste0("    ", paste(nBoth,          "molecules had both merge failures and rejected indels", sep = "\t")))
-#=====================================================================================
+# #=====================================================================================
+# message("  counting unique molecules")
+# nMolecules <- edges[, length(unique(molKey))]
+# nMergeFailure  <- edges[edgeType %in% c(edgeTypes$FUSED_MERGE_FAILURE, edgeTypes$FUSED_MERGE_FAILURE_REJECTED_INDEL), length(unique(molKey))]
+# nRejectedIndel <- edges[edgeType %in% c(edgeTypes$REJECTED_INDEL,      edgeTypes$FUSED_MERGE_FAILURE_REJECTED_INDEL), length(unique(molKey))]
+# nBoth <- edges[edgeType == edgeTypes$FUSED_MERGE_FAILURE_REJECTED_INDEL, length(unique(molKey))]
+# message(paste0("    ", paste(nMolecules,     "unique molecule sequences",     sep = "\t")))
+# message(paste0("    ", paste(nMergeFailure,  "molecules had merge failures",  sep = "\t")))
+# message(paste0("    ", paste(nRejectedIndel, "molecules had rejected indels", sep = "\t")))
+# message(paste0("    ", paste(nBoth,          "molecules had both merge failures and rejected indels", sep = "\t")))
+# #=====================================================================================
 
 #=====================================================================================
 message("  collapsing nodes and edges into molecules")
-edges[, ":="(
-    nodePair = paste( # create a unique identifier for an edge, NOT including insSize yet, only for path tracing
-        paste(chrom1, strand1, pos1, sep = "/"),
-        paste(chrom2, strand2, pos2, sep = "/"),
-        sep = ":"          
-    )
-)]
 molecules <- edges[, {
-    isAlignment <- edgeClass == edgeTypes$ALIGNMENT
-    isSameRead <- readN1 == readN2
-    isRead1 <- readN1 == 1
-    isMerged <- mergeLevel[1] == 0
-    aligmentInfo <- function(value1, value2){
-        paste0(na.omit(ifelse(
-            isAlignment, 
-            ifelse(
-                isSameRead, 
-                ifelse(isRead1, value1, value2), # read 2 reports end positions, for consistency with merge failures
-                paste(value1, value2, sep = ":") # properly handle merge failures, i.e., 1:2 fusions, by reporting both alignments
-            ),
-            NA
-        )), collapse = ":")
+    isAlignment <- edgeType == edgeTypes$ALIGNMENT    
+    isCandidateJunction <- !isAlignment & !masked
+    isMerged <- mergeLevel[1] > 0
+    interleave_ <- function(value1, value2){
+        paste(c(rbind(value1[isCandidateJunction], value2[isCandidateJunction])), collapse = ":")
     }
-    junctionInfo <- function(value, collapse = ":"){
-        paste0(na.omit(ifelse(
-            isAlignment, 
-            NA,
-            value
-        )), collapse = collapse)
+    paste_ <- function(value, collapse = ":"){
+        paste(value[isCandidateJunction], collapse = collapse)
+    }
+    min_ <- function(value){
+        min(value[isAlignment], na.rm = TRUE)
     }
     .(
         # molecule-level information, the same for every edge
+        # molKey
         ampliconId = ampliconId[1], 
         molId = molId[1],  
-        isRef =  as.logical(isRef[1]),    
+        isReference =  as.logical(isReference[1]),    
         nReadPairs = nReadPairs[1],    
         mergeLevel = mergeLevel[1], 
         overlap = overlap[1],
 
-        # alignment-level information
-        chroms = aligmentInfo(chrom1,  chrom2),
-        strands= aligmentInfo(strand1, strand2),
-        poss   = aligmentInfo(pos1,    pos2),
-        cigars = aligmentInfo(cigar1,  cigar2),
-        readNs = aligmentInfo(readN1,  readN2),
-        mapQs       = aligmentInfo(mapQ,     mapQ),
-        baseQuals   = aligmentInfo(baseQual, baseQual),
-        minMapQ     = min(mapQ,     na.rm = TRUE),
-        minBaseQual = min(baseQual, na.rm = TRUE),
-
-        # junction-level information
-        pathClass = junctionInfo(edgeClass, collapse = ""),
-        path      = junctionInfo(nodePair),
-        sizes     = junctionInfo(size),
-        insSizes  = junctionInfo(insSize),
-        nodePairs = list(as.character(na.omit(ifelse( # a concatenation of internal nodePairs only; zero-length string when no SV found
-            edgeClass == edgeTypes$ALIGNMENT, 
-            NA, 
-            nodePair
-        )))),
+        # junction-level information, concatenated across all candidate, i.e., unmasked junctions
+        # for amplicon sequencing, path need not include the outer alignment nodes
+        path        = interleave_(node1,    node2),  # node-level info
+        chroms      = interleave_(chrom1,   chrom2), # different parsing of the same node-level info as in path
+        strands     = interleave_(strand1,  strand2),
+        poss        = interleave_(pos1,     pos2),
+        edgeTypes   = paste_(edgeType, collapse = ""), # edge-level info
+        eventSizes  = paste_(eventSize),
+        insertSizes = paste_(insertSize),
+        readNs      = paste_(readN1),
+        mapQs       = paste_(mapQ),
+        alnQs       = paste_(alnQ),
+        baseQuals   = paste_(baseQual),
 
         # read-level information
+        minMapQ     = min_(mapQ), # a flag showing just how bad the worst part of a read was
+        minAlnQ     = min_(alnQ),
+        minBaseQual = min_(baseQual),  
+        cigars = paste(cigar[isAlignment], collapse = ":"),   
         seq1  = seq1[1], 
-        seq2  = if(isMerged) seq2[.N]  else "*", # there are only ever one merged or two unmerged reads
+        seq2  = if(!isMerged) seq2[.N]  else "*", # there are only ever one merged or two unmerged reads
         qual1 = qual1[1],
-        qual2 = if(isMerged) qual2[.N] else "*"
+        qual2 = if(!isMerged) qual2[.N] else "*"
     )
 }, by = .(molKey)]
 #=====================================================================================
@@ -191,45 +180,44 @@ molecules <- edges[, {
 message("  aggregating molecules into types, i.e., shared SV paths")
 moleculeTypes <- molecules[
     order(
-        ampliconId, path, insSizes,      # first columns are for next grouping
-        -isRef, -mergeLevel, -nReadPairs # last columns are for selecting the index molecule   
+        ampliconId, path, insSizes, # first columns are for moleculeType grouping (not currently using sequence, just insertSize)
+        -isReference, -mergeLevel, -nReadPairs, -minBaseQual, -minMapQ # last columns are for selecting the index molecule   
     )
 ][,
     .(
         # molecule-level information
         # ampliconId 
         # path
-        # insSizes
-        molKey      = molKey[1],
-        molId       = molId[1],  # one molecule id selected as the index for the type        
-        isRef       = isRef[1],
-        nReadPairs  = sum(nReadPairs), # continue summing all original read pairs that has this type 
-        nMols       = .N, # the number of distinct read pair _sequences_ that had this type        
+        # insertSizes
+        molKey      = molKey[1],  # one molecule id selected as the index for the type
+        molId       = molId[1],        
+        isReference = isReference[1],
+        nReadPairs  = sum(nReadPairs), # continue summing all original _read pairs_ that has this type 
+        nMolecules  = .N, # the number of distinct read pair _sequences_ that had this type  
         mergeLevel  = mergeLevel[1],
         overlap     = overlap[1],
      
-        # alignment-level information
+        # junction-level information
         chroms      = chroms[1],
         strands     = strands[1],
         poss        = poss[1],
-        cigars      = cigars[1],
-        readNs      = readNs[1],        
+        edgeTypes   = edgeTypes[1],
+        eventSizes  = eventSizes[1],   
+        readNs      = readNs[1],  
         mapQs       = mapQs[1],
+        alnQs       = alnQs[1],
         baseQuals   = baseQuals[1],
-        minMapQ     = max(minMapQ), # thus, take the worst segment score per molecule, but the best of those values across all molecules matching a type
-        minBaseQual = max(minBaseQual),
-
-        # junction-level information
-        pathClass   = pathClass[1],
-        nodePairs   = nodePairs[1],
-        sizes       = sizes[1],        
 
         # read-level information
+        minMapQ     = max(minMapQ), # thus, take the worst segment score per molecule, but the best of those values across all molecules matching a type
+        minAlnQ     = max(minAlnQ),
+        minBaseQual = max(minBaseQual),
+        cigars      = cigars[1],
         seq1        = seq1[1],
         seq2        = seq2[1],        
         qual1       = qual1[1],
         qual2       = qual2[1]
-    ), by = .(ampliconId, path, insSizes) # group
+    ), by = .(ampliconId, path, insertSizes)
 ][
     order(ampliconId, -nReadPairs) # sort by molecule type frequency
 ]
@@ -239,19 +227,46 @@ moleculeTypes <- molecules[
 message("  tabulating unique SV junctions found in one or more molecules")
 molTypeKeys <- moleculeTypes[, molKey]
 edges[, isIndexMol := molKey %in% molTypeKeys]
-junctions <- edges[edgeClass != edgeTypes$ALIGNMENT, .(
+junctions <- edges[edgeType != edgeTypes$ALIGNMENT & masked == FALSE, .( # only tabulate candidate junction, not merge failures our under-sized SVs
     # ampliconId
-    # nodePair
-    # insSize
-    nReadPairs = sum(nReadPairs),
-    nMol = length(unique(molKey)), # beware of possibility of rare molecules with a recurring junction
-    nMolTypes = length(unique(molKey[isIndexMol])), 
-    edgeClass = edgeClass[1],
-    mergeLevel = max(mergeLevel),
-    size = size[1],
-    mapQ = max(mapQ),
+    # node1
+    # node2
+    # insertSize
+    nReadPairs  = sum(nReadPairs),
+    nMolecules  = length(unique(molKey)), # beware of possibility of rare molecules with a recurring junction
+    nMolTypes   = length(unique(molKey[isIndexMol])), 
+    chrom1      = chrom1[1],
+    strand1     = strand1[1],
+    pos1        = pos1[1],
+    chrom2      = chrom2[1],
+    strand2     = strand2[1],
+    pos2        = pos2[1],
+    mapQ        = max(mapQ),
+    alnQ        = max(alnQ),
+    baseQual    = max(baseQual),    
+    edgeType    = edgeType[1],
+    eventSize   = eventSize[1],
+    mergeLevel  = max(mergeLevel),
     molTypeKeys = list(unique(molKey[isIndexMol]))
-), by = .(ampliconId, nodePair, insSize)] # here, include the junctional insertion in the definiton, i.e. D5I0 and D5I22 are different junctions
+), by = .(ampliconId, node1, node2, insertSize)] # here, include the junction insertion in the definiton, i.e. D5I0 and D5I22 are different junctions, but not the bases themselves
+#=====================================================================================
+
+#=====================================================================================
+message("  saving outputs")
+saveRDS(moleculeTypes, file = env$MOLECULE_TYPES_FILE)
+saveRDS(junctions, file = env$JUNCTIONS_FILE)
+write.table(
+    data.table(
+        Project     = basename(env$OUTPUT_DIR),
+        Sample_ID   = env$DATA_NAME,
+        Description = env$DATA_NAME
+    ),
+    file = env$MANIFEST_FILE, 
+    quote = TRUE, 
+    sep = ",",
+    row.names = FALSE,
+    col.names = TRUE
+)
 #=====================================================================================
 
 # #=====================================================================================
@@ -309,21 +324,3 @@ junctions <- edges[edgeClass != edgeTypes$ALIGNMENT, .(
 #     by = "molKey"
 # )
 # #=====================================================================================
-
-#=====================================================================================
-message("  saving outputs")
-saveRDS(moleculeTypes, file = env$MOLECULE_TYPES_FILE)
-saveRDS(junctions, file = env$JUNCTIONS_FILE)
-write.table(
-    data.table(
-        Project     = basename(env$OUTPUT_DIR),
-        Sample_ID   = env$DATA_NAME,
-        Description = env$DATA_NAME
-    ),
-    file = env$MANIFEST_FILE, 
-    quote = TRUE, 
-    sep = ",",
-    row.names = FALSE,
-    col.names = TRUE
-)
-#=====================================================================================

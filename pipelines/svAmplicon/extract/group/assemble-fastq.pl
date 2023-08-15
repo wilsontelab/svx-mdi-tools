@@ -3,7 +3,7 @@ use warnings;
 
 # write a FASTQ stream of kept and grouped molecule sequences suitable for re-alignment
 # each molecule may have one merged or two unmerged reads
-# name = molId:ampliconId:nOverlapBases:molCount:merged:readN
+# name = molId:ampliconId:merged:nOverlapBases:isReference:molCount:readN
 
 # load dependencies
 my $perlUtilDir = "$ENV{GENOMEX_MODULES_DIR}/utilities/perl";
@@ -35,13 +35,15 @@ while(my $line = <STDIN>){ # each line summarizes one unique encountered read se
         print "\@$name:2\n$line[SEQ2]\n+\n$qual2\n";  
     }
 }
-sub getMaxQual { # for multiply detected reads, return the maximum observed base quality at each position over all reads 
-    my @readQuals = split(",", $_[0]);
-    join("", map {
-        my $baseI = $_ - 1;
-        my @baseQuals = sort { $b <=> $a } map { ord(substr($readQuals[$_], $baseI, 1)) } 0..$#readQuals;
-        chr($baseQuals[0]); # no need to apply +/- 33 since we are only sorting
-    } 1..length($readQuals[0]));
+sub getMaxQual { # for multiply detected reads, return the maximum observed base quality at each position over all reads
+    my ($readQuals) = @_;
+    my @readQuals = split(",", $readQuals);
+    my @maxBaseQuals;
+    foreach my $baseN(1..length($readQuals[0])){ # perfectly fine to do alphanumeric sort on phred characters
+        my @baseQuals = sort { $b cmp $a } map { substr($readQuals[$_], $baseN - 1, 1) } 0..$#readQuals;
+        push @maxBaseQuals, $baseQuals[0];
+    }
+    join("", @maxBaseQuals);
     # my %counts;    # TODO: use better aggregate QUAL, e.g., via $val = ord($base) - 33 ??
     # map { $counts{$_}++ } split("", $_[0]);
     # my @quals = sort { $counts{$b} <=> $counts{$a} } keys %counts;

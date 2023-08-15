@@ -24,11 +24,11 @@ if [ "$READ_LEN" = "" ]; then # a fallback in the very rare case that all read p
 fi
 echo "READ_LEN=$READ_LEN"
 
-# group read pairs to unique molecule sequences, merge additional read pairs
-runWorkflowStep 1 group group/group.sh
+# # group read pairs to unique molecule sequences, merge additional read pairs
+# runWorkflowStep 1 group group/group.sh
 
-# re-align processed molecules to genome
-runWorkflowStep 2 realign realign/realign.sh
+# # re-align processed molecules to genome
+# runWorkflowStep 2 realign realign/realign.sh
 
 # summarize information on final amplicon alignments
 runWorkflowStep 3 extract extract/extract.sh

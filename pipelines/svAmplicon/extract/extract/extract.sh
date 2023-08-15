@@ -30,19 +30,21 @@ slurp -s 10M $NAME_REALIGNED_BAM_FILE |
 samtools view - |
 perl $ACTION_DIR/extract/extract_nodes.pl | 
 
-# adjust the segment type when an insertion is present
-#   large del + any ins = D 
-#   short/no del + large ins = I
-awk 'BEGIN{OFS="\t"}{ 
-    if($7 > 0 && ($4 == "D" || $4 == "I")){ $4 = $6 >= '$MIN_SV_SIZE' ? "D" : "I"}; 
-    print $0;
-}' | 
-
 # break the node signature apart
 sed 's/ZZ/\t/g' | 
 
-# purge merge-failure and too-small indels from the node stream
-perl $ACTION_DIR/extract/purge_junctions.pl | 
+# adjust the edge type when an insertion is present
+#   any del + any ins = D 
+#   no del + large ins = I
+awk 'BEGIN{OFS="\t"}{ 
+    if($19 != "NA" && $19 > 0 && ($17 == "D" || $17 == "I")){ 
+        $17 = $18 > 0 ? "D" : "I";
+    }
+    print $0;
+}' | 
+
+# add base qualities to aligments for junction filtering
+perl $ACTION_DIR/extract/add_base_quals.pl | 
 pigz -p $N_CPU -c | 
 slurp -s 10M -o $INTERIM_FILE
 checkPipe
@@ -51,5 +53,8 @@ checkPipe
 echo "sorting and grouping molecules based on the SVs they carry"
 Rscript $ACTION_DIR/extract/sort_and_group.R
 checkPipe
+
+echo "cleaning up"
+# rm -f ${INTERIM_FILE}
 
 echo "done"
