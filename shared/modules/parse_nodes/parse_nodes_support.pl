@@ -12,7 +12,7 @@ use constant {
 };
 
 # working variables
-use vars qw($MIN_SV_SIZE 
+use vars qw($MIN_SV_SIZE $APPEND_JXN_BASES
             @alnNodes @alnMapQs @alnCigars @alnAlnQs @alnTypes @alnSizes @alnInsSizes @alnAlns
             @nodes    @mapQs    @cigars    @alnQs    @types    @sizes    @insSizes    @outAlns);  
 my $minCigarSvDigits = length($MIN_SV_SIZE);
@@ -64,7 +64,7 @@ sub parseSvsInCigar {
                     push @alnAlnQs,    0;
                     push @alnTypes,    $operation; 
                     push @alnSizes,    $isSmallDLargeI ? $prevSize : 0;
-                    push @alnInsSizes, $size; 
+                    push @alnInsSizes, $size.($APPEND_JXN_BASES ? "\tNA" : ""); # svAmplicon at least expect jxnBases appended to insSize
                     push @alnAlns,     [];
                 } else {
                     $refPos += $size;
@@ -73,7 +73,7 @@ sub parseSvsInCigar {
                     push @alnAlnQs,    0;
                     push @alnTypes,    $operation; 
                     push @alnSizes,    $size;
-                    push @alnInsSizes, $prevOp eq INSERTION ? $prevSize : 0; # handle smallI->largeD operations
+                    push @alnInsSizes, ($prevOp eq INSERTION ? $prevSize : 0).($APPEND_JXN_BASES ? "\tNA" : ""); # handle smallI->largeD operations
                     push @alnAlns,     [];
                 }
 

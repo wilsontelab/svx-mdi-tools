@@ -29,7 +29,7 @@ keepRejectUI <- function(id, options) {
         settings = FALSE,
 
         # appStep UI elements, populate as needed
-        fluidRow(
+        fluidRow(    
             box(
                 width = 4,
                 sampleSetUI (ns("sampleSet"))

@@ -142,7 +142,7 @@ sub commitAlignmentEdges{
     push @alnAlnQs,    0;       
     push @alnTypes,    ALIGNMENT; 
     push @alnSizes,    $$aln[REND] - $$aln[RSTART]; # alignments carry nRefBases in eventSize
-    push @alnInsSizes, "NA"; # insSize not applicable for alignments
+    push @alnInsSizes, "NA\tNA"; # insSize and appended jxnBases not applicable for alignments
     push @alnAlns,     $aln;
 }
 sub processSplitJunction {
@@ -154,9 +154,9 @@ sub processSplitJunction {
     my $svSize = getSvSize($innData[READ1], $innData[READ2], $jxnType);
     my ($insSize, $jxnBases) = getJxnStructure($alns[READ1], $alns[READ2], $innData[READ1], $innData[READ2]); 
     {
-        jxnType => $jxnType,
-        svSize  => $svSize,
-        insSize => $insSize # i.e., microhomology is a negative number for svAmplicon
+        jxnType  => $jxnType,
+        svSize   => $svSize,
+        insSize  => "$insSize\t$jxnBases" # i.e., microhomology is a negative number for svAmplicon
     }
 }
 #===================================================================================================

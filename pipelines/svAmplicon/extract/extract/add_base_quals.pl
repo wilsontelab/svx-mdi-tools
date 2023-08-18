@@ -35,12 +35,13 @@ use constant {
     EDGE_TYPE => 16,
     EVENT_SIZE => 17,
     INSERT_SIZE => 18,
-    AMPLICON_ID => 19,
-    MERGE_LEVEL => 20,
-    OVERLAP => 21,
-    IS_REFERENCE => 22,
-    N_READ_PAIRS => 23,
-    BASE_QUAL => 24, # added by us to alignment edges only
+    JXN_BASES => 19,
+    AMPLICON_ID => 20,
+    MERGE_LEVEL => 21,
+    OVERLAP => 22,
+    IS_REFERENCE => 23,
+    N_READ_PAIRS => 24,
+    BASE_QUAL => 25, # added by us to alignment edges only
     #-------------
     ALIGNMENT     => "A", # the single type for a contiguous aligned segment
     TRANSLOCATION => "T", # edge/junction types (might be several per source molecule)
@@ -56,6 +57,7 @@ use constant {
 
 # process data by molecule over multiple parallel threads
 my ($prevQBases, $prevMolId, @lines) = (0);
+my $lineN = 0;
 while(my $line = <STDIN>){
     chomp $line;
     my @line = split("\t", $line);

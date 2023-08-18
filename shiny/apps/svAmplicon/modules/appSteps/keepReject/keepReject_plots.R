@@ -1,11 +1,11 @@
 #----------------------------------------------------------------------
 # construct a composite paired quality plot, i.e. MAPQ vs. QUAL
 #----------------------------------------------------------------------
-pairedQualityPlotServer <- function(pathClassMoleculeTypes) mdiInteractivePlotServer(
+pairedQualityPlotServer <- function(moleculeTypes) mdiInteractivePlotServer(
     "pairedQualityPlot",       
     click = TRUE,
     contents = reactive({ 
-        mts <- pathClassMoleculeTypes()        
+        mts <- moleculeTypes()        
         thresholds <- app$keepReject$thresholds()[[1]]
         list(
             plotArgs = list(
@@ -33,7 +33,6 @@ pairedQualityPlotServer <- function(pathClassMoleculeTypes) mdiInteractivePlotSe
 #----------------------------------------------------------------------
 # quality profile and dot plot of a single molecule's reads and alignments
 #----------------------------------------------------------------------
-
 # plotting constants
 dotPlotColors <- list(
     M = CONSTANTS$plotlyColors$grey,
@@ -60,7 +59,6 @@ cigarDotPlot <- function(cigar, qryPos, refPos, strand){
     dt <- do.call(rbind, lapply(1:nOps, function(i){
         length <- lengths[i]
         operation <- operations[i]
-
         # deleted segments are present in reference, not in query
         if(operation == 'D'){
             dt <- data.table(
@@ -95,6 +93,7 @@ cigarDotPlot <- function(cigar, qryPos, refPos, strand){
     if(strand == "-"){
         nNotS <- sum(notS)
         dt$y[notS] <- dt$y[notS][nNotS:1]
+        refPos <- min(dt$y[notS])
     }
     list(
         qryPos = qryPos,
@@ -106,81 +105,89 @@ cigarDotPlot <- function(cigar, qryPos, refPos, strand){
 }
 
 # plot all alignment segments from a single read (could be 1 or 2 reads per moleculeType)
-plotReadAlns <- function(pts, mmd, readN, chrom, midx){
+plotReadAlns <- function(pts, mmd, readN, midx){
     qryPos <- 1
-    is <- which(mmd$alnReadNs == readN)
-    types    <- mmd$types[is]
-    chroms   <- mmd$chroms[is]
-    strands  <- mmd$strands[is]
-    poss     <- mmd$poss[is]
-    cigars   <- mmd$cigars[is]
-    mapQs    <- mmd$mapQs[is]
-    baseQuals<- mmd$baseQuals[is]
-    is <- which(mmd$jxnReadNs == readN)
-    sizes    <- mmd$sizes[is]
-    insSizes <- mmd$insSizes[is]
-    for(i in 1:length(types)){
-        refPos <- getRefPos(readN, strands[i], poss[i], cigars[i])
-        dp <- cigarDotPlot(cigars[i], qryPos, refPos, strands[i])
-        text(
-            dp$x, dp$y, 
-            paste(
-                paste("QUAL", baseQuals[i], sep = " "), 
-                paste("MAPQ", mapQs[i], sep = " "),
-                sep = ", "
-            ),
-            pos = if(dp$x > midx) 2 else 4, 
-            offset = 1.5
-        ) 
+    alnIs <- 1:length(mmd$chroms)
+    nodeIs <- sapply(alnIs * 2, function(j) (j - 1):j)
+    for(alnI in alnIs){
+        chr <- mmd$chroms[alnI]
+        nodeJ <- alnI * 2
+        refPos <- min(mmd$poss[(nodeJ - 1):nodeJ])
+        dp <- cigarDotPlot(mmd$cigars[alnI], qryPos, refPos, mmd$strands[alnI]) 
         pts <- rbind(pts, data.table(
             x = dp$dt$x,
             y = dp$dt$y,
             col = unlist(dotPlotColors[dp$dt$operation]),
-            operation = dp$dt$operation
+            operation = dp$dt$operation,
+            chrom = chr,
+            alnI = alnI
         ))
-        if(isTruthy(types[i]) && types[i] %in% c("D","I")){
-            if(!is.na(sizes[i]) && sizes[i] > 0 && sizes[i] < midx * 2) pts <- rbind(pts, data.table(
-                x = rep(dp$qryPos, sizes[i]),
-                y = dp$refPos:(dp$refPos + sizes[i] - 1),
-                col = if(chroms[i] == chrom) dotPlotColors$D else NA,
-                operation = "D"
+        eT <- mmd$edgeTypes[alnI]
+        if(isTruthy(eT)){
+            chr <- mmd$chroms[alnI]
+            eS  <- mmd$eventSizes[alnI]
+            iS  <- mmd$insertSizes[alnI]
+            if(!is.na(eS) && eS > 0 && eS < midx * 2 && eT %in% c("D","U","V")) pts <- rbind(pts, data.table( # deletions / duplications / inversions
+                x = rep(dp$qryPos, eS),
+                y = switch( eT,
+                    D = dp$refPos:(dp$refPos + eS - 1),
+                    U = dp$refPos:(dp$refPos - eS + 1),
+                    V = dp$refPos:(dp$refPos + eS - 1)
+                ),
+                col = dotPlotColors$D,
+                operation = "D",
+                chrom = chr,
+                alnI = alnI
             ))     
-            if(!is.na(insSizes[i]) && insSizes[i] > 0) pts <- rbind(pts, data.table(
-                x = dp$qryPos:(dp$qryPos + insSizes[i] - 1),
-                y = rep(dp$refPos + sizes[i], insSizes[i]),
-                col = if(chroms[i] == chrom) dotPlotColors$I else NA,
-                operation = "I"
+            if(!is.na(iS) && iS > 0) pts <- rbind(pts, data.table( # junction insertion
+                x = dp$qryPos:(dp$qryPos + iS - 1),
+                y = switch(eT,
+                    D = rep(dp$refPos + eS - 1, iS),
+                    U = rep(dp$refPos - eS + 1, iS),
+                    V = rep(dp$refPos + eS, iS),
+                    rep(dp$refPos, iS)
+                ),
+                col = dotPlotColors$I,
+                operation = "I",
+                chrom = chr,
+                alnI = alnI
             ))   
-            if(!is.na(insSizes[i]) && insSizes[i] < 0) pts <- rbind(pts, data.table(
-                x = (dp$qryPos + insSizes[i] + 1):dp$qryPos,
-                y = rep(dp$refPos + sizes[i], -insSizes[i]),
-                col = if(chroms[i] == chrom) dotPlotColors$H else NA,
-                operation = "H"
+            if(!is.na(iS) && iS < 0) pts <- rbind(pts, data.table( # junction microhomology
+                x = (dp$qryPos + iS + 1):dp$qryPos,
+                y = switch(eT,
+                    D = rep(dp$refPos + eS - 1, -iS),
+                    U = rep(dp$refPos - eS + 1, -iS),
+                    V = rep(dp$refPos + eS, -iS),
+                    rep(dp$refPos, -iS)
+                ),
+                col = dotPlotColors$H,
+                operation = "H",
+                chrom = chr,
+                alnI = alnI
             )) 
         }
-        qryPos <- dp$qryPos + if(!is.na(insSizes[i])) insSizes[i] else 0  
+        qryPos <- dp$qryPos
+        if(!is.na(mmd$insertSizes[alnI])){
+            qryPos <- qryPos + mmd$insertSizes[alnI]
+        }
     }
     pts     
 }
 
 # plot a single chromosome segment
-renderAlignmentPlot <- function(xmax, mmd, i, ampliconic){
-    ylim <- if(ampliconic) c(mmd$amplicon$pos1, mmd$amplicon$pos2) else {
-        range(mapply(function(ampliconic, readN, strand, pos, cigar){
-            if(!ampliconic) return(rep(as.integer(NA), 2))
-            p <- getRefPos(readN, strand, pos, cigar)
-            l <- getNRefBases(cigar)       
-            c(p, p + l - 1)     
-        }, mmd$ampliconic, mmd$alnReadNs[i], mmd$strand[i], mmd$pos[i], mmd$cigar[i]), na.rm = TRUE)
-    }
-    chrom <- if(ampliconic) mmd$amplicon$chrom1 else mmd$chroms[i][1]
+initializeAlignmentPlot <- function(xmax, mmd, alnI, ampliconic){
+    ylim <- if(ampliconic) c(mmd$amplicon$pos1, mmd$amplicon$pos2) else { # the reference range on chrom for y axis
+        j <- alnI * 2
+        range(mmd$poss[(j - 1):j])
+    }    
     par(mar = c(if(ampliconic) 4.1 else 0.1, 4.1, 0.1, 0.1), cex = 1)
+    chrom_ <- if(ampliconic) mmd$amplicon$chrom1 else mmd$chroms[alnI]
     plot(
         NA, NA,
         xlim = c(1, xmax),
         ylim = ylim,
         xlab = if(ampliconic) "Position in Read" else "",
-        ylab = chrom,
+        ylab = chrom_,
         xaxt = if(ampliconic) "s" else "n"
     )
     if(mmd$isMerged){
@@ -188,17 +195,18 @@ renderAlignmentPlot <- function(xmax, mmd, i, ampliconic){
         ovlp <- mmd$moleculeType$overlap
         flank <- (len - ovlp) / 2
         rect(max(0, flank), ylim[1], min(len, flank + ovlp), ylim[2], col = "grey90", lwd = NA) 
-    }    
-    pts <- data.table(x = integer(), y = integer(), col = character(), operation = character())
-    midx <- xmax / 2 
-    pts <- plotReadAlns(pts, mmd, 1, chrom, midx)    
-    if(!mmd$isMerged) pts <- plotReadAlns(pts, mmd, 2, chrom, midx)
-    pts <- pts[order(unlist(dotStackOrder[pts$operation]))]
+    } 
+    midx <- xmax / 2     
+    midy <- mean(ylim)    
     abline(v = midx, col = CONSTANTS$plotlyColors$black) 
     abline(v = c(midx + 50 * c(1:10, -(1:10))), col = CONSTANTS$plotlyColors$grey) 
-    midy <- mean(ylim)
     abline(h = midy, col = CONSTANTS$plotlyColors$black)
-    abline(h = c(midy + 50 * c(1:10, -(1:10))), col = CONSTANTS$plotlyColors$grey)
+    abline(h = c(midy + 50 * c(1:10, -(1:10))), col = CONSTANTS$plotlyColors$grey)    
+}
+renderAlignmentPoints <- function(mmd, alnI_, ampliconic, pts){
+    chrom_ <- if(ampliconic) mmd$amplicon$chrom1 else mmd$chroms[alnI_]
+    pts <- pts[chrom == chrom_ & alnI == alnI_]
+    pts <- pts[order(unlist(dotStackOrder[pts$operation]))]
     points(pts$x, pts$y, col = pts$col, pch = 19, cex = 0.5)
 }
 
@@ -221,7 +229,7 @@ renderReadQualPlot <- function(xmax, mmd, mt){
         col = CONSTANTS$plotlyColors$blue
     )
     if(!mmd$isMerged) lines(
-        x = 1:nchar(mt$seq2),
+        x = 1:nchar(mt$seq2) + mt$tLen1,
         y = as.integer(sapply(strsplit(mt$qual2, "")[[1]], charToRaw)) - 33,
         col = CONSTANTS$plotlyColors$orange
     )    
@@ -248,11 +256,25 @@ moleculeQcPlot <- function(moleculeMetadata) {
     # plot QUAL
     renderReadQualPlot(xmax, mmd, mt)
 
+    # calculate plot points
+    pts <- data.table(x = integer(), y = integer(), col = character(), operation = character(), 
+                      chrom = character(), alnI = integer())
+    midx <- xmax / 2 
+    pts <- plotReadAlns(pts, mmd, 1, midx)    
+    if(!mmd$isMerged) {  
+        pts <- plotReadAlns(pts, mmd, 2, midx)
+    }
+
     # plot out-of-amplicon alignments; at present, only handle one such segment per chromosome well
-    for(i in which(!mmd$ampliconic)){
-        renderAlignmentPlot(xmax, mmd, i, FALSE) # these could be from different regions!
+    for(alnI in which(!mmd$ampliconic)){
+        initializeAlignmentPlot(xmax, mmd, alnI, FALSE)
+        renderAlignmentPoints(mmd, alnI, FALSE, pts)
     }
 
     # plot ampliconic alignments
-    renderAlignmentPlot(xmax, mmd, which(mmd$ampliconic), TRUE)
+    alnIs <- which(mmd$ampliconic)
+    initializeAlignmentPlot(xmax, mmd, alnIs[1], TRUE)
+    for(alnI in alnIs){
+        renderAlignmentPoints(mmd, alnI, TRUE, pts) # these could be from different regions!
+    }
 }

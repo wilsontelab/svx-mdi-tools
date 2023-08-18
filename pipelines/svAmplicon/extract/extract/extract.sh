@@ -35,7 +35,7 @@ sed 's/ZZ/\t/g' |
 
 # adjust the edge type when an insertion is present
 #   any del + any ins = D 
-#   no del + large ins = I
+#   no del  + any ins = I
 awk 'BEGIN{OFS="\t"}{ 
     if($19 != "NA" && $19 > 0 && ($17 == "D" || $17 == "I")){ 
         $17 = $18 > 0 ? "D" : "I";

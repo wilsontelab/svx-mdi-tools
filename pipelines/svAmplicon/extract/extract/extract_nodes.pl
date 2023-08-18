@@ -104,6 +104,7 @@ our (@alns, @mol, $amplicon,
      @nodes,    @mapQs,    @cigars,    @alnQs,    @types,    @sizes,    @insSizes,    @outAlns,
      @alnNodes, @alnMapQs, @alnCigars, @alnAlnQs, @alnTypes, @alnSizes, @alnInsSizes, @alnAlns) = ();
 my $anyUnmapped = 0;
+our $APPEND_JXN_BASES = 1;
 
 # process data by read pair
 my ($prevPairName);
@@ -144,7 +145,7 @@ sub parseReadPair {
             push @alnQs,    0;
             push @types,    MERGE_FAILURE;
             push @sizes,    "NA";
-            push @insSizes, "NA";
+            push @insSizes, "NA\tNA";
             push @outAlns,  [];
             parseReadAlignments(READ2, @{$alns[READ2]});
         }  

@@ -14,10 +14,7 @@ CONSTANTS$edgeTypes <- list(
     UNKNOWN       = "?",
     INSERTION     = "I", 
     MERGE_FAILURE = "M",
-    PROPER        = "P",
-    FUSED_MERGE_FAILURE = "F",
-    REJECTED_INDEL = "R",
-    FUSED_MERGE_FAILURE_REJECTED_INDEL = "Q"
+    PROPER        = "P"
 )
 CONSTANTS$junctionTypes <- list(
     D   = "deletion (D)",
@@ -31,15 +28,14 @@ CONSTANTS$groupedPathClasses <- list(
     D   = "deletion (D)",
     I   = "insertion (I)",
     U   = "duplication (U)",    
-    VV  = "full inversion (VV)",
+    "V:V"  = "full inversion (VV)",
     V   = "partial inversion (V)",
-    TT  = "full translocation (TT)",
+    "T:T"  = "full translocation (TT)",
     T   = "partial translocation (T)",
-    DI  = "paired indel (DI,ID)",
-    ID  = "paired indel (DI,ID)"
+    "D:I"  = "paired indel (DI,ID)",
+    "I:D"  = "paired indel (DI,ID)"
     # all other path classes listed as "other"
 )
-
 
 # appServer() is called after all modules are instantiated
 appServer <- function(){
