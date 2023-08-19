@@ -37,6 +37,14 @@ setThresholds <- function(d){
     ampliconKey <- getAmpliconKeys(selectedAmplicon())
     thresholds[[ampliconKey]] <- d
 }
+kept <- reactiveValues()
+toggleKept <- function(sampleMolTypeKey){
+    ampliconKey <- getAmpliconKeys(selectedAmplicon())
+    if(is.null(kept[[ampliconKey]])) kept[[ampliconKey]] <- list()
+    currentValue <- kept[[ampliconKey]][[sampleMolTypeKey]]
+    if(is.null(currentValue)) currentValue <- if(input$moleculeTypeFilter == "Kept") TRUE else FALSE
+    kept[[ampliconKey]][[sampleMolTypeKey]] <- !currentValue
+}
 
 #----------------------------------------------------------------------
 # get the samples and amplicons to plot
@@ -57,8 +65,8 @@ moleculeTypes <- moleculeTypesReactive(samples, selectedAmplicon)
 #----------------------------------------------------------------------
 pathClasses <- pathClassesReactive(moleculeTypes)
 pathClassesTable <- pathClassesTableServer(id, input, pathClasses, selection = "single")
-pathClassMoleculeTypes <- pathClassMoleculeTypesReactive(moleculeTypes, pathClasses, pathClassesTable)
-pairedQualityPlot <- pairedQualityPlotServer(pathClassMoleculeTypes)
+pathClassMoleculeTypes <- pathClassMoleculeTypesReactive(moleculeTypes, pathClasses, pathClassesTable, selectedAmplicon)
+pairedQualityPlot <- pairedQualityPlotServer(pathClassMoleculeTypes, selectedAmplicon)
 observeEvent(pairedQualityPlot$click(), {
     d <- pairedQualityPlot$click()$coord
     setThresholds(list(minBaseQual = d$x, minMapQ = d$y))
@@ -67,11 +75,22 @@ observeEvent(pairedQualityPlot$click(), {
 #----------------------------------------------------------------------
 # construct the molecule-level metadata and plot
 #----------------------------------------------------------------------
-keepRejectMoleculeTypes <- keepRejectMoleculeTypesReactive(pathClassMoleculeTypes, input)
+keepRejectMoleculeTypes <- keepRejectMoleculeTypesReactive(pathClassMoleculeTypes, input, selectedAmplicon, kept)
 moleculeTypeStepper <- listStepperButtonsServer("moleculeTypeStepper", keepRejectMoleculeTypes)
 moleculeMetadata <- moleculeMetadataReactive(selectedAmplicon, moleculeTypeStepper)
 output$moleculeMetadata <- moleculeMetadataUI(moleculeMetadata)
 output$moleculeQcPlot <- renderPlot({ moleculeQcPlot(moleculeMetadata) }) 
+
+#----------------------------------------------------------------------
+# handle user overrides of quality filter status
+#----------------------------------------------------------------------
+observeEvent(input$toggleKeepReject, {
+    mt <- keepRejectMoleculeTypes()
+    i <- moleculeTypeStepper$current()
+    req(mt, i)
+    toggleKept(mt[i, sampleMolTypeKey])
+    setTimeout(function(...) moleculeTypeStepper$setCurrent(i), delay = 100)
+})
 
 #----------------------------------------------------------------------
 # define bookmarking actions
@@ -83,6 +102,7 @@ observe({
     updateSelectInput(session, "sampleSet-sampleSet", selected = bm$input[['sampleSet-sampleSet']])
     if(!is.null(bm$outcomes)) {
         thresholds <<- listToReactiveValues(bm$outcomes$thresholds)
+        kept <<- listToReactiveValues(bm$outcomes$kept)
     }
 })
 
@@ -93,10 +113,12 @@ list(
     input = input,
     # settings = settings$all_,
     outcomes = reactive({ list(
-        thresholds = reactiveValuesToList(thresholds)
+        thresholds = reactiveValuesToList(thresholds),
+        kept = reactiveValuesToList(kept)
     ) }),
-    thresholds = function(amplicons = NULL){
-        if(is.null(amplicons)) amplicons <- selectedAmplicon()
+    thresholds = function(amplicons){
+        amplicons <- amplicons()
+        req(amplicons)
         ampliconKeys <- getAmpliconKeys(amplicons)
         x <- lapply(ampliconKeys, function(ampliconKey){
             if(is.null(thresholds[[ampliconKey]])) defaultThreshold else thresholds[[ampliconKey]]

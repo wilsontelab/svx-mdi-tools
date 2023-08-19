@@ -61,25 +61,31 @@ selectedAmpliconsReactive <- function(amplicons, ampliconsTable) reactive({
 moleculeTypesReactive <- function(samples, selectedAmplicons) reactive({ 
     amplicons <- selectedAmplicons()
     req(amplicons)
+    startSpinner(session, message = "loading molecule types")
     x <- assembleDataTable(samples, "moleculeTypes", readRDS) 
-    x[isRef == TRUE, pathClass := "-"] # avoids having a blank list name
+    x[isReference == TRUE, pathEdgeTypes := "-"] # avoids having a blank list name
     x[, ":="(
         ampliconKey = getAmpliconKeys(x),
-        sampleMolTypeKey = paste(sample, molKey, sep = "::")
+        sampleMolTypeKey = paste(sample, molKey, sep = ":") # thus, sample:ampliconId:molId
     )]
-    x[ampliconKey %in% getAmpliconKeys(amplicons)]
+    x <- x[ampliconKey %in% getAmpliconKeys(amplicons)]
+    stopSpinner(session)
+    x
 })
 
-# pathClasses, i.e., one row for each kind of path (D, TT, VV, DID, etc.) through an amplicon molecule
+# pathClasses, i.e., one row for each kind of edgeTypes path (D, TT, VV, DID, etc.) through an amplicon molecule
 pathClassesReactive <- function(moleculeTypes) reactive({
     x  <- moleculeTypes()
+    startSpinner(session, message = "loading path classes")
     pc <- CONSTANTS$groupedPathClasses
-    x[, pathClass_ := if(pathClass %in% names(pc)) pc[[pathClass]] else "other", by = "pathClass"]    
-    x[, .(
+    x[, pathClass := if(pathEdgeTypes %in% names(pc)) pc[[pathEdgeTypes]] else "other", by = "pathEdgeTypes"]    
+    x  <- x[, .(
         nReadPairs = sum(nReadPairs),
-        nMols = sum(nMols),         
+        nMolecules = sum(nMolecules),         
         nMolTypes = .N
-    ), by = .(pathClass_)]
+    ), by = .(pathClass)]
+    stopSpinner(session)
+    x
 })
 pathClassesTableServer <- function(parentId, input, pathClasses, selection = "single") bufferedTableServer(
     "pathClassesTable",
@@ -92,19 +98,27 @@ pathClassesTableServer <- function(parentId, input, pathClasses, selection = "si
     ),
     selection = selection
 )
-pathClassMoleculeTypesReactive <- function(moleculeTypes, pathClasses, pathClassesTable) reactive({
+pathClassMoleculeTypesReactive <- function(moleculeTypes, pathClasses, pathClassesTable, selectedAmplicons) reactive({
     I <- pathClassesTable$rows_selected()
-    x <- if(isTruthy(I)) moleculeTypes()[pathClass_ == pathClasses()[I, pathClass_]]
-         else moleculeTypes()  
-    thresholds <- app$keepReject$thresholds()[[1]]         
-    x[, passedQualityFilters := minBaseQual >= thresholds$minBaseQual & minMapQ >= thresholds$minMapQ]
+    x <- if(isTruthy(I)) moleculeTypes()[pathClass %in% pathClasses()[I, pathClass]]
+         else moleculeTypes()    
+    thresholds <- app$keepReject$thresholds(selectedAmplicons) 
+    for(aKey in names(thresholds)){
+        ts <- thresholds[[aKey]]
+        x[ampliconKey == aKey, passedQualityFilters := minBaseQual >= ts$minBaseQual & minMapQ >= ts$minMapQ]        
+    }
     x
 })
-keepRejectMoleculeTypesReactive <- function(pathClassMoleculeTypes, input) reactive({
-    x <- pathClassMoleculeTypes()
+keepRejectMoleculeTypesReactive <- function(moleculeTypes, input, selectedAmplicon, kept) reactive({
+    x <- moleculeTypes()
     req(x, input$moleculeTypeFilter)
-    filterState <- if(input$moleculeTypeFilter == "Kept") TRUE else FALSE    
-    x[passedQualityFilters == filterState]
+    filterState <- if(input$moleculeTypeFilter == "Kept") TRUE else FALSE  
+    ampliconKey <- getAmpliconKeys(selectedAmplicon())
+    userRejects <- if(is.null(kept[[ampliconKey]])) character() else na.omit(sapply(names(kept[[ampliconKey]]), function(sampleMolTypeKey){
+        if(kept[[ampliconKey]][[sampleMolTypeKey]]) NA else sampleMolTypeKey
+    }))
+    if(filterState == TRUE) x[passedQualityFilters == TRUE & !(sampleMolTypeKey %in% userRejects)]
+                       else x[passedQualityFilters == FALSE |  sampleMolTypeKey %in% userRejects]
 })
 
 # moleculeType, i.e., metadata on a single selected moleculeType
@@ -114,23 +128,27 @@ moleculeMetadataReactive <- function(selectedAmplicon, moleculeTypeStepper) reac
     req(amplicon, moleculeType)
 
     # molecule-level information
-    alnReadNs <- as.integer(strsplit(moleculeType$readNs, ":")[[1]])
-    jxnReadNs <- integer()
-    if(!moleculeType$isRef){
-        for(i in 1:(length(alnReadNs) - 1)) if(alnReadNs[i] == alnReadNs[i + 1]) jxnReadNs <- c(jxnReadNs, alnReadNs[i])
-    }
     moleculeType$tLen1 <- nchar(moleculeType$seq1)
     moleculeType$tLen2 <- if(moleculeType$mergeLevel > 0) NA else nchar(moleculeType$seq2)
-    moleculeType$alnReadNs <- paste(alnReadNs, collapse = ":")
-    moleculeType$jxnReadNs <- paste(jxnReadNs, collapse = ":")
 
     # out-of-amplicon segments
-    chroms <- strsplit(moleculeType$chroms, ":")[[1]]
-    poss   <- as.integer(strsplit(moleculeType$poss, ":")[[1]])
-    ampliconic <- chroms == amplicon$chrom1 & poss >= amplicon$pos1 & poss <= amplicon$pos2
-
+    split_ <- function(column, isInteger = FALSE){
+        x <- strsplit(moleculeType[[column]], ":")[[1]]
+        if(isInteger) x <- as.integer(x)
+        x
+    }
+    cigars <- split_("cigars")
+    nAlns <- length(cigars)
+    nJxns <- nAlns + 1
+    chroms <- split_("chroms")
+    poss   <- split_("poss", TRUE)
+    alnPos <- poss[seq(1, length(poss), 2)]
+    padding <- 10
+    ampliconic <- if(nAlns <= 2) rep(TRUE, nAlns) 
+                  else chroms == amplicon$chrom1 & alnPos >= amplicon$pos1 - padding & alnPos <= amplicon$pos2 + padding
     list(
-        moleculeType = moleculeType,
+        # molecule-level information
+        moleculeType = moleculeType, # unparsed information, some repeated below for convenient access
         amplicon = amplicon,
         ampliconSize = amplicon$pos2 - amplicon$pos1 + 1,
         tLen = moleculeType[,
@@ -138,20 +156,25 @@ moleculeMetadataReactive <- function(selectedAmplicon, moleculeTypeStepper) reac
             else nchar(seq1)
         ],
         isMerged = moleculeType$mergeLevel > 0,
-        ampliconic = ampliconic,
 
-        # alignment-level information
-        chroms = chroms,
-        strands = strsplit(moleculeType$strands, ":")[[1]],
-        poss   = poss,
-        cigars = strsplit(moleculeType$cigars, ":")[[1]],
-        mapQs = strsplit(moleculeType$mapQs, ":")[[1]],
-        baseQuals = strsplit(moleculeType$baseQuals, ":")[[1]],
-        alnReadNs = alnReadNs,
-        jxnReadNs = jxnReadNs,
-        sizes  = as.integer(strsplit(moleculeType$sizes, ":")[[1]]),
-        insSizes = as.integer(strsplit(moleculeType$insSizes, ":")[[1]]),
-        types = strsplit(moleculeType$pathClass, "")[[1]]
+        # node-level information
+        poss        = poss,        
+
+        # junction-level information
+        edgeTypes   = split_("edgeTypes"), # fields that have the same value for the entire junction
+        eventSizes  = split_("eventSizes", TRUE),
+        insertSizes = split_("insertSizes", TRUE),
+        jxnBases    = split_("jxnBases"),
+        insertBases = split_("insertBases"),
+        mapQs       = split_("mapQs", TRUE),
+        baseQuals   = split_("baseQuals", TRUE),
+
+        # alignment-level information, one value per alignment
+        chroms      = chroms,
+        strands     = split_("strands"),
+        cigars      = cigars,
+        readNs      = split_("readNs", TRUE),         
+        ampliconic = ampliconic       
     )
 })
 moleculeMetadataUI <- function(moleculeMetadata) renderUI({
@@ -167,36 +190,45 @@ moleculeMetadataUI <- function(moleculeMetadata) renderUI({
     tags$div(
         lapply(c(
             "ampliconId","molId",
-            "nReadPairs","nMols",
+            "nReadPairs","nMolecules",
             "mergeLevel","overlap","tLen1","tLen2",
-            "pathClass",
-            "alnReadNs",
-            "strands","chroms","poss","cigars","mapQs","baseQuals",
-            "jxnReadNs",
-            "sizes","insSizes"
+            "poss",
+            "chroms","strands","readNs","cigars",
+            "edgeTypes","eventSizes","insertSizes",
+            "mapQs","baseQuals"
         ), keyValuePair)
     )
 })
 
 # junctions, i.e., one row for each distinct SV edge in an amplicon molecule
-junctionsReactive <- function(samples, moleculeTypes, selectedAmplicons) reactive({ 
+junctionsReactive <- function(samples, selectedAmplicons, pathClassMoleculeTypes) reactive({ 
     amplicons <- selectedAmplicons()
-    moleculeTypes <- moleculeTypes()
+    moleculeTypes <- pathClassMoleculeTypes()
     req(amplicons, moleculeTypes)
-    x <- assembleDataTable(samples, "junctions", readRDS) 
-    x <- x[edgeClass != CONSTANTS$edgeTypes$ALIGNMENT]
-    x[, jxnKey := paste(sample, ampliconId, nodePair, insSize, sep = "::")]
-    expandedJunctions <- x[, .(sampleMolTypeKey = paste(sample, unlist(molTypeKeys), sep = "::")), by = .(jxnKey)]
+    startSpinner(session, message = "loading junctions")
+    junctions <- assembleDataTable(samples, "junctions", readRDS) 
+    junctions[, jxnKey := paste(sample, ampliconId, node1, node2, insertSize, insertBases, sep = ":")]
+    expandedJunctions <- junctions[, .(sampleMolTypeKey = paste(sample, unlist(molTypeKeys), sep = ":")), by = .(jxnKey)]
     thresholds <- app$keepReject$thresholds(amplicons)
+    kept <- app$keepReject$outcomes()$kept
     moleculeTypes <- do.call(rbind, lapply(getAmpliconKeys(amplicons), function(aKey){
         ts <- thresholds[[aKey]]
-        moleculeTypes[ampliconKey == aKey & minBaseQual >= ts$minBaseQual & minMapQ >= ts$minMapQ]
+        userRejects <- if(is.null(kept[[aKey]])) character() else na.omit(sapply(names(kept[[aKey]]), function(sampleMolTypeKey){
+            if(kept[[aKey]][[sampleMolTypeKey]]) NA else sampleMolTypeKey
+        }))
+        moleculeTypes[
+            ampliconKey == aKey & 
+            minBaseQual >= ts$minBaseQual & 
+            minMapQ >= ts$minMapQ & 
+            !(sampleMolTypeKey %in% userRejects)
+        ]
     }))
     jxnKeys <- expandedJunctions[sampleMolTypeKey %in% moleculeTypes$sampleMolTypeKey, unique(jxnKey)]
-    x <- x[jxnKey %in% jxnKeys] 
+    junctions <- junctions[jxnKey %in% jxnKeys] 
     jt <- CONSTANTS$junctionTypes    
-    x[, junctionType := if(edgeClass %in% names(jt)) jt[[edgeClass]] else "other", by = "edgeClass"]    
-    x
+    junctions[, jxnType := if(edgeType %in% names(jt)) jt[[edgeType]] else "other", by = "edgeType"]  
+    stopSpinner(session)  
+    junctions
 })
 
 # junction Types, i.e., one row for each kind of junction (D, T, V, etc.)
@@ -205,10 +237,10 @@ junctionTypesReactive <- function(junctions) reactive({
     req(junctions)
     junctions[, .(
         nReadPairs = sum(nReadPairs),
-        nMols = sum(nMol),         
+        nMolecules = sum(nMolecules),         
         nMolTypes = sum(nMolTypes),
         nJunctions = .N
-    ), by = .(junctionType)]
+    ), by = .(jxnType)]
 })
 junctionTypesTableServer <- function(parentId, input, junctionTypes, selection = "multiple") bufferedTableServer(
     "junctionsTypesTable",
@@ -223,7 +255,7 @@ junctionTypesTableServer <- function(parentId, input, junctionTypes, selection =
 )
 junctionTypesJunctionsReactive <- function(junctions, junctionTypes, junctionTypesTable) reactive({
     I <- junctionTypesTable$rows_selected()
-    x <- if(isTruthy(I)) junctions()[junctionType %in% junctionTypes()[I, junctionType]]
+    x <- if(isTruthy(I)) junctions()[jxnType %in% junctionTypes()[I, jxnType]]
          else junctions()  
     x
 })
@@ -234,33 +266,19 @@ junctionsTableServer <- function(parentId, input, junctionPlotData) bufferedTabl
     tableData = reactive({ junctionPlotData()$junctions[, .SD, .SDcols = c(
         "sample",
         "ampliconId",
-        # "nodePair",
+        "jxnType",         
         "chrom1",
         "strand1",
         "pos1",
         "chrom2",
         "strand2",
         "pos2",
-        "insSize", 
+        "eventSize",
+        "insertSize",
+        "jxnBases",
         "nReadPairs", 
-        "nMol", 
-        "nMolTypes", 
-        "junctionType", 
-        "size"
+        "nMolecules", 
+        "nMolTypes"
     )] }),
     selection = "none"
 )
-
-    # # ampliconId
-    # # nodePair
-    # # insSize
-    # nReadPairs = sum(nReadPairs),
-    # nMol = length(unique(molKey)), # beware of possibility of rare molecules with a recurring junction
-    # nMolTypes = length(unique(molKey[isIndexMol])), 
-    # edgeClass = edgeClass[1],
-    # mergeLevel = max(mergeLevel),
-    # size = size[1],
-    # mapQ = max(mapQ),
-    # molTypeKeys = list(unique(molKey[isIndexMol]))
-
-

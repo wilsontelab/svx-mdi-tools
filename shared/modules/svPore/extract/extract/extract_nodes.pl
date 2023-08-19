@@ -61,7 +61,7 @@ our (@alns, $molId,
      @nodes,    @mapQs,    @cigars,    @alnQs,    @types,    @sizes,    @insSizes,    @outAlns,
      @alnNodes, @alnMapQs, @alnCigars, @alnAlnQs, @alnTypes, @alnSizes, @alnInsSizes, @alnAlns) = ();
 
-# process data by molecule over multiple parallel threads
+# process data by molecule 
 my ($prevQName);
 $| = 1;
 while(my $line = <STDIN>){

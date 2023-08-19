@@ -18,6 +18,10 @@ actions:
     align:
         order: 1
         module: genomex-mdi-tools//align/dna-paired-end 
+        env-vars:
+            suppress-smart-pairing: true
+            create-fastq-index: true
+            append-fastp-overlap: true
     extract:
         order: 2
         condaFamilies:
@@ -28,6 +32,7 @@ actions:
             - genomex-mdi-tools//read-merging
             - amplicon-discovery
             - read-pair-filtering
+            - genomex-mdi-tools//aligner # for realignment
             - sv-finding
         resources:
             required:

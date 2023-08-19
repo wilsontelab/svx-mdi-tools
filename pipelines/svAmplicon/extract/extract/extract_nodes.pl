@@ -21,8 +21,10 @@ fillEnvVar(\our $ACTION_DIR,       'ACTION_DIR');
 fillEnvVar(\our $READ_LEN,         'READ_LEN');
 fillEnvVar(\our $MAX_INSERT_SIZE,  'MAX_INSERT_SIZE');
 fillEnvVar(\our $MIN_SV_SIZE,      'MIN_SV_SIZE');
-# fillEnvVar(\our $N_CPU,            'N_CPU'); # user options, or derived from them
-our $N_CPU = 1; # at present, large write blocks create problems with auto-flush to output stream
+
+# initialize the genome
+use vars qw(%chromIndex);
+setCanonicalChroms();
 
 # load additional dependencies
 map { require "$ACTION_DIR/extract/$_.pl" } qw(parse_nodes);
@@ -31,10 +33,6 @@ map { require "$perlUtilDir/$_.pl" } qw(amplicons);
 $perlUtilDir = "$ENV{MODULES_DIR}/parse_nodes";
 map { require "$perlUtilDir/$_.pl" } qw(parse_nodes_support);
 use vars qw(@amplicons);
-
-# initialize the genome
-use vars qw(%chromIndex);
-setCanonicalChroms();
 
 # constants
 use constant {
@@ -101,80 +99,61 @@ use constant {
     PROPER        => "P"
 };
 
-# process data by molecule over multiple parallel threads
-launchChildThreads(\&parseReadPair);
-use vars qw(@readH @writeH);
-my $writeH = $writeH[1];
-my ($threadName);
+# working variables
+our (@alns, @mol, $amplicon,
+     @nodes,    @mapQs,    @cigars,    @alnQs,    @types,    @sizes,    @insSizes,    @outAlns,
+     @alnNodes, @alnMapQs, @alnCigars, @alnAlnQs, @alnTypes, @alnSizes, @alnInsSizes, @alnAlns) = ();
+my $anyUnmapped = 0;
+our $APPEND_JXN_BASES = 1;
+
+# process data by read pair
+my ($prevPairName);
+$| = 1;
 while(my $line = <STDIN>){
     $nInputAlns++;
-    my ($qName) = split("\t", $line, 2);  
+    chomp $line;
+    my @aln = (split("\t", $line, 12))[QNAME..QUAL];     
     # name = molId:ampliconId:nOverlapBases:molCount:merged:readN 
-    $qName =~ m/(.+):\d/; # strip the trailing readN to group read by readPair
+    $aln[QNAME] =~ m/(.+):\d/; # strip the trailing readN to group read by readPair
     my $pairName = $1;
-    if($threadName and $pairName ne $threadName){
-        $nReadPairs++;        
-        print $writeH END_READ_PAIR, "\t$nReadPairs\n";        
-        $writeH = $writeH[$nReadPairs % $N_CPU + 1];
-    }    
-    print $writeH $line; # commit to worker thread
-    $threadName = $pairName;
-}
-$nReadPairs++;
-print $writeH END_READ_PAIR, "\t$nReadPairs\n";      
-finishChildThreads();
+    if($prevPairName and $pairName ne $prevPairName){  
+        parseReadPair();  
+    }
+    $aln[RNAME_INDEX] = $chromIndex{$aln[RNAME]} || 0; # non-canonical chroms are excluded, unmapped continue on (for now)   
+    ($aln[FLAG] & _UNMAPPED) and $anyUnmapped = 1;
+    @mol = split(":", $aln[QNAME]);    
+    push @{$alns[$mol[READ_N] - 1]}, \@aln;
+    $prevPairName = $pairName;
+} 
+parseReadPair(); 
 
 # print summary information
 printCount($nInputAlns, 'nInputAlns', 'input aligned segments over all read pairs');
 printCount($nReadPairs, 'nReadPairs', 'input read pairs');
 
-# child process to parse bam read pairs
+# parse bam read pairs
 sub parseReadPair {
-    my ($childN) = @_;
-    
-    # auto-flush output to prevent buffering and ensure proper feed to sort
-    $| = 1;
+    $nReadPairs++;
 
-    # working variables
-    our (@alns, @mol, $amplicon,
-         @nodes,    @types,    @mapQs,    @sizes,    @insSizes,    @outAlns,
-         @alnNodes, @alnTypes, @alnMapQs, @alnSizes, @alnInsSizes, @alnAlns) = ();
-    my $anyUnmapped = 0;
-  
-    # run aligner output one alignment at a time
-    my $readH = $readH[$childN];
-    while(my $line = <$readH>){
-        chomp $line;
-        my @aln = (split("\t", $line, 12))[QNAME..QUAL];     
-
-        # parse output one source molecule at a time
-        if($aln[0] eq END_READ_PAIR){
-
-            # reject molecules with even one unmapped read, can't be considered and amplicon match
-            unless($anyUnmapped){
-                $amplicon = $amplicons[$mol[AMPLICON_ID]];
-                parseReadAlignments(READ1, @{$alns[READ1]});
-                if($alns[READ2]){
-                    push @types,    MERGE_FAILURE;
-                    push @mapQs,    0;
-                    push @sizes,    "NA";
-                    push @insSizes, "NA";
-                    push @outAlns,  [];
-                    parseReadAlignments(READ2, @{$alns[READ2]});
-                }  
-                fillJxnMapQs();
-                printMolecule($mol[MOL_ID], @mol[AMPLICON_ID, MERGE_LEVEL, N_OVERLAP_BASES, IS_REFERENCE, MOL_COUNT]);
-            }
-
-            # prepare for next read-pair
-            (@alns, @nodes, @types, @mapQs, @sizes, @insSizes, @outAlns) = ();
-            $anyUnmapped = 0;
-
-        } else{ # add new alignment to growing source molecule
-            $aln[RNAME_INDEX] = $chromIndex{$aln[RNAME]} || 0; # non-canonical chroms are excluded, unmapped continue on (for now)   
-            ($aln[FLAG] & _UNMAPPED) and $anyUnmapped = 1;
-            @mol = split(":", $aln[QNAME]);
-            push @{$alns[$mol[READ_N] - 1]}, \@aln;
-        }
+    # reject molecules with even one unmapped read, can't be considered an amplicon match
+    unless($anyUnmapped){
+        $amplicon = $amplicons[$mol[AMPLICON_ID]];
+        parseReadAlignments(READ1, @{$alns[READ1]});
+        if($alns[READ2]){
+            push @mapQs,    0;
+            push @cigars,   "NA";
+            push @alnQs,    0;
+            push @types,    MERGE_FAILURE;
+            push @sizes,    "NA";
+            push @insSizes, "NA\tNA";
+            push @outAlns,  [];
+            parseReadAlignments(READ2, @{$alns[READ2]});
+        }  
+        fillJxnQs();
+        printMolecule($mol[MOL_ID], @mol[AMPLICON_ID, MERGE_LEVEL, N_OVERLAP_BASES, IS_REFERENCE, MOL_COUNT]);
     }
+
+    # reset for the next read-pair
+    (@alns, @nodes, @mapQs, @cigars, @alnQs, @types, @sizes, @insSizes, @outAlns) = ();
+    $anyUnmapped = 0;
 }

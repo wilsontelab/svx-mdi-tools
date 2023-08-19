@@ -71,8 +71,8 @@ my @sides = (RIGHTWARD,  LEFTWARD); # e.g., at a left end clip, the read continu
 # working variables
 use vars qw($READ_LEN $MAX_INSERT_SIZE $MIN_SV_SIZE
             @alns @mol $amplicon
-            @nodes    @types    @mapQs    @sizes    @insSizes    @outAlns
-            @alnNodes @alnTypes @alnMapQs @alnSizes @alnInsSizes @alnAlns);    
+            @alnNodes @alnMapQs @alnCigars @alnAlnQs @alnTypes @alnSizes @alnInsSizes @alnAlns
+            @nodes    @mapQs    @cigars    @alnQs    @types    @sizes    @insSizes    @outAlns);    
 
 #===================================================================================================
 # top level molecule parser, called by main thread loop, and it support subs
@@ -82,7 +82,7 @@ sub parseReadAlignments {
     my @alnIs = sortReadAlignments(\@alns, LEFT, RIGHT);  
     foreach my $i(0..$#alnIs){
         my $aln = $alns[$alnIs[$i]];
-        $$aln[RSTART] = $$aln[POS] - 1;
+        $$aln[RSTART] = $$aln[POS] - 1; # create PAF-like designations
         $$aln[REND] = getEnd($$aln[POS], $$aln[CIGAR]);
         $$aln[STRAND] = ($$aln[FLAG] & _REVERSE) ? "-" : "+";
 
@@ -90,51 +90,59 @@ sub parseReadAlignments {
         if($i > 0){
             my $prevAln = $alns[$alnIs[$i - 1]];
             my $jxn = processSplitJunction($prevAln, $aln);
-            push @types,    $$jxn{jxnType};
             push @mapQs,    0;
+            push @cigars,   "NA";
+            push @alnQs,    0;
+            push @types,    $$jxn{jxnType};            
             push @sizes,    $$jxn{svSize};
             push @insSizes, $$jxn{insSize};
             push @outAlns,  [];
         }         
 
         # parse this alignment    
-        (@alnNodes, @alnTypes, @alnMapQs, @alnSizes, @alnInsSizes, @alnAlns) = ();
-        parseSvsInCigar($aln, RSTART, REND, $$aln[CIGAR], \&commitAlignmentNodes, $readN);
+        (@alnNodes, @alnMapQs, @alnCigars, @alnAlnQs, @alnTypes, @alnSizes, @alnInsSizes, @alnAlns) = ();
+        parseSvsInCigar($aln, RSTART, REND, $$aln[CIGAR], \&commitAlignmentEdges, $readN);
 
         # maintain proper 5'-3' node order on bottom strand, since svPore tracks genome paths
         if($$aln[STRAND] eq "-"){
-            @alnNodes    = reverse @alnNodes; 
-            @alnTypes    = reverse @alnTypes;
+            @alnNodes    = reverse @alnNodes;
             @alnMapQs    = reverse @alnMapQs;
+            @alnCigars   = reverse @alnCigars;
+            @alnAlnQs    = reverse @alnAlnQs;
+            @alnTypes    = reverse @alnTypes;
             @alnSizes    = reverse @alnSizes;
             @alnInsSizes = reverse @alnInsSizes;
-            @alnAlns     = reverse @alnAlns;
+            @alnAlns     = reverse @alnAlns; 
         }
 
         # commit the nodes and junctions
         push @nodes,    @alnNodes;
-        push @types,    @alnTypes;
         push @mapQs,    @alnMapQs;
+        push @cigars,   @alnCigars;
+        push @alnQs,    @alnAlnQs;        
+        push @types,    @alnTypes;        
         push @sizes,    @alnSizes;
         push @insSizes, @alnInsSizes;
         push @outAlns,  @alnAlns;
     }
 }
-sub commitAlignmentNodes{
-    my ($aln, $cigar, $readN) = @_;
+sub commitAlignmentEdges{
+    my ($aln, $cigar, $readN) = @_; # can include small indels in the alignment span
     # in this output of two nodes per alignment:
     #   all fields except POS are identical in node positions 1 and 2
     #   for bottom strand (STRAND == "-") alignments:
     #       POS is in reverse order, i.e., POS1 > POS2, to track the molecule path
     #       SEQ/QUAL are reverse complemented from canonical, as provided by aligner
     push @alnNodes, ( 
-        join("ZZ", @$aln[RNAME, STRAND], $$aln[RSTART] + 1,  @$aln[SEQ, QUAL], $cigar, $readN + 1), # svAmplicon nodes are always 1-referenced
-        join("ZZ", @$aln[RNAME, STRAND, REND, SEQ, QUAL], $cigar, $readN + 1)
+        join("ZZ", @$aln[RNAME, STRAND], $$aln[RSTART] + 1,  @$aln[SEQ, QUAL], $readN + 1), # svAmplicon nodes are always 1-referenced
+        join("ZZ", @$aln[RNAME, STRAND, REND, SEQ, QUAL], $readN + 1)
     );
-    push @alnTypes,    ALIGNMENT; 
     push @alnMapQs,    $$aln[MAPQ];
-    push @alnSizes,    $$aln[REND] - $$aln[RSTART];
-    push @alnInsSizes, 0;
+    push @alnCigars,   $cigar; # CIGAR is not reversed, i.e., matches rc of read if - strand      
+    push @alnAlnQs,    0;       
+    push @alnTypes,    ALIGNMENT; 
+    push @alnSizes,    $$aln[REND] - $$aln[RSTART]; # alignments carry nRefBases in eventSize
+    push @alnInsSizes, "NA\tNA"; # insSize and appended jxnBases not applicable for alignments
     push @alnAlns,     $aln;
 }
 sub processSplitJunction {
@@ -146,9 +154,9 @@ sub processSplitJunction {
     my $svSize = getSvSize($innData[READ1], $innData[READ2], $jxnType);
     my ($insSize, $jxnBases) = getJxnStructure($alns[READ1], $alns[READ2], $innData[READ1], $innData[READ2]); 
     {
-        jxnType => $jxnType,
-        svSize  => $svSize,
-        insSize => $insSize # i.e., microhomology is a negative number for svAmplicon
+        jxnType  => $jxnType,
+        svSize   => $svSize,
+        insSize  => "$insSize\t$jxnBases" # i.e., microhomology is a negative number for svAmplicon
     }
 }
 #===================================================================================================
@@ -199,9 +207,9 @@ sub getJxnStructure {
     my $overlap = $readPos1 - $readPos2 + 1;
     my $jxnBases = "*"; # a blunt joint
     if($overlap > 0){  # microhomology
-        $jxnBases = substr($$aln1[SEQ], $readPos2,     $overlap); # TODO: any value to reverse complementing inversions?
+        $jxnBases = substr($$aln1[SEQ], $readPos2,      $overlap); # TODO: any value to reverse complementing inversions?
     } elsif($overlap < 0){ # inserted bases
-        $jxnBases = substr($$aln1[SEQ], $readPos1 + 1, $overlap);
+        $jxnBases = substr($$aln1[SEQ], $readPos1 + 1, -$overlap);
     }
     (-$overlap, $jxnBases); # i.e., return insertion size
 }

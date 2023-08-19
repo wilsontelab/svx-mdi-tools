@@ -11,7 +11,7 @@ downstream visualization in a Stage 2 Shiny app.
 Typical applications are in the study of targeted mutagenesis
 by induced or natural DNA double-strand breaks.
 
-The distinct feature of svAmplicon relative to other svx pipelines
+A distinct feature of svAmplicon relative to other svx pipelines
 is that it expects
 reads to share common outer molecule endpoints, i.e., to have
 the expected endpoints derived from the genomic primer binding sites.
@@ -20,7 +20,7 @@ on their outer endpoints.
 
 ### Operating modes and assocated experimental designs
 
-svAmplicon is built on the same basic algorithms used for _de novo_ genomic
+svAmplicon is built on the core SVX algorithms used for _de novo_ genomic
 SV calling so is highly generalized. However, only two experimental
 approaches will yield optimal results.
 
@@ -37,6 +37,8 @@ are so widely spaced that you don't expect unrearranged genomic
 DNA to give you any products. Thus, any sequenced products are assumed
 to represent SVs relative to the primer design.
 This mode is called **notPossible** in amplicon reports.
+Note that pipeline svDJ also analyzes amplicons of this type
+and may or may not be a better match to your goals.
 
 The pipeline will also process, up to a point, a third configuration
 where you do expect to amplify and sequence DNA molecules that are 
@@ -51,17 +53,17 @@ The svAmplicon pipeline aligns your reads to the genome for you.
 Accordingly, you must provide a set of fastq.gz format files, 
 with one pair of files for each sample corresponding to the two 
 reads of a paired-end sequencing run. These are specified using 
-the '--input-dir' and '--input-name' options of the 'align' action.
-Your job configuration should execute actions 'align' and 'extract'.
+the `--input-dir` and `--input-name` options of the `align` action.
+Your job configuration should execute actions `align` and `extract`.
 
 It is not possible to use externally provided bam files due to the special 
 handling of the alignment process in svAmplicon. Amplicon sequencing
 alignment is fast so this is not a significant limitation.
 
 It is not necessary to provide up-front information on the amplicon(s)
-your are sequencing. svAmplicon uses an agnostic approach in which
+you are sequencing. svAmplicon uses an agnostic approach in which
 reads are aligned to the reference genome with heuristic algorithms 
-used to perform _de novo_ amplicon discovery. There are a few options you
+used to perform _ab initio_ amplicon discovery. There are a few options you
 can set to control the number and quality of found amplicons. 
 
 The amplicon discovery approach makes it routinely possible to sequence
@@ -73,8 +75,8 @@ they must be barcoded and demultiplexed before running svAmplicon.
 ### Required genome inputs
 
 Additional required files provide information about the
-genome in use. Option '--genome' might typically be 'hg38'.
-Option '--genomes-dir' tells the pipeline where to find the
+genome in use. Option `--genome` might typically be 'hg38'.
+Option `--genomes-dir` tells the pipeline where to find the
 required genome reference files, which must include
 sub-directory 'iGenomes' properly populated with the named
 genome. See:

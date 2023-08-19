@@ -139,6 +139,10 @@ while(my $mol = <STDIN>){
         $mol[SEQ1] eq $$amplicon[AMP_REF1] and $mol[SEQ2] eq $$amplicon[AMP_REF2] and $isReference = 1;
     }
 
+    # mask comma's in QUAL, so that we may safely concatenat them later
+    $mol[QUAL1] =~ s/,/-/g; # dash (12) is one higher Phred than comma (11)
+    $mol[QUAL2] =~ s/,/-/g;
+
     # reported patched and filtered read pairs
     print join("\t", 
         $$nodePair[AMPLICON],     

@@ -14,9 +14,4 @@ use warnings;
 
 # all task environment variables may be accessed here
 
-# set options for paired read alignment
-$ENV{SUPPRESS_SMART_PAIRING} = 1; 
-$ENV{CREATE_FASTQ_INDEX} = 1;
-$ENV{APPEND_FASTP_OVERLAP} = 1;
-
 1;

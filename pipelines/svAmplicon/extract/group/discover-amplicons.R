@@ -4,7 +4,9 @@
 # script initialization
 #-------------------------------------------------------------------------------------
 message("  initializing")
-library(data.table)
+suppressPackageStartupMessages(suppressWarnings({
+    library(data.table)    
+}))
 #-------------------------------------------------------------------------------------
 # load, parse and save environment variables
 env <- as.list(Sys.getenv())
