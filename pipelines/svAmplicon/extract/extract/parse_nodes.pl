@@ -207,9 +207,9 @@ sub getJxnStructure {
     my $overlap = $readPos1 - $readPos2 + 1;
     my $jxnBases = "*"; # a blunt joint
     if($overlap > 0){  # microhomology
-        $jxnBases = substr($$aln1[SEQ], $readPos2,     $overlap); # TODO: any value to reverse complementing inversions?
+        $jxnBases = substr($$aln1[SEQ], $readPos2,      $overlap); # TODO: any value to reverse complementing inversions?
     } elsif($overlap < 0){ # inserted bases
-        $jxnBases = substr($$aln1[SEQ], $readPos1 + 1, $overlap);
+        $jxnBases = substr($$aln1[SEQ], $readPos1 + 1, -$overlap);
     }
     (-$overlap, $jxnBases); # i.e., return insertion size
 }

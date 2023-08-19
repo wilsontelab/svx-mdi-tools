@@ -1,12 +1,12 @@
 #----------------------------------------------------------------------
 # construct a composite paired quality plot, i.e. MAPQ vs. QUAL
 #----------------------------------------------------------------------
-pairedQualityPlotServer <- function(moleculeTypes) mdiInteractivePlotServer(
+pairedQualityPlotServer <- function(moleculeTypes, amplicon) mdiInteractivePlotServer(
     "pairedQualityPlot",       
     click = TRUE,
     contents = reactive({ 
         mts <- moleculeTypes()        
-        thresholds <- app$keepReject$thresholds()[[1]]
+        thresholds <- app$keepReject$thresholds(amplicon)[[1]]
         list(
             plotArgs = list(
                 jitter(mts$minBaseQual, amount = 1),

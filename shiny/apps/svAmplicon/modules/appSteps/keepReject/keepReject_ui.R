@@ -57,14 +57,18 @@ keepRejectUI <- function(id, options) {
         fluidRow(
             style = "padding: 5px;",
             column(
-                offset = 2,
                 width = 2,
+                offset = 2,
                 style = "padding-top: 7px;",
                 radioButtons(ns("moleculeTypeFilter"), NULL, choices = c("Kept", "Rejected"), selected = "Kept", inline = TRUE)
             ),
             column(
-                width = 4,
+                width = 3,
                 listStepperButtonsUI(ns("moleculeTypeStepper")) 
+            ),          
+            column(
+                width = 2,
+                bsButton(ns("toggleKeepReject"), "Toggle Keep/Reject", style = "primary")
             )
         ),             
         fluidRow(

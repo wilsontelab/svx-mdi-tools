@@ -64,7 +64,7 @@ sub parseSvsInCigar {
                     push @alnAlnQs,    0;
                     push @alnTypes,    $operation; 
                     push @alnSizes,    $isSmallDLargeI ? $prevSize : 0;
-                    push @alnInsSizes, $size.($APPEND_JXN_BASES ? "\tNA" : ""); # svAmplicon at least expect jxnBases appended to insSize
+                    push @alnInsSizes, $size.($APPEND_JXN_BASES ? "\tNA" : ""); # svAmplicon at least expect jxnBases appended to insSize; NA jxnBases flags CIGAR indels
                     push @alnAlns,     [];
                 } else {
                     $refPos += $size;

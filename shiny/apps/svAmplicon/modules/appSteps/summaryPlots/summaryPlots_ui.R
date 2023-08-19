@@ -43,29 +43,52 @@ summaryPlotsUI <- function(id, options) {
         ),
         fluidRow(
             bufferedTableUI (
+                ns("pathClassesTable"), 
+                title = "Molecule Path Classes", 
+                downloadable = TRUE,
+                width = 4,
+                collapsible = TRUE,
+                collapsed = FALSE
+            ),
+            bufferedTableUI (
                 ns("junctionsTypesTable"), 
                 title = "Junction Types", 
                 downloadable = TRUE,
                 width = 4,
                 collapsible = TRUE,
                 collapsed = FALSE
-            ),
+            )
+        ),
+        fluidRow(
             staticPlotBoxUI(
-                ns("svTrianglePlot"), 
-                title = "Triangle Plot",
-                width = 4
+                ns("svCirclesPlot"), 
+                title = "Circles Plot",
+                width = 12,
+                collapsible = TRUE,
+                collapsed = FALSE
             )
         ), 
         fluidRow(
+            # staticPlotBoxUI(
+            #     ns("svTrianglePlot"), 
+            #     title = "Triangle Plot",
+            #     width = 4,
+            #     collapsible = TRUE,
+            #     collapsed = TRUE
+            # ),        
             staticPlotBoxUI(
                 ns("positionDensityPlot"), 
                 title = "Position Density",
-                width = 4
+                width = 6,
+                collapsible = TRUE,
+                collapsed = TRUE
             ),            
             staticPlotBoxUI(
                 ns("sizeDensityPlot"), 
                 title = "Size Density",
-                width = 4
+                width = 6,
+                collapsible = TRUE,
+                collapsed = TRUE
             )
         ),   
         fluidRow(
@@ -73,7 +96,7 @@ summaryPlotsUI <- function(id, options) {
                 ns("junctionsTable"), 
                 title = "Junctions", 
                 downloadable = TRUE,
-                width = 8,
+                width = 12,
                 collapsible = TRUE,
                 collapsed = FALSE
             ) 

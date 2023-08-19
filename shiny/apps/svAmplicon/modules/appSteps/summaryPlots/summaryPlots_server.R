@@ -38,11 +38,18 @@ amplicons <- ampliconsReactive(samples)
 ampliconsTable <- ampliconsTableServer(id, input, amplicons, selection = "multiple")
 selectedAmplicons <- selectedAmpliconsReactive(amplicons, ampliconsTable)
 moleculeTypes <- moleculeTypesReactive(samples, selectedAmplicons)
-junctions <- junctionsReactive(samples, moleculeTypes, selectedAmplicons) # filtered by quality thresholds
+
+#----------------------------------------------------------------------
+# construct the path class table - only these path classes are used to construct the junctions table
+#----------------------------------------------------------------------
+pathClasses <- pathClassesReactive(moleculeTypes)
+pathClassesTable <- pathClassesTableServer(id, input, pathClasses, selection = "multiple")
+pathClassMoleculeTypes <- pathClassMoleculeTypesReactive(moleculeTypes, pathClasses, pathClassesTable, selectedAmplicons)
 
 #----------------------------------------------------------------------
 # construct the junction types table
 #----------------------------------------------------------------------
+junctions <- junctionsReactive(samples, selectedAmplicons, pathClassMoleculeTypes)
 junctionTypes <- junctionTypesReactive(junctions)
 junctionTypesTable <- junctionTypesTableServer(id, input, junctionTypes, selection = "multiple")
 junctionTypesJunctions <- junctionTypesJunctionsReactive(junctions, junctionTypes, junctionTypesTable) # i.e., filtered by table selection
@@ -51,7 +58,8 @@ junctionTypesJunctions <- junctionTypesJunctionsReactive(junctions, junctionType
 # make junction plots
 #----------------------------------------------------------------------
 junctionPlotData <- junctionPlotDataReactive(selectedAmplicons, junctionTypesJunctions)
-svTrianglePlot <- svTrianglePlotServer(junctionPlotData)
+# svTrianglePlot <- svTrianglePlotServer(junctionPlotData)
+svCirclesPlot <- svCirclesPlotServer(junctionPlotData)
 positionDensityPlot <- positionDensityPlotServer(junctionPlotData)
 sizeDensityPlot <- sizeDensityPlotServer(junctionPlotData)
 
@@ -61,34 +69,18 @@ sizeDensityPlot <- sizeDensityPlotServer(junctionPlotData)
 junctionsTableServer(id, input, junctionPlotData)
 
 #----------------------------------------------------------------------
-# make junction position density plots
-#----------------------------------------------------------------------
-# moleculeTypeData <- reactive({
-#     I <- moleculeTypesTable$rows_selected()
-#     req(I)
-#     tableFilteredMoleculeTypes()[I]
-# })
-# moleculeTypeExpansion <- reactive({
-#     moleculeTypeData <- moleculeTypeData()
-#     cols <- names(moleculeTypeData)
-#     moleculeTypeData <- moleculeTypeData[, .SD, .SDcols = cols[!(cols %in% c("dotplotL","dotplotR"))]]
-#     data.table(
-#         key_ = names(moleculeTypeData), 
-#         value_ = as.character(unlist(moleculeTypeData))
-#     )        
-# })
-
-#----------------------------------------------------------------------
 # define bookmarking actions
 #----------------------------------------------------------------------
-observe({
+bookmarkObserver <- observe({
     bm <- getModuleBookmark(id, module, bookmark, locks)
     req(bm)
     # settings$replace(bm$settings)
     updateSelectInput(session, "sampleSet-sampleSet", selected = bm$input[['sampleSet-sampleSet']])
     if(!is.null(bm$outcomes)) {
+        svCirclesPlot$settings$replace(bm$outcomes$svCirclesPlotSettings)
         # outcomes <<- listToReactiveValues(bm$outcomes)
     }
+    bookmarkObserver$destroy()
 })
 
 #----------------------------------------------------------------------
@@ -98,6 +90,7 @@ list(
     input = input,
     # settings = settings$all_,
     outcomes = reactive({ list(
+        svCirclesPlotSettings = svCirclesPlot$settings$all_()
     ) }),
     # isReady = reactive({ getStepReadiness(options$source, ...) }),
     NULL
