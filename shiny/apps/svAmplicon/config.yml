@@ -22,7 +22,7 @@ uploadTypes:
             junctions:
                 required: true
             amplicons:
-                required: true
+                required: true # note, chromosomesFile not relevant to targeted amplicons
 
 #----------------------------------------------------------------------
 # labels and definitions for all sequential analysis steps shown in sidebar
@@ -55,3 +55,5 @@ appSteps:
         module: keepReject        
     summaryPlots:
         module: summaryPlots   
+    browser:
+        module: genomex-mdi-tools//trackBrowser

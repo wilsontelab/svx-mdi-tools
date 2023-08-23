@@ -14,9 +14,11 @@ assembleDataTable <- function(samples, fileType, loadFn, colNames = NULL){
     do.call(rbind, lapply(seq_len(nrow(x)), function(i){
         dt <- loadFn(getSourceFilePath(x$Source_ID[i], fileType))
         if(!is.null(colNames)) setnames(dt, colNames)
+        sampleUniqueId <- paste(x$Project[i], x$Sample_ID[i], sep = ":") # thus, sampleUniqueId = Project:Sample_ID
         cbind(
-            sourceId = x$Source_ID[i],
-            sample = getSampleNames(sampleUniqueIds = paste(x$Project[i], x$Sample_ID[i], sep = ":")),
+            sourceId       = x$Source_ID[i],
+            sampleUniqueId = sampleUniqueId, # for tracking
+            sampleName     = getSampleNames(sampleUniqueIds = sampleUniqueId), # for display
             dt
         )
     }))
@@ -26,15 +28,31 @@ assembleDataTable <- function(samples, fileType, loadFn, colNames = NULL){
 getAmpliconKeys <- function(dt){
     req(dt, nrow(dt) > 0)
     ampId <- if("amplicon" %in% names(dt)) "amplicon" else "ampliconId"
-    paste(dt$sample, dt[[ampId]], sep = ":")
+    paste(dt$sampleUniqueId, dt[[ampId]], sep = ":") # thus, ampliconKey = Project:Sample_ID:amplicon = sampleUniqueId:amplicon
+}
+CONSTANTS$ampliconsColNames <- c(
+    "amplicon","type","nReadPairs",
+    "chrom1","side1","pos1","ref1","primer1",
+    "chrom2","side2","pos2","ref2","primer2"
+)
+fillAmpliconDerivedColumns <- function(amplicons){
+    amplicons[, size := if(chrom1 == chrom2) pos2 - pos1 + 1 else NA_integer_]
+    if("side1" %in% names(amplicons)){
+        amplicons[, ":="(
+            strand1 = if(side1 == "R") "+" else "-",
+            strand2 = if(side2 == "R") "+" else "-"
+        )]
+    } else {
+        amplicons[, ":="(
+            side1 = if(strand1 == "+") "R" else "L",
+            side2 = if(strand2 == "+") "R" else "L"    
+        )]
+    }
+    amplicons
 }
 ampliconsReactive <- function(samples) reactive({
-    x <- assembleDataTable(samples, "amplicons", fread, colNames = c(
-        "amplicon","type","nReadPairs",
-        "chrom1","side1","pos1","ref1","primer1",
-        "chrom2","side2","pos2","ref2","primer2"
-    ))
-    x[, size := pos2 - pos1 + 1]
+    assembleDataTable(samples, "amplicons", fread, colNames = CONSTANTS$ampliconsColNames) %>%
+    fillAmpliconDerivedColumns()
 })
 ampliconsTableServer <- function(parentId, input, amplicons, selection = "single") bufferedTableServer(
     "ampliconsTable",
@@ -42,7 +60,7 @@ ampliconsTableServer <- function(parentId, input, amplicons, selection = "single
     input,
     tableData = reactive({
         amplicons()[, .SD, .SDcols = c(
-            "sample",
+            "sampleName",
             # "amplicon","type",#"nReadPairs",
             "chrom1","side1","pos1",
             "chrom2","side2","pos2",
@@ -66,7 +84,7 @@ moleculeTypesReactive <- function(samples, selectedAmplicons) reactive({
     x[isReference == TRUE, pathEdgeTypes := "-"] # avoids having a blank list name
     x[, ":="(
         ampliconKey = getAmpliconKeys(x),
-        sampleMolTypeKey = paste(sample, molKey, sep = ":") # thus, sample:ampliconId:molId
+        sampleMolTypeKey = paste(sampleUniqueId, molKey, sep = ":") # thus, sampleMolTypeKey = Project:Sample_ID:amplicon:indexMolId = ampliconKey:indexMolId
     )]
     x <- x[ampliconKey %in% getAmpliconKeys(amplicons)]
     stopSpinner(session)
@@ -207,8 +225,8 @@ junctionsReactive <- function(samples, selectedAmplicons, pathClassMoleculeTypes
     req(amplicons, moleculeTypes)
     startSpinner(session, message = "loading junctions")
     junctions <- assembleDataTable(samples, "junctions", readRDS) 
-    junctions[, jxnKey := paste(sample, ampliconId, node1, node2, insertSize, insertBases, sep = ":")]
-    expandedJunctions <- junctions[, .(sampleMolTypeKey = paste(sample, unlist(molTypeKeys), sep = ":")), by = .(jxnKey)]
+    junctions[, jxnKey := paste(sampleUniqueId, ampliconId, node1, node2, insertSize, insertBases, sep = ":")]
+    expandedJunctions <- junctions[, .(sampleMolTypeKey = paste(sampleUniqueId, unlist(molTypeKeys), sep = ":")), by = .(jxnKey)]
     thresholds <- app$keepReject$thresholds(amplicons)
     kept <- app$keepReject$outcomes()$kept
     moleculeTypes <- do.call(rbind, lapply(getAmpliconKeys(amplicons), function(aKey){
@@ -264,7 +282,7 @@ junctionsTableServer <- function(parentId, input, junctionPlotData) bufferedTabl
     parentId,
     input,
     tableData = reactive({ junctionPlotData()$junctions[, .SD, .SDcols = c(
-        "sample",
+        "sampleName",
         "ampliconId",
         "jxnType",         
         "chrom1",

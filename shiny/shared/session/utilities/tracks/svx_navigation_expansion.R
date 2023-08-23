@@ -45,6 +45,34 @@ svx_jumpToJunction <- function(jxn){
     }
 }
 
+# construct an amplicon trackNav table
+svx_ampliconNavTable <- function(track, session, browserId, reference, coord, 
+                                 parseFn = NULL){
+    navTableName <- initTrackNav(track, session, "navTable") # table reactive functions are provided below  
+    trackNavData <- reactive({ # simple nav table, no need for formatted/unformatted
+        svx_getTrackAmpliconTargets(track, parseFn = parseFn)
+    })
+    handleRowClick <- function(selectedRow){
+        req(selectedRow)
+        amplicon <- trackNavData()[selectedRow]
+        if(is.na(amplicon$end)){
+            amplicon$end   <- amplicon$start + 500
+            amplicon$start <- amplicon$start - 500
+        }
+        handleTrackNavTableClick(track, amplicon$chrom, amplicon$start, amplicon$end, expandFn = NULL)
+    }
+    tagList(
+        trackNavTable(
+            track, 
+            session, 
+            browserId,
+            navTableName, # the name as provided by initTrackNav
+            tableData = trackNavData, # populate a table based on track settings, etc.
+            actionFn = handleRowClick
+        )
+    )  
+}
+
 # appropriately disperse a nodes or triangle plot click event
 svx_handleJunctionClick <- function(track, click, buffer, 
                                     expandReactive, expandFn, summarizeFn,

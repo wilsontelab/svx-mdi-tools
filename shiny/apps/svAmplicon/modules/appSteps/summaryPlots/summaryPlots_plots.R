@@ -37,7 +37,7 @@ junctionPlotDataReactive <- function(selectedAmplicons, junctionTypesJunctions) 
                 )
             }]
         }),
-        circles = lapply(seq_along(ampKeys), function(i){ # one series for every sample+amplicon combination
+        circles = lapply(seq_along(ampKeys), function(i){
             x <- seq(0, pi, length.out = 25)
             junctions[getAmpliconKeys(junctions) == ampKeys[i] & 
                       edgeType == "D", {
@@ -49,13 +49,13 @@ junctionPlotDataReactive <- function(selectedAmplicons, junctionTypesJunctions) 
                 )
             }, by = .(jxnKey)]
         }),
-        positionDensity = lapply(seq_along(ampKeys), function(i){ # one series for every sample+amplicon combination
+        positionDensity = lapply(seq_along(ampKeys), function(i){ 
             junctions[
                 getAmpliconKeys(junctions) == ampKeys[i], 
                 getJunctionDensity(posLim[1]:posLim[2], c(pos1, pos2))
             ]
         }),
-        sizeDensity = lapply(seq_along(ampKeys), function(i){ # one series for every sample+amplicon combination
+        sizeDensity = lapply(seq_along(ampKeys), function(i){
             junctions[
                 getAmpliconKeys(junctions) == ampKeys[i], 
                 getJunctionDensity(0:sizeMax, eventSize)
