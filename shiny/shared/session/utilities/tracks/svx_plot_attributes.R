@@ -30,6 +30,7 @@ svx_junctionsLegend <- function(track, coord, ylim, selectedTargets,
         getBrowserTrackSetting(track, family, "Color_By", "edgeType"),
         edgeType = {
             jt <- svx_jxnTypes[order(order)]
+            if(!is.null(jxns)) jt <- jt[code %in% jxns[, unique(edgeType)]] # optionally only shows actual edgeTypes in legend
             list(
                 legend = jt$longName[jt$legend],
                 color  = jt$color[jt$legend]

@@ -1,9 +1,9 @@
 include:
     - height
 shared:
-    # - svPoint_settings.yml
     - svArc_settings.yml
-    - svFilter_settings.yml
+    - svAmpliconFilter_settings.yml # shared with other amplicon apps, e.g., svDJ
+    - ../svAmplicon_filters.yml # specific to this app
 #     - svJunction_settings.yml
 #     - ../junction_settings.yml    
 #     - svSummarize_settings.yml

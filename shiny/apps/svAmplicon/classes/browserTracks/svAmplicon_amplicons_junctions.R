@@ -39,8 +39,12 @@ getAmpliconSample <- function(ampliconKey){
 }
 svAmplicon_loadJunctions <- function(ampliconKey){ # Project_08673:Sample_Chr1_SH_2_IGO_08673_2:1
     x <- getAmpliconSample(ampliconKey)
-    jxns <- readRDS(getSourceFilePath(x$sample$Source_ID, "junctions")) 
+    sourceId <- x$sample$Source_ID
+    sampleUniqueId <- paste(x$Project, x$Sample_ID, sep = ":")
+    jxns <- readRDS(getSourceFilePath(sourceId, "junctions")) 
+    mts  <- readRDS(getSourceFilePath(sourceId, "moleculeTypes")) 
     jxns[, ":="(
+        sourceId = sourceId,
         jxnKey = paste(ampliconKey, node1, node2, insertSize, insertBases, sep = ":"),
         node1 = pos1, # this may cause problem, not a true genomic node position
         node2 = pos2,
@@ -50,7 +54,7 @@ svAmplicon_loadJunctions <- function(ampliconKey){ # Project_08673:Sample_Chr1_S
         cRefPos2 = pos2,
         cStrand1 = ifelse(edgeType == "V" & strand1 == "+", 1, -1),
         cStrand2 = ifelse(edgeType == "V" & strand2 == "+", 1, -1),
-        sampleUniqueId = paste(x$Project, x$Sample_ID, sep = ":"),  
+        sampleUniqueId = sampleUniqueId,  
         samples = x$Sample_ID,
         nSamples = 1, # svAmplicon only has find, not multiSample compare
         nInstances = nMolTypes,
@@ -64,9 +68,24 @@ svAmplicon_loadJunctions <- function(ampliconKey){ # Project_08673:Sample_Chr1_S
         by = "jxnKey",
         all.x = TRUE
     )
-    jxns[, jxnUniqueKey := paste(sampleMolTypeKey, jxnKey, sep = ":")] # for plotting indiviual junction encounters
-    jxns[, molTypeKeys := NULL]
-    app$keepReject$getKeptJunctions(ampliconKey, jxns)
+    pc <- CONSTANTS$groupedPathClasses
+    mts[, sampleMolTypeKey := paste(sampleUniqueId, molKey, sep = ":")]
+    mts[, pathClass := if(pathEdgeTypes %in% names(pc)) pc[[pathEdgeTypes]] else "other", by = "pathEdgeTypes"]  
+    setkey(mts, sampleMolTypeKey)  
+    jxns[, ":="(
+        jxnUniqueKey = paste(sampleMolTypeKey, jxnKey, sep = ":"), # for plotting individual junction encounters
+        pathClass = mts[sampleMolTypeKey, pathClass],
+        molTypeKeys = NULL
+    )]
+    app$keepReject$getKeptJunctions(ampliconKey, jxns) # filter by keepReject app step
+}
+svAmplicon_filterJunctions <- function(jxns, track){ # filter by app-specific browser track settings
+    Mol_Path_Classes <- getBrowserTrackSetting(track, "Filters", "Mol_Path_Classes", "deletion (D)") 
+    Min_Reads <- getBrowserTrackSetting(track, "Filters", "Min_Reads", 1) 
+    jxns[
+        pathClass %in% Mol_Path_Classes & 
+        nReadPairs >= Min_Reads
+    ]
 }
 
 # convert sampleId to sampleName for legend

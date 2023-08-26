@@ -24,7 +24,7 @@ items.svAmplicon_nodesTrack <- function(...) svAmplicon_showAmpliconsDialog(...)
 # build method for the S3 class; REQUIRED
 build.svAmplicon_nodesTrack <- function(...){
     build.svx_nodes_track(..., svAmplicon_nodesTrackBuffer, svAmplicon_loadJunctions, idCol = "jxnUniqueKey", 
-                          isMultiSample = FALSE, sampleNameFn = svAmplicon_legendSampleNames)
+                          isMultiSample = FALSE, sampleNameFn = svAmplicon_legendSampleNames, jxnFilterFn = svAmplicon_filterJunctions)
 }
 
 # method for the S3 class to populate one or more trackNav inputs above the browser output

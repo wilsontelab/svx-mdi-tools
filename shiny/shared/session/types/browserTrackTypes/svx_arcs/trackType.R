@@ -22,7 +22,7 @@ new_svx_arcsTrack <- function(trackId, expandReactive) {
 
 # build method for the S3 class; REQUIRED
 build.svx_arcs_track <- function(track, reference, coord, layout, trackBuffer, loadFn, idCol, 
-                                 isMultiSample = TRUE, sampleNameFn = NULL){
+                                 isMultiSample = TRUE, sampleNameFn = NULL, jxnFilterFn = NULL){
     req(coord, coord$chromosome)
     isWholeGenome <- coord$chromosome == "all"    
 
@@ -36,33 +36,42 @@ build.svx_arcs_track <- function(track, reference, coord, layout, trackBuffer, l
     Upside_Down <- getBrowserTrackSetting(track, "Arcs", "Upside_Down", FALSE)    
     Color_By    <- getBrowserTrackSetting(track, "Arcs", "Color_By", "edgeType")
     Line_Width  <- getBrowserTrackSetting(track, "Arcs", "Line_Width", 1)
-    Max_SV_Size <- getBrowserTrackSetting(track, "Filters", "Max_SV_Size", 0)
-    ymax <- (if(Max_SV_Size == 0) diff(coord$range) else Max_SV_Size) / 2
-    ylim <- c(0, ymax)
+    Max_Y_BP    <- getBrowserTrackSetting(track, "Arcs", "Max_Y_BP", "window_width")
 
     # use the mdiTrackImage helper function to create the track image
     mai <- NULL
     image <- mdiTrackImage(layout, height, message = "svx_arcs", function(...){
         mai <<- setMdiTrackMai(layout, padding, mar = list(top = 0, bottom = 0))
-        plot(0, 0, type = "n", bty = "n",
-            xlim = coord$range, xlab = "", xaxt = "n", # nearly always set `xlim`` to `coord$range`
-            ylim = ylim, ylab = "", yaxt = "n",
-            xaxs = "i", yaxs = "i") # always set `xaxs` and `yaxs` to "i" 
+
         jxns <- svx_getTrackJunctions(track, selectedTargets, loadFn, coord, "endpoint", 
                                       chromOnly = FALSE, isMultiSample = isMultiSample, family = "Arcs")
+        if(!is.null(jxnFilterFn)) jxns <- jxnFilterFn(jxns, track) # apply app-specific filters
         if(Color_By == "sample") jxns <- dt_colorBySelectedSample(jxns, selectedTargets, isMultiSample)
+        ymax <- switch(
+            Max_Y_BP,
+            window_width = diff(coord$range) * 0.51,
+            max_sv_width = jxns[, max(abs(cRefPos1 - cRefPos2))] * 0.51,
+            fixed = as.integer(getBrowserTrackSetting(track, "Arcs", "Fixed_Y_BP", 500))
+        )
+        ylim <<- c(0, ymax)
+        plot(0, 0, type = "n", bty = "n",
+            xlim = coord$range, xlab = "", xaxt = "n", # nearly always set `xlim`` to `coord$range`
+            ylim = ylim, ylab = ylab(track, ""), yaxt = "n",
+            xaxs = "i", yaxs = "i") # always set `xaxs` and `yaxs` to "i" 
+
         x <- seq(0, pi, length.out = 25)
         if(nrow(jxns) == 0) trackNoData(coord, ylim, "no matching junctions in window") else {
             jxns[, {
-                halfsize <- (cRefPos2 - cRefPos1 + 1) / 2
-                center <- cRefPos1 + halfsize
+                pos <- range(cRefPos1, cRefPos2)
+                halfsize <- (pos[2] - pos[1] + 1) / 2
+                center <- pos[1] + halfsize
                 y <- sin(x) * halfsize
                 if(Upside_Down) y <- ymax - y
                 lines(
                     x = cos(x) * halfsize + center, 
                     y = y,
                     col = color,
-                    # lwd = lwd
+                    lwd = Line_Width
                 )      
             }, by = idCol]
         }

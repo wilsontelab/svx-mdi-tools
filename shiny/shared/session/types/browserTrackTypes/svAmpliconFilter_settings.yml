@@ -1,0 +1,39 @@
+Filters:
+    Min_SV_Size:
+        type:   numericInput
+        value:  1
+        min:    0
+        max:    10000
+        step:   100
+    Max_SV_Size:
+        type:   numericInput
+        value:  0 # i.e., no limit
+        min:    0
+        max:    10000
+        step:   100
+    Min_Insert_Size:
+        type:   numericInput
+        value:  -50
+        min:    -1000
+        max:    1000
+        step:   10
+    Max_Insert_Size:
+        type:   numericInput
+        value:  50
+        min:    -1000
+        max:    1000
+        step:   10   
+    Min_Map_Quality:
+        type:   numericInput
+        value:  0
+        min:    0
+        max:    60
+        step:   5          
+    Min_Reads:
+        type:   numericInput
+        value:  1
+        min:    1
+        max:    10000
+        step:   1    
+    # SPACER_1:
+    #     type: spacer       

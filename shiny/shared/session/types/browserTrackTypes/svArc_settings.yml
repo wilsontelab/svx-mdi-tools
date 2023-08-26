@@ -19,6 +19,19 @@ Arcs:
             - isSingleSample
             - sample
         value: edgeType 
+    Max_Y_BP: 
+        type:   selectInput
+        choices:
+            - window_width
+            - max_sv_width
+            - fixed
+        value: window_width 
+    Fixed_Y_BP:
+        type:   numericInput
+        value:  500
+        min:    10
+        max:    10000
+        step:   50
     Upside_Down:
         type: checkboxInput
         value: false

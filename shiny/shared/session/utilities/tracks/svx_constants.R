@@ -86,7 +86,7 @@ svx_jxnType_nameToX <- function(x, col){
 }
 
 # junction filters
-svx_filterDefaults <- list(
+svx_filterDefaults <- list( # all values here should be ~unfiltered, so that apps that don't offer the setting don't apply the filter
     Min_SV_Size = 1,
     Max_SV_Size = 0,
     Min_Insert_Size = -50,
@@ -100,7 +100,7 @@ svx_filterDefaults <- list(
     Min_Map_Quality = 0,
     Min_Flank_Length = 0,
     SV_Type = c("Del","Dup","Inv"),  
-    Show_ChrM = "never"    
+    Show_ChrM = "always"    
 )
 svx_nodeClasses <- list(
    'GAP'='0',

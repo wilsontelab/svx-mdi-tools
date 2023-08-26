@@ -5,6 +5,7 @@
 #   sessionCache
 #   loadFn(targetId) that returns a data.table with appropriately named display and filter columns
 #----------------------------------------------------------------------
+svxLoadCreate <- "asNeeded" # for convenience when debugging load functions
 
 # load all unique junctions for a specific targetId (not filtered by region, type, or sample yet)
 svx_loadJunctions <- function(targetId, loadFn, samples_ = NULL){
@@ -14,7 +15,7 @@ svx_loadJunctions <- function(targetId, loadFn, samples_ = NULL){
         key = if(!is.null(samples_)) targetId else digest(targetId), 
         permanent = TRUE, 
         from = "ram", 
-        create = "asNeeded", 
+        create = svxLoadCreate, 
         createFn = function(...) {
             startSpinner(session, message = "loading junctions")
             jxns <- loadFn(targetId)
@@ -45,7 +46,7 @@ svx_filterJunctionsBySample <- function(targetId, samples_, loadFn){
         keyObject = list(targetId = targetId, samples = samples_), 
         permanent = TRUE, 
         from = "ram",
-        create = "asNeeded", 
+        create = svxLoadCreate, 
         createFn = function(...) {
             jxns <- svx_loadJunctions(targetId, loadFn, samples_)
             if(is.null(samples_)) return(jxns) # e.g., when track items are amplicons          
@@ -65,7 +66,7 @@ svx_filterJunctionsBySettings <- function(track, targetId, samples, loadFn, fami
         keyObject = list(targetId = targetId, samples = samples, settings = track$settings$all()), 
         permanent = FALSE,
         from = "ram", 
-        create = "asNeeded", 
+        create = svxLoadCreate, 
         createFn = function(...) {
             jxns <- svx_filterJunctionsBySample(targetId, samples, loadFn)
 

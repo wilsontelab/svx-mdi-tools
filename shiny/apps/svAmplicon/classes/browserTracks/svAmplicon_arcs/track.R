@@ -24,7 +24,7 @@ items.svAmplicon_arcsTrack <- function(...) svAmplicon_showAmpliconsDialog(...)
 # build method for the S3 class; REQUIRED
 build.svAmplicon_arcsTrack <- function(...){
     build.svx_arcs_track(..., svAmplicon_arcsTrackBuffer, svAmplicon_loadJunctions, idCol = "jxnUniqueKey", 
-                         isMultiSample = FALSE, sampleNameFn = svAmplicon_legendSampleNames)
+                         isMultiSample = FALSE, sampleNameFn = svAmplicon_legendSampleNames, jxnFilterFn = svAmplicon_filterJunctions)
 }
 
 # method for the S3 class to populate one or more trackNav inputs above the browser output

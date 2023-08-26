@@ -63,7 +63,7 @@ svx_node_plotGenomeJxns <- function(jxns, lwd, idCol){
     jxns
 }
 build.svx_nodes_track <- function(track, reference, coord, layout, trackBuffer, loadFn, idCol, 
-                                  isMultiSample = TRUE, sampleNameFn = NULL){
+                                  isMultiSample = TRUE, sampleNameFn = NULL, jxnFilterFn = NULL){
     req(coord, coord$chromosome)
     isWholeGenome <- coord$chromosome == "all"    
 
@@ -92,6 +92,7 @@ build.svx_nodes_track <- function(track, reference, coord, layout, trackBuffer, 
         jxns <- svx_getTrackJunctions(
             track, selectedTargets, loadFn, coord, "endpoint", chromOnly = FALSE, isMultiSample = isMultiSample
         )[order(if(isWholeGenome) sample(.N) else -size)]
+        if(!is.null(jxnFilterFn)) jxns <- jxnFilterFn(jxns, track) # apply app-specific filters
         if(Color_By == "sample") jxns <- dt_colorBySelectedSample(jxns, selectedTargets, isMultiSample)
         jxns[, lty := ifelse(
             edgeType == svx_edgeTypes$INVERSION, 
