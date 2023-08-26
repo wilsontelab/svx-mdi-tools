@@ -39,10 +39,10 @@ junctionPlotDataReactive <- function(selectedAmplicons, junctionTypesJunctions) 
         }),
         circles = lapply(seq_along(ampKeys), function(i){
             x <- seq(0, pi, length.out = 25)
-            junctions[getAmpliconKeys(junctions) == ampKeys[i] & 
-                      edgeType == "D", {
-                halfsize <- (pos2 - pos1 + 1) / 2
-                center <- pos1 + halfsize
+            junctions[getAmpliconKeys(junctions) == ampKeys[i], {
+                pos <- range(pos1, pos2)
+                halfsize <- (pos[2] - pos[1] + 1) / 2
+                center <- pos[1] + halfsize
                 .(
                     x = cos(x) * halfsize + center,
                     y = sin(x) * halfsize 
