@@ -36,16 +36,16 @@ CONSTANTS$ampliconsColNames <- c(
     "chrom2","side2","pos2","ref2","primer2"
 )
 fillAmpliconDerivedColumns <- function(amplicons){
-    amplicons[, size := if(chrom1 == chrom2) pos2 - pos1 + 1 else NA_integer_]
+    amplicons[, size := ifelse(chrom1 == chrom2, pos2 - pos1 + 1, NA_integer_)]
     if("side1" %in% names(amplicons)){
         amplicons[, ":="(
-            strand1 = if(side1 == "R") "+" else "-",
-            strand2 = if(side2 == "R") "+" else "-"
+            strand1 = ifelse(side1 == "R", "+",  "-"),
+            strand2 = ifelse(side2 == "R", "+",  "-")
         )]
     } else {
         amplicons[, ":="(
-            side1 = if(strand1 == "+") "R" else "L",
-            side2 = if(strand2 == "+") "R" else "L"    
+            side1 = ifelse(strand1 == "+", "R",  "L"),
+            side2 = ifelse(strand2 == "+", "R",  "L")    
         )]
     }
     amplicons

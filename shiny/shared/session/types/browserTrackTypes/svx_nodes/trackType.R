@@ -103,7 +103,7 @@ build.svx_nodes_track <- function(track, reference, coord, layout, trackBuffer, 
                              else svx_node_plotChromosomeJxns(jxns, Line_Width, idCol)
         if(nrow(jxns) == 0) trackNoData(coord, ylim, "no matching junctions in window")
         svx_junctionsLegend(track, coord, ylim, selectedTargets, isMultiSample, jxns, sampleNameFn = sampleNameFn)
-        trackBuffer[[track$id]] <<- jxns
+        trackBuffer[[track$id]] <- jxns
     })
 
     # return the track's magick image and associated metadata

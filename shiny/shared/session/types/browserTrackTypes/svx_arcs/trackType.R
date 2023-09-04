@@ -42,7 +42,6 @@ build.svx_arcs_track <- function(track, reference, coord, layout, trackBuffer, l
     mai <- NULL
     image <- mdiTrackImage(layout, height, message = "svx_arcs", function(...){
         mai <<- setMdiTrackMai(layout, padding, mar = list(top = 0, bottom = 0))
-
         jxns <- svx_getTrackJunctions(track, selectedTargets, loadFn, coord, "endpoint", 
                                       chromOnly = FALSE, isMultiSample = isMultiSample, family = "Arcs")
         if(!is.null(jxnFilterFn)) jxns <- jxnFilterFn(jxns, track) # apply app-specific filters
@@ -60,7 +59,10 @@ build.svx_arcs_track <- function(track, reference, coord, layout, trackBuffer, l
             xaxs = "i", yaxs = "i") # always set `xaxs` and `yaxs` to "i" 
 
         x <- seq(0, pi, length.out = 25)
+
         if(nrow(jxns) == 0) trackNoData(coord, ylim, "no matching junctions in window") else {
+            jxns <- jxns[sample.int(.N, replace = FALSE)]
+            jxns[, randomI := 1:.N]
             jxns[, {
                 pos <- range(cRefPos1, cRefPos2)
                 halfsize <- (pos[2] - pos[1] + 1) / 2
@@ -73,10 +75,10 @@ build.svx_arcs_track <- function(track, reference, coord, layout, trackBuffer, l
                     col = color,
                     lwd = Line_Width
                 )      
-            }, by = idCol]
+            }, by = .(randomI)] # idCol
         }
         svx_junctionsLegend(track, coord, ylim, selectedTargets, isMultiSample, jxns, "Arcs", sampleNameFn)
-        trackBuffer[[track$id]] <<- jxns
+        trackBuffer[[track$id]] <- jxns
     })
 
     # return the track's magick image and associated metadata
