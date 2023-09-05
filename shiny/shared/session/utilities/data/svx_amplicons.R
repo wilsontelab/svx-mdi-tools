@@ -1,6 +1,9 @@
 # parse amplicons for rapid navigation to the relevant genome location(s) (one or two per amplicon)
-svx_getTrackAmpliconTargets <- function(track, parseFn = NULL){
-    amplicons <- track$settings$items()
+svx_getTrackAmpliconTargets <- function(track, parseFn = NULL, isMultiSample = TRUE, amplicons = NULL){
+    if(is.null(amplicons)){
+        amplicons <- track$settings$items()
+        if(isMultiSample) amplicons <- getSourcesFromTrackSamples(amplicons)
+    }
     nAmplicons <- length(amplicons)
     req(nAmplicons > 0) 
     amplicons <- do.call(rbind, lapply(amplicons, as.data.table))
@@ -8,9 +11,10 @@ svx_getTrackAmpliconTargets <- function(track, parseFn = NULL){
     navTargets <- do.call(rbind, lapply(1:nAmplicons, function(i){
         x <- amplicons[i]
         if(x$chrom1 == x$chrom2 && abs(x$pos2 - x$pos1) <= 10000){
-            x[, .(chrom = chrom1, start = min(pos1, pos2), end = max(pos1, pos2))]
+            x[, .(ampliconTargetKey = ampliconKey, chrom = chrom1, start = min(pos1, pos2), end = max(pos1, pos2))]
         } else {
             data.table(
+                ampliconTargetKey = paste(x$ampliconKey, 1:2), 
                 chrom = c(x$chrom1, x$chrom2),
                 start = c(x$pos1, x$pos2),
                 end   = NA_integer_

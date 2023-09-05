@@ -47,10 +47,10 @@ svx_jumpToJunction <- function(jxn){
 
 # construct an amplicon trackNav table
 svx_ampliconNavTable <- function(track, session, browserId, reference, coord, 
-                                 parseFn = NULL){
+                                 parseFn = NULL, isMultiSample = FALSE){
     navTableName <- initTrackNav(track, session, "navTable") # table reactive functions are provided below  
     trackNavData <- reactive({ # simple nav table, no need for formatted/unformatted
-        svx_getTrackAmpliconTargets(track, parseFn = parseFn)
+        svx_getTrackAmpliconTargets(track, parseFn = parseFn, isMultiSample = isMultiSample)
     })
     handleRowClick <- function(selectedRow){
         req(selectedRow)
