@@ -79,7 +79,7 @@ use vars qw($READ_LEN $MAX_INSERT_SIZE $MIN_SV_SIZE
 #---------------------------------------------------------------------------------------------------
 sub parseReadAlignments {
     my ($readN, @alns) = @_;
-    my @alnIs = sortReadAlignments(\@alns, LEFT, RIGHT);  
+    my @alnIs = sortReadAlignments(\@alns, LEFT, RIGHT); # sort reads in query read order
     foreach my $i(0..$#alnIs){
         my $aln = $alns[$alnIs[$i]];
         $$aln[RSTART] = $$aln[POS] - 1; # create PAF-like designations
@@ -207,9 +207,9 @@ sub getJxnStructure {
     my $overlap = $readPos1 - $readPos2 + 1;
     my $jxnBases = "*"; # a blunt joint
     if($overlap > 0){  # microhomology
-        $jxnBases = substr($$aln1[SEQ], $readPos2,      $overlap); # TODO: any value to reverse complementing inversions?
+        $jxnBases = substr($$aln1[SEQ], $readPos2 - 1,  $overlap); # TODO: any value to reverse complementing inversions?
     } elsif($overlap < 0){ # inserted bases
-        $jxnBases = substr($$aln1[SEQ], $readPos1 + 1, -$overlap);
+        $jxnBases = substr($$aln1[SEQ], $readPos1,     -$overlap);
     }
     (-$overlap, $jxnBases); # i.e., return insertion size
 }

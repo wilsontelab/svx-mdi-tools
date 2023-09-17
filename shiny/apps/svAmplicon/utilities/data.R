@@ -294,9 +294,12 @@ junctionsTableServer <- function(parentId, input, junctionPlotData) bufferedTabl
         "eventSize",
         "insertSize",
         "jxnBases",
+        "inlineJxn",
         "nReadPairs", 
         "nMolecules", 
-        "nMolTypes"
+        "nMolTypes",
+        "seq1s",
+        "seq2s"
     )] }),
     selection = "none"
 )
