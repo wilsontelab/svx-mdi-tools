@@ -1,0 +1,32 @@
+Filters:
+    # SPACER_1:
+    #     type: spacer       
+    Mol_Path_Classes:
+        type:   checkboxGroupInput 
+        choices:
+            - "deletion (D)"
+            - "insertion (I)"
+            - "duplication (U)"
+            - "full inversion (VV)"
+            - "partial inversion (V)"
+            - "full translocation (TT)"
+            - "partial translocation (T)"
+            - "paired indel (DI,ID)"
+            - "paired indel (DI,ID)"
+            - "other"
+        value:
+            - "deletion (D)"
+        inline: FALSE
+    SV_Type:
+        type:   checkboxGroupInput
+        choices:
+            - Del
+            - Dup
+            - Inv
+            - Trans
+        value:
+            - Del
+            - Dup
+            - Inv
+            - Trans
+        inline: FALSE

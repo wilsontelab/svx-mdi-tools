@@ -4,7 +4,11 @@
 #   values returned from app step modules
 #----------------------------------------------------------------------
 
-# objects instantiated here are available to all appStep modules in a session
+# genome browser support
+library(bit64)
+sessionCache <- new_dataCache('svAmpliconCache')
+
+# constants
 CONSTANTS$edgeTypes <- list(
     ALIGNMENT     = "A", # the single type for a contiguous aligned segment
     TRANSLOCATION = "T", # edge/junction types (might be several per source molecule)

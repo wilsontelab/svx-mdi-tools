@@ -67,6 +67,7 @@ edgesColumns <- c(
     "overlap", 
     "isReference", 
     "nReadPairs",
+    "isInlineJxn",
     "baseQual"
 )
 edgeTypes <- list(
@@ -188,6 +189,7 @@ molecules <- edges[, {
         mapQs       = paste_(mapQ,       !isAlignment), # quality values already set as the minimum of the two flanks
         alnQs       = paste_(alnQ,       !isAlignment),
         baseQuals   = paste_(baseQual,   !isAlignment),
+        inlineJxns  = paste_(isInlineJxn,!isAlignment),
 
         # alignment-level information, one value per alignment, all values here match between node1 and node2 of alignments
         chroms      = paste_(chrom1,  isAlignment), 
@@ -209,7 +211,7 @@ message("  aggregating molecules into types, i.e., shared SV paths")
 moleculeTypes <- molecules[
     order(
         ampliconId, path, pathInsertSizes, pathInsertBases, # first columns are for moleculeType grouping
-        -isReference, -mergeLevel, -nReadPairs, -minBaseQual, -minMapQ # last columns are   
+        -isReference, -mergeLevel, -nReadPairs, -minBaseQual, -minMapQ # last columns are for selecting the index molecule
     )
 ][, .(
         # molecule-level information
@@ -244,6 +246,7 @@ moleculeTypes <- molecules[
         mapQs       = mapQs[1],
         alnQs       = alnQs[1],
         baseQuals   = baseQuals[1],
+        inlineJxns  = inlineJxns[1],
 
         # alignment-level information
         chroms      = chroms[1],
@@ -265,30 +268,36 @@ moleculeTypes <- molecules[
 message("  tabulating unique SV junctions found in one or more molecules")
 molTypeKeys <- moleculeTypes[, molKey]
 edges[, isIndexMol := molKey %in% molTypeKeys]
-junctions <- edges[edgeType != edgeTypes$ALIGNMENT & maskedJunction == FALSE, .( # only tabulate candidate junction, not merge failures our under-sized SVs
-    # ampliconId
-    # node1
-    # node2
-    # insertSize
-    # insertBases
-    nReadPairs  = sum(nReadPairs),
-    nMolecules  = length(unique(molKey)), # beware of possibility of rare molecules with a recurring junction
-    nMolTypes   = length(unique(molKey[isIndexMol])), 
-    chrom1      = chrom1[1],
-    strand1     = strand1[1],
-    pos1        = pos1[1],
-    chrom2      = chrom2[1],
-    strand2     = strand2[1],
-    pos2        = pos2[1],
-    mapQ        = max(mapQ),
-    alnQ        = max(alnQ),
-    baseQual    = max(baseQual),    
-    edgeType    = edgeType[1],
-    eventSize   = eventSize[1],
-    jxnBases    = jxnBases[1],
-    mergeLevel  = max(mergeLevel),
-    molTypeKeys = list(unique(molKey[isIndexMol]))
-), by = .(ampliconId, node1, node2, insertSize, insertBases)] # include insertSize and insertBases in junction definitons
+junctions <- edges[edgeType != edgeTypes$ALIGNMENT & maskedJunction == FALSE, {
+    indexMolKeys <- unique(molKey[isIndexMol])
+    .( # only tabulate candidate junction, not merge failures our under-sized SVs
+        # ampliconId
+        # node1
+        # node2
+        # insertSize
+        # insertBases
+        nReadPairs  = sum(nReadPairs),
+        nMolecules  = length(unique(molKey)), # beware of possibility of rare molecules with a recurring junction
+        nMolTypes   = length(indexMolKeys), 
+        chrom1      = chrom1[1],
+        strand1     = strand1[1],
+        pos1        = pos1[1],
+        chrom2      = chrom2[1],
+        strand2     = strand2[1],
+        pos2        = pos2[1],
+        mapQ        = max(mapQ),
+        alnQ        = max(alnQ),
+        baseQual    = max(baseQual),    
+        inlineJxn   = any(isInlineJxn[isIndexMol] == 1),
+        edgeType    = edgeType[1],
+        eventSize   = eventSize[1],
+        jxnBases    = jxnBases[1],
+        mergeLevel  = max(mergeLevel),
+        molTypeKeys = list(indexMolKeys),
+        seq1s       = moleculeTypes[molKey %in% indexMolKeys, paste(seq1, collapse = ",")],
+        seq2s       = moleculeTypes[molKey %in% indexMolKeys, paste(seq2, collapse = ",")]
+    )
+}, by = .(ampliconId, node1, node2, insertSize, insertBases)] # include insertSize and insertBases in junction definitons
 #=====================================================================================
 
 #=====================================================================================

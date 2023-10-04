@@ -43,6 +43,9 @@ awk 'BEGIN{OFS="\t"}{
     print $0;
 }' | 
 
+# assess microhomologies at inline (CIGAR) junctions
+perl $ACTION_DIR/extract/adjust_inline_junctions.pl | 
+
 # add base qualities to aligments for junction filtering
 perl $ACTION_DIR/extract/add_base_quals.pl | 
 pigz -p $N_CPU -c | 

@@ -41,7 +41,8 @@ use constant {
     OVERLAP => 22,
     IS_REFERENCE => 23,
     N_READ_PAIRS => 24,
-    BASE_QUAL => 25, # added by us to alignment edges only
+    IS_INLINE_JXN => 25,
+    BASE_QUAL => 26, # added by us to alignment edges only
     #-------------
     ALIGNMENT     => "A", # the single type for a contiguous aligned segment
     TRANSLOCATION => "T", # edge/junction types (might be several per source molecule)

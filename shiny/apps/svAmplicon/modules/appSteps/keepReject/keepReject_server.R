@@ -33,17 +33,17 @@ defaultThreshold <- list(
     minMapQ = 55
 )
 thresholds <- reactiveValues()
-setThresholds <- function(d){
+setThresholds <- function(d){ # quality thresholds are applied per amplicon (most often, that means per sample, i.e., per sequence library)
     ampliconKey <- getAmpliconKeys(selectedAmplicon())
     thresholds[[ampliconKey]] <- d
 }
 kept <- reactiveValues()
-toggleKept <- function(sampleMolTypeKey){
+toggleKept <- function(sampleMolTypeKey){ # keep/reject overrides are applied per moleculeType within an amplicon set
     ampliconKey <- getAmpliconKeys(selectedAmplicon())
     if(is.null(kept[[ampliconKey]])) kept[[ampliconKey]] <- list()
     currentValue <- kept[[ampliconKey]][[sampleMolTypeKey]]
     if(is.null(currentValue)) currentValue <- if(input$moleculeTypeFilter == "Kept") TRUE else FALSE
-    kept[[ampliconKey]][[sampleMolTypeKey]] <- !currentValue
+    kept[[ampliconKey]][[sampleMolTypeKey]] <- !currentValue # key levels are redundant, but allow retrieving all marks for an amplicon at once
 }
 
 #----------------------------------------------------------------------
@@ -125,6 +125,19 @@ list(
         })  
         names(x) <- ampliconKeys
         x
+    },
+    getKeptJunctions = function(ampliconKey, junctions){
+        req(ampliconKey)        
+        thresholds <- if(is.null(thresholds[[ampliconKey]])) defaultThreshold else thresholds[[ampliconKey]]
+        kept <- if(is.null(kept[[ampliconKey]])) list() else kept[[ampliconKey]]
+        userRejects <- na.omit(sapply(names(kept), function(sampleMolTypeKey){
+            if(kept[[sampleMolTypeKey]]) NA else sampleMolTypeKey
+        }))
+        junctions[
+            baseQual >= thresholds$minBaseQual & 
+            mapQ >= thresholds$minMapQ & 
+            !(sampleMolTypeKey %in% userRejects)
+        ]
     },
     # isReady = reactive({ getStepReadiness(options$source, ...) }),
     NULL

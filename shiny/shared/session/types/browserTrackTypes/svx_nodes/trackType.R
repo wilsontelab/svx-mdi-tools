@@ -62,12 +62,14 @@ svx_node_plotGenomeJxns <- function(jxns, lwd, idCol){
     svx_node_plotJxnLines(jxns, lwd, idCol)
     jxns
 }
-build.svx_nodes_track <- function(track, reference, coord, layout, trackBuffer, loadFn, idCol){
+build.svx_nodes_track <- function(track, reference, coord, layout, trackBuffer, loadFn, idCol, 
+                                  isMultiSample = TRUE, sampleNameFn = NULL, jxnFilterFn = NULL){
     req(coord, coord$chromosome)
     isWholeGenome <- coord$chromosome == "all"    
 
     # get the data to plot
-    selectedSources <- getSourcesFromTrackSamples(track$settings$items())
+    selectedTargets <- track$settings$items()
+    if(isMultiSample) selectedTargets <- getSourcesFromTrackSamples(selectedTargets)
 
     # set the plot layout and axes
     padding <- padding(track, layout)
@@ -87,8 +89,11 @@ build.svx_nodes_track <- function(track, reference, coord, layout, trackBuffer, 
             xlim = coord$range, xlab = "", xaxt = "n", # nearly always set `xlim`` to `coord$range`
             ylim = ylim, ylab = if(isWholeGenome) "SV Size" else "Unique Junctions", yaxt = if(isWholeGenome) "s" else "n",
             xaxs = "i", yaxs = "i") # always set `xaxs` and `yaxs` to "i" 
-        jxns <- svx_getTrackJunctions(track, selectedSources, loadFn, coord, "endpoint", chromOnly = FALSE)[order(if(isWholeGenome) sample(.N) else -size)]
-        if(Color_By == "sample") jxns <- dt_colorBySelectedSample(jxns, selectedSources)
+        jxns <- svx_getTrackJunctions(
+            track, selectedTargets, loadFn, coord, "endpoint", chromOnly = FALSE, isMultiSample = isMultiSample
+        )[order(if(isWholeGenome) sample(.N) else -size)]
+        if(!is.null(jxnFilterFn)) jxns <- jxnFilterFn(jxns, track) # apply app-specific filters
+        if(Color_By == "sample") jxns <- dt_colorBySelectedSample(jxns, selectedTargets, isMultiSample)
         jxns[, lty := ifelse(
             edgeType == svx_edgeTypes$INVERSION, 
             ifelse(cStrand1 == 1, 1, 2), 
@@ -97,8 +102,8 @@ build.svx_nodes_track <- function(track, reference, coord, layout, trackBuffer, 
         jxns <- if(isWholeGenome) svx_node_plotGenomeJxns(jxns, Line_Width, idCol) 
                              else svx_node_plotChromosomeJxns(jxns, Line_Width, idCol)
         if(nrow(jxns) == 0) trackNoData(coord, ylim, "no matching junctions in window")
-        svx_junctionsLegend(track, coord, ylim, selectedSources)
-        trackBuffer[[track$id]] <<- jxns
+        svx_junctionsLegend(track, coord, ylim, selectedTargets, isMultiSample, jxns, sampleNameFn = sampleNameFn)
+        trackBuffer[[track$id]] <- jxns
     })
 
     # return the track's magick image and associated metadata

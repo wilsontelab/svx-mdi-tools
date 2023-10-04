@@ -15,8 +15,10 @@ pairedQualityPlotServer <- function(moleculeTypes, amplicon) mdiInteractivePlotS
                 cex = 0.5,
                 xlab = "min(QUAL)",
                 ylab = "min(MAPQ)",
-                xlim = c(0, 45),
-                ylim = c(0, 65),
+                xlim = c(-5, 50),
+                ylim = c(-5, 65),
+                xaxs = "i",
+                yaxs = "i",
                 col = ifelse(mts$passedQualityFilters, CONSTANTS$plotlyColors$green, CONSTANTS$plotlyColors$red)
             ),
             abline = list(h = thresholds$minMapQ, v = thresholds$minBaseQual),
