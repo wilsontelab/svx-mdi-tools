@@ -38,3 +38,6 @@ export MANIFEST_PREFIX=$DATA_GENOME_PREFIX.manifest
 export GENOTYPE_PREFIX=$DATA_GENOME_PREFIX.genotype
 export CONSTITUTIVE_VCF=$GENOTYPE_PREFIX.constitutive.vcf.gz
 export PADDED_TARGETS_BED=$DATA_FILE_PREFIX.padded_targets.bed
+
+# assemble
+export ASSEMBLE_PREFIX=$DATA_FILE_PREFIX.assemble # may assemble across genomes

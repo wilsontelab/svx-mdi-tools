@@ -52,7 +52,7 @@ observeEvent(segments(),{
 #----------------------------------------------------------------------
 # define bookmarking actions
 #----------------------------------------------------------------------
-observe({
+bookmarkObserver <- observe({
     bm <- getModuleBookmark(id, module, bookmark, locks)
     req(bm)
     # settings$replace(bm$settings)
@@ -60,6 +60,7 @@ observe({
     if(!is.null(bm$outcomes)) {
         # outcomes <<- listToReactiveValues(bm$outcomes)
     }
+    bookmarkObserver$destroy()
 })
 
 #----------------------------------------------------------------------

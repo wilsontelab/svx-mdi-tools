@@ -95,7 +95,7 @@ observeEvent(input$toggleKeepReject, {
 #----------------------------------------------------------------------
 # define bookmarking actions
 #----------------------------------------------------------------------
-observe({
+bookmarkObserver <- observe({
     bm <- getModuleBookmark(id, module, bookmark, locks)
     req(bm)
     # settings$replace(bm$settings)
@@ -104,6 +104,7 @@ observe({
         thresholds <<- listToReactiveValues(bm$outcomes$thresholds)
         kept <<- listToReactiveValues(bm$outcomes$kept)
     }
+    bookmarkObserver$destroy()
 })
 
 #----------------------------------------------------------------------

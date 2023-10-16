@@ -210,7 +210,7 @@ junctionAlignmentServer(output, junctionMap, alignmentSettings)
 # ----------------------------------------------------------------------
 # define bookmarking actions
 # ----------------------------------------------------------------------
-observe({
+bookmarkObserver <- observe({
     bm <- getModuleBookmark(id, module, bookmark, locks)
     req(bm)
     settings$replace(bm$settings)
@@ -225,6 +225,7 @@ observe({
         nodesPlot$settings$replace(bm$outcomes$nodesPlotSettings)
         alignmentSettings$replace(bm$outcomes$alignmentSettings)
     }
+    bookmarkObserver$destroy()
 })
 
 #----------------------------------------------------------------------

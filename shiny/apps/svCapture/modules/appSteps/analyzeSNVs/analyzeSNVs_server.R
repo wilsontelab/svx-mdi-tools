@@ -113,7 +113,7 @@ output$junctionAlignment <- renderText({
 # ----------------------------------------------------------------------
 # define bookmarking actions
 # ----------------------------------------------------------------------
-observe({
+bookmarkObserver <- observe({
     bm <- getModuleBookmark(id, module, bookmark, locks)
     req(bm)
     settings$replace(bm$settings)
@@ -125,6 +125,7 @@ observe({
         locationsPlot$settings$replace(bm$outcomes$locationsPlotSettings)
         alignmentSettings$replace(bm$outcomes$alignmentSettings)
     }
+    bookmarkObserver$destroy()
 })
 
 #----------------------------------------------------------------------

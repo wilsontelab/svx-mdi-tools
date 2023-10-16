@@ -317,13 +317,14 @@ observeEvent(input$clearAllAssignments, { # completely purge all assignment outc
 #----------------------------------------------------------------------
 # define bookmarking actions
 #----------------------------------------------------------------------
-observe({
+bookmarkObserver <- observe({
     bm <- getModuleBookmark(id, module, bookmark, locks)
     req(bm)
     settings$replace(bm$settings)
     if(!is.null(bm$outcomes$assignments)) cnvGroupAssignments(bm$outcomes$assignments)
     # updateTextInput(session, 'xxx', value = bm$outcomes$xxx)
     # xxx <- bm$outcomes$xxx
+    bookmarkObserver$destroy()
 })
 
 #----------------------------------------------------------------------

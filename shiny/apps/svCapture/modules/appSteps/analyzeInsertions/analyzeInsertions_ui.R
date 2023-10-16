@@ -44,6 +44,11 @@ analyzeInsertionsUI <- function(id, options) {
                 ns('templateLocations'),
                 width = 12,
                 title = "Templated Insertion Locations"
+            ),            
+            staticPlotBoxUI(
+                ns('templateLocations2'),
+                width = 12,
+                title = "Templated Insertion Locations"
             )
         ),
 
