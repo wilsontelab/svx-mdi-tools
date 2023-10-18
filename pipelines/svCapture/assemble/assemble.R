@@ -194,6 +194,7 @@ svs <- samples[, {
         SIDE_2,
         POS_2,
         N_MOLECULES   = if(env$INCLUDE_CLIPS) N_TOTAL else N_SPLITS + N_GAPS,
+        N_SPLITS,
         N_DUPLEX      = if(env$INCLUDE_CLIPS) N_DUPLEX else N_DUPLEX_GS,
         STRAND_COUNT  = if(env$INCLUDE_CLIPS) STRAND_COUNT else STRAND_COUNT_GS, # i.e., family size
         SHARED_PROPER = if(env$INCLUDE_CLIPS) SHARED_PROPER else SHARED_PROPER_GS, 

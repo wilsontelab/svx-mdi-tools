@@ -1,15 +1,15 @@
 #----------------------------------------------------------------------
-# UI components for the svRatePlots appStep module
+# UI components for the assemblyPlots appStep module
 #----------------------------------------------------------------------
 
 # module ui function
-svRatePlotsUI <- function(id, options) {
+assemblyPlotsUI <- function(id, options) {
 
     # initialize namespace
     ns <- NS(id)
     
     # override missing options to module defaults
-    options <- setDefaultOptions(options, stepModuleInfo$svRatePlots)
+    options <- setDefaultOptions(options, stepModuleInfo$assemblyPlots)
 
     # return the UI contents
     standardSequentialTabItem(
@@ -29,8 +29,8 @@ svRatePlotsUI <- function(id, options) {
         # saving figures
         fluidRow(
             bufferedTableUI(
-                ns("savedPlots"), 
-                title = "Saved Plots", 
+                ns("savedPlotSets"), 
+                title = "Saved Plot Assemblies", 
                 width = 10,
                 collapsible = TRUE,
                 collapsed = FALSE,
@@ -39,15 +39,15 @@ svRatePlotsUI <- function(id, options) {
             column(
                 width = 2,
                 bsButton(
-                    ns("savePlot"),
-                    "Save Plot",
+                    ns("savePlotSet"),
+                    "Save Plots",
                     style = "success",
                     block = TRUE
                 )
             ),
             column(
                 width = 12,
-                uiOutput(ns('savePlotFeedback'))
+                uiOutput(ns('savePlotSetFeedback'))
             )
         ),
 
@@ -136,23 +136,59 @@ svRatePlotsUI <- function(id, options) {
                 title = "Groups to Plot", 
                 width = 12,
                 collapsible = TRUE,
-                collapsed = FALSE,
+                collapsed = TRUE,
                 downloadable = TRUE
             )
         ),
 
-        # output plot and item ordering
+        # svFrequencies plot and item ordering
         fluidRow(
             column(
                 width = 6,
                 style = "padding: 0;",
-                uiOutput(ns("conditionOrder")),
-                uiOutput(ns("groupOrder"))                
+                uiOutput(ns("conditions_svFrequencies")),
+                uiOutput(ns("groups_svFrequencies"))
             ),
             staticPlotBoxUI(
-                ns("ratePlot"), 
-                "SV Rate Plot",
-                width = 6 # additional arguments passed to shinydashboard::box()    
+                ns("svFrequenciesPlot"), 
+                "SV Frequencies",
+                width = 6,
+                collapsible = TRUE,
+                collapsed = TRUE
+            )
+        ),
+
+        # microhomology plot and item ordering
+        fluidRow(
+            column(
+                width = 6,
+                style = "padding: 0;",
+                uiOutput(ns("conditions_microhomology")),
+                uiOutput(ns("groups_microhomology"))
+            ),
+            staticPlotBoxUI(
+                ns("microhomologyPlot"), 
+                "Microhomology/Insert Distributions",
+                width = 6,
+                collapsible = TRUE,
+                collapsed = TRUE
+            )
+        ),
+
+        # endpoint locations plot and item ordering
+        fluidRow(
+            column(
+                width = 6,
+                style = "padding: 0;",
+                uiOutput(ns("conditions_endpoints")),
+                uiOutput(ns("groups_endpoints"))
+            ),
+            staticPlotBoxUI(
+                ns("endpointsPlot"), 
+                "SV Endpoint Distributions",
+                width = 6,
+                collapsible = TRUE,
+                collapsed = TRUE
             )
         )
     )

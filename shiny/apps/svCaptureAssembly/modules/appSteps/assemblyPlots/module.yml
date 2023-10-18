@@ -1,15 +1,15 @@
 #----------------------------------------------------------------------
 # ui
 #----------------------------------------------------------------------
-shortLabel:       "SV Rate Plots" # shown on dashboard menu 
-shortDescription: "Make plots of SV formation rates/frequencies between sample groups." # shown on Overview page
-longLabel:        "Plot SV formation rates/frequencies" # shown at top of appStep page 
+shortLabel:       "Assemble Plots" # shown on dashboard menu 
+shortDescription: "Create and save aggregated plots of SV formation frequencies, microhomologies, sizes, positions, etc." # shown on Overview page
+longLabel:        "Assemble svCapture summary plots" # shown at top of appStep page 
 
 #----------------------------------------------------------------------
 # server
 #----------------------------------------------------------------------
 types: # names of the type(s) of this module ...
-    - svRatePlots
+    - plots
 sourceTypes: upload # ... and of the module(s) on which it depends
 
 #----------------------------------------------------------------------
@@ -43,7 +43,6 @@ settings:
         Merge_Doses:
             type: checkboxInput
             value: true 
-
 #         <settingName>:
 #             type:   textInput
 #             value:  abc  
