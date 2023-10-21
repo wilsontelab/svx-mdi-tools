@@ -7,15 +7,13 @@
 #----------------------------------------------------------------------
 # if not needed, simply omit file server.R from your app
 #----------------------------------------------------------------------
-
-# objects instantiated here are available to all appStep modules in a session
-# sourceExternalScript("genomex-mdi-tools", "shared/global/utilities/sequence.R")
+assemblyCache <- new_dataCache('assemblyCache')
+loadingPlotSet <- NULL
 
 # names of the columns used internally for plotting, etc.
 # all other columns were declared by user and are offered for grouping and selection
 denominatorColumns <- c("kbp_on_target","kbp_on_target_effective","kbp_on_target_filtered","kbp_on_target_filtered_effective")
 svTypeColumns <- c("deletion","duplication","inversion","translocation")
-
 internalUseSampleColumns <- c(
     "project","sample","sample_id",
     "genomesDir","genome","cram","minMapq","targetsBed","regionPadding",

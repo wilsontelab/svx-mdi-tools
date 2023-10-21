@@ -18,7 +18,7 @@ actions:
         order: 3
         module: genomex-mdi-tools//nanopore/basecall
         env-vars:     
-            dorado-output-format: usam # retain tags
+            dorado-output-format: usam # retain tags; irrelevent when --align-reads is set
     align:
         order: 4
         module: genomex-mdi-tools//align/dna-long-read

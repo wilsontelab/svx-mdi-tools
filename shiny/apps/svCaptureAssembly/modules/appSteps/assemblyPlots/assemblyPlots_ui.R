@@ -11,6 +11,33 @@ assemblyPlotsUI <- function(id, options) {
     # override missing options to module defaults
     options <- setDefaultOptions(options, stepModuleInfo$assemblyPlots)
 
+    # bucket and static plot box
+    assemblyPlotBox <- function(type, title, collapsed = TRUE){
+        fluidRow(
+            box(
+                width = 12,
+                title = title,
+                collapsible = TRUE,
+                collapsed = collapsed,
+                fluidRow(
+                    column(
+                        width = 6,
+                        style = "padding: 0;",
+                        uiOutput(ns(paste("conditions", type, sep = "_"))),
+                        uiOutput(ns(paste("groups", type, sep = "_")))
+                    ),
+                    staticPlotBoxUI(
+                        ns(paste0(type, "Plot")), 
+                        title = "",
+                        width = 6,
+                        collapsible = TRUE,
+                        collapsed = collapsed
+                    )
+                )
+            )
+        )
+    }
+
     # return the UI contents
     standardSequentialTabItem(
 
@@ -76,6 +103,17 @@ assemblyPlotsUI <- function(id, options) {
                 width = 12,
                 tags$div(
                     style = "padding: 10px;",
+                    tags$div(
+                        width = 3,
+                        bsButton(
+                            ns("suspendDataProcessing"),
+                            "Allow Data Processing",
+                            style = "warning",
+                            block = TRUE,
+                            type = "toggle",
+                            value = TRUE
+                        )                       
+                    ),
                     checkboxGroupInput(
                         ns("Group_By"),
                         "Group By",
@@ -141,55 +179,13 @@ assemblyPlotsUI <- function(id, options) {
             )
         ),
 
-        # svFrequencies plot and item ordering
-        fluidRow(
-            column(
-                width = 6,
-                style = "padding: 0;",
-                uiOutput(ns("conditions_svFrequencies")),
-                uiOutput(ns("groups_svFrequencies"))
-            ),
-            staticPlotBoxUI(
-                ns("svFrequenciesPlot"), 
-                "SV Frequencies",
-                width = 6,
-                collapsible = TRUE,
-                collapsed = TRUE
-            )
-        ),
-
-        # microhomology plot and item ordering
-        fluidRow(
-            column(
-                width = 6,
-                style = "padding: 0;",
-                uiOutput(ns("conditions_microhomology")),
-                uiOutput(ns("groups_microhomology"))
-            ),
-            staticPlotBoxUI(
-                ns("microhomologyPlot"), 
-                "Microhomology/Insert Distributions",
-                width = 6,
-                collapsible = TRUE,
-                collapsed = TRUE
-            )
-        ),
-
-        # endpoint locations plot and item ordering
-        fluidRow(
-            column(
-                width = 6,
-                style = "padding: 0;",
-                uiOutput(ns("conditions_endpoints")),
-                uiOutput(ns("groups_endpoints"))
-            ),
-            staticPlotBoxUI(
-                ns("endpointsPlot"), 
-                "SV Endpoint Distributions",
-                width = 6,
-                collapsible = TRUE,
-                collapsed = TRUE
-            )
-        )
+        # output plots
+        assemblyPlotBox("svFrequencies", "SV Frequencies", collapsed = TRUE),
+        assemblyPlotBox("microhomology", "Microhomology/Insert Distributions", collapsed = TRUE),
+        assemblyPlotBox("endpoints", "SV Endpoint Distributions", collapsed = FALSE),
+        assemblyPlotBox("svSizes", "SV Size Distributions", collapsed = TRUE),
+        # assemblyPlotBox("insertionTemplates", "Insertion Templates", collapsed = TRUE),
+        # assemblyPlotBox("junctionBases", "Junction Base Usage", collapsed = TRUE),
+        NULL
     )
 }

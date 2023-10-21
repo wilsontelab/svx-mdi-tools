@@ -225,15 +225,32 @@ samples <- merge(
 
 #=====================================================================================
 message("assembling target region sequences")
+refFlats <- list()
+getGeneCoordinate <- function(genome, geneNames, column, aggFn){
+    if(is.null(refFlats[[genome]])) NA else sapply(geneNames, function(geneName_){
+        x <- refFlats[[genome]][geneName == geneName_, unlist(.SD), .SDcols = column]
+        if(length(x) > 0) aggFn(x) else NA
+    })
+}
 targets <- samples[, {
     targets <- fread(targetsBed)[, 1:4]
     names(targets) <- c("chrom","regionStart","regionEnd","name")
     regionPadding <- max(regionPadding)
-    genomeFasta <- file.path(genomesDir[1], "iGenomes/*/UCSC", genome, "Sequence/WholeGenomeFasta/genome.fa")
+    genomeDir   <- Sys.glob(file.path(genomesDir[1], "iGenomes/*/UCSC", genome))
+    refFlat     <- file.path(genomeDir, "Annotation/Genes/refFlat.txt.gz")    
+    genomeFasta <- file.path(genomeDir, "Sequence/WholeGenomeFasta/genome.fa")
+    if(is.null(refFlats[[genome]])) refFlats[[genome]] <<- tryCatch({
+        x <- fread(refFlat, sep = "\t")
+        names(x) <- c("geneName","name","chrom","strand","txStart","txEnd","cdsStart","cdsEnd","exonCount","exonStarts","exonEnds")
+        x
+    }, error = function(e) NULL)
     targets[, ":="(
         regionPadding = regionPadding,
-        paddedStart = regionStart - regionPadding, # all still half-open like the source BED
-        paddedEnd = regionEnd + regionPadding
+        paddedStart   = regionStart - regionPadding, # all still half-open like the source BED
+        paddedEnd     = regionEnd   + regionPadding,
+        geneStart     = getGeneCoordinate(genome, name, "txStart", min),
+        geneEnd       = getGeneCoordinate(genome, name, "txEnd",   max),
+        geneStrand    = getGeneCoordinate(genome, name, "strand",  function(x) x[1])
     )]
     targets[, ":="(
         paddedSequence = {
@@ -423,3 +440,19 @@ saveRDS(results, paste(env$ASSEMBLE_PREFIX, "rds", sep = "."))
 #  $ RO3306_Colch_2APH_M       : int  1 0 0 0 1 0 0 0 0 0 ...
 #  $ RO3306_Colch_M            : int  0 1 0 2 0 0 0 0 2 1 ...
 #  $ RO3306_G2                 : int  1 0 1 0 0 0 1 0 0 0 ...
+
+# table refFlat
+#   "A gene prediction with additional geneName field." 
+#       (
+#       string  geneName;           "Name of gene as it appears in Genome Browser." 
+#       string  name;               "Name of gene" 
+#       string  chrom;              "Chromosome name" 
+#       char[1] strand;             "+ or - for strand" 
+#       uint    txStart;            "Transcription start position" 
+#       uint    txEnd;              "Transcription end position" 
+#       uint    cdsStart;           "Coding region start" 
+#       uint    cdsEnd;             "Coding region end" 
+#       uint    exonCount;          "Number of exons" 
+#       uint[exonCount] exonStarts; "Exon start positions" 
+#       uint[exonCount] exonEnds;   "Exon end positions" 
+#       )

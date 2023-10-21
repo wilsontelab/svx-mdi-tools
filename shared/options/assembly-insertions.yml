@@ -1,5 +1,4 @@
 ---
-# options used during read grouping to identify source molecules  
 options:
     find-insertion-templates: 
         order: 1
