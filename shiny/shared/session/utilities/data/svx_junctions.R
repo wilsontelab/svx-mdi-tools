@@ -27,12 +27,15 @@ svx_loadJunctions <- function(targetId, loadFn, samples_ = NULL){
                 size = abs(abs(node2) - abs(node1)) # eventSize has the chrom-level size, where translocation size == 0
             )]   
             tryCatch({ # if no chromosomesFile available (e.g., svAmplicon), loadFn must set cChrom1/2
-                chroms <- readRDS(getSourceFilePath(sourceId, "chromosomesFile")) 
+                chroms <- readRDS(getSourceFilePath(targetId, "chromosomesFile")) 
                 jxns[, ":="(
                     cChrom1 = unlist(chroms$revChromIndex[cChromIndex1]),
                     cChrom2 = unlist(chroms$revChromIndex[cChromIndex2])
                 )]                    
-            }, error = function(e) NULL)
+            }, error = function(e) {
+                print(e)
+                NULL
+            })
             jxns
         }
     )$value
@@ -52,7 +55,7 @@ svx_filterJunctionsBySample <- function(targetId, samples_, loadFn){
             if(is.null(samples_)) return(jxns) # e.g., when track items are amplicons          
             startSpinner(session, message = "filtering junctions")
             I <- FALSE
-            samples_ <- paste0(",", samples_, ",")
+            samples_ <- if(startsWith(samples_, ",")) samples_ else paste0(",", samples_, ",")
             for(sample_ in samples_) I <- I | jxns[, grepl(sample_, samples)]
             jxns[I]
         }
@@ -69,7 +72,6 @@ svx_filterJunctionsBySettings <- function(track, targetId, samples, loadFn, fami
         create = svxLoadCreate, 
         createFn = function(...) {
             jxns <- svx_filterJunctionsBySample(targetId, samples, loadFn)
-
             startSpinner(session, message = paste("getting junctions"))
             filters <- if(is.null(track$settings$Filters)) list()
                        else track$settings$Filters()
@@ -117,7 +119,8 @@ svx_filterJunctionsBySettings <- function(track, targetId, samples, loadFn, fami
 svx_filterJunctionsByRange <- function(jxns, coord, rangeType, chromOnly = FALSE){
     startSpinner(session, message = "filtering junctions to window")
     isWholeGenome <- coord$chromosome == "all"
-    if(!isWholeGenome && chromOnly) jxns <- jxns[
+    isProperChrom <- isProperChromosome(coord$chromosome)
+    if(isProperChrom && chromOnly) jxns <- jxns[
         cChrom1 == coord$chromosome & 
         cChrom2 == coord$chromosome
     ]
@@ -125,21 +128,21 @@ svx_filterJunctionsByRange <- function(jxns, coord, rangeType, chromOnly = FALSE
         rangeType,
         center = {
             jxns <- jxns[data.table::between(
-                as.numeric(if(isWholeGenome) nodeCenter else refPosCenter), 
+                as.numeric(if(isProperChrom) refPosCenter else nodeCenter), 
                 as.numeric(coord$start), 
                 as.numeric(coord$end)
             )]
-            jxns[ , center := if(isWholeGenome) nodeCenter else refPosCenter]
+            jxns[ , center := if(isProperChrom) refPosCenter else nodeCenter]
             jxns
         },
         endpoint = {
             jxns[ , ":="(
-                pos1 = if(isWholeGenome) abs(node1) else cRefPos1,
-                pos2 = if(isWholeGenome) abs(node2) else cRefPos2
+                pos1 = if(isProperChrom) cRefPos1 else abs(node1),
+                pos2 = if(isProperChrom) cRefPos2 else abs(node2)
             )]
             jxns[ , ":="(
-                pos1In = (isWholeGenome | cChrom1 == coord$chrom) & data.table::between(as.numeric(pos1), as.numeric(coord$start), as.numeric(coord$end)),
-                pos2In = (isWholeGenome | cChrom2 == coord$chrom) & data.table::between(as.numeric(pos2), as.numeric(coord$start), as.numeric(coord$end))
+                pos1In = (!isProperChrom | cChrom1 == coord$chrom) & data.table::between(as.numeric(pos1), as.numeric(coord$start), as.numeric(coord$end)),
+                pos2In = (!isProperChrom | cChrom2 == coord$chrom) & data.table::between(as.numeric(pos2), as.numeric(coord$start), as.numeric(coord$end))
             )]
             jxns[pos1In | pos2In]
         },

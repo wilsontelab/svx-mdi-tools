@@ -105,12 +105,12 @@ sub initializeWindowCoverage {
 # functions for creating a window coverage map 
 # these functions are called by window_coverage.pl to parse alignment edges
 sub incrementWindowCoverage { # place up/down marks in windows
-    my ($node1, $node2) = @_;
+    my ($node1, $node2, $increment) = @_;
     my $i1 = coordinateToWindowIndex(abs($node1)); # nodes are 1-referenced positions across the concatenated genome
     my $i2 = coordinateToWindowIndex(abs($node2));
     $i1 > $i2 and ($i1, $i2) = ($i2, $i1);
-    $windowCoverage[$i1]     += 1; # up in the aln's first window
-    $windowCoverage[$i2 + 1] -= 1; # down in the window AFTER this aln
+    $windowCoverage[$i1]     += $increment; # up in the aln's first window
+    $windowCoverage[$i2 + 1] -= $increment; # down in the window AFTER this aln (or the reverse on duplex molecules)
 }
 sub printWindowCoverage {
     open my $outH, "|-", "bgzip -c | slurp -s 10M -o $ENV{COVERAGE_FILE}" or die "could not open: $ENV{COVERAGE_FILE}\n";

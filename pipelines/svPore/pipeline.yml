@@ -17,19 +17,21 @@ actions:
     basecall:
         order: 3
         module: genomex-mdi-tools//nanopore/basecall
-        env-vars:     
-            dorado-output-format: usam # retain tags; irrelevent when --align-reads is set
+        env-vars:
+            duplex: true 
+            emit-moves: false
+            align-reads: false
     align:
         order: 4
         module: genomex-mdi-tools//align/dna-long-read
         env-vars:
-            default-alignment-mode: map-ont   
+            default-alignment-mode: map-ont
     extract:
         order: 5
         module: svPore/extract 
     find:
         order: 6
-        module: svPore/find                       
+        module: svPore/find
 package:
     find: # the pipeline action after which a data package should assembled
         uploadType: svPore # a signal to the Stage 2 framework regarding the package contents

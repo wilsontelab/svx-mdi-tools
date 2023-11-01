@@ -2,21 +2,21 @@
 # options used during svPore extract and find
 options:
     min-alignment-size:
-        order: 3
+        order: 2
         short: a
         type: integer
         required: false
         default: 100
         description: "ignore junctions if either flanking alignment is <a bp long"
     min-alignment-identity:
-        order: 4
+        order: 3
         short: I
         type: double
         required: false
         default: 0.9
         description: "ignore junctions if either flanking alignment has <I gap-compressed match rate"       
     junction-bandwidth:
-        order: 5
+        order: 4
         short: b
         type: integer
         required: false

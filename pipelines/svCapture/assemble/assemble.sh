@@ -2,3 +2,5 @@
 
 Rscript $ACTION_DIR/assemble.R
 checkPipe
+
+echo "done"

@@ -3,6 +3,7 @@ use warnings;
 
 # characterize the nodes of all alignments and junctions in an edge stream
 # adds information used in SV filtering and analysis
+# creates a coverage map with proper handling of duplex coverage, i.e., not over-counting duplexes
 
 # load dependencies
 our $script = "extend_edges";
@@ -11,6 +12,7 @@ our ($matchScore, $mismatchPenalty, $gapOpenPenalty, $gapExtensionPenalty, $maxS
     (1,           -1.5,             -2.5,            -1,                   3);
 my $perlUtilDir = "$ENV{GENOMEX_MODULES_DIR}/utilities/perl";
 map { require "$perlUtilDir/$_.pl" } qw(workflow numeric);
+map { require "$perlUtilDir/genome/$_.pl" } qw(chroms);
 map { require "$perlUtilDir/sequence/$_.pl" } qw(general smith_waterman);
 resetCountFile();
 
@@ -18,18 +20,18 @@ resetCountFile();
 use constant {
     END_READ_EDGES => "__END_READ_EDGES__",
     #=============
-    QNAME => 0, # edge format fields
-    NODE1 => 1,
-    QSTART => 2,    
-    NODE2 => 3,
-    QEND => 4,
-    MAPQ => 5,
-    CIGAR => 6,
-    GAP_COMPRESSED_IDENTITY => 7,
-    EDGE_TYPE => 8,
-    EVENT_SIZE => 9,
-    INSERT_SIZE => 10,
-    N_STRANDS => 11,
+    QNAME_ => 0, # edge format fields
+    NODE1_ => 1,
+    QSTART_ => 2,    
+    NODE2_ => 3,
+    QEND_ => 4,
+    MAPQ_ => 5,
+    CIGAR_ => 6,
+    GAP_COMPRESSED_IDENTITY_ => 7,
+    EDGE_TYPE_ => 8,
+    EVENT_SIZE_ => 9,
+    INSERT_SIZE_ => 10,
+    FOLDBACK_ => 11,
     #-------------
     jxnSeq => 12, # in query orientation, not reverse-complemented yet
     baseQual => 13,   
@@ -61,6 +63,7 @@ use constant {
     # pod5File => 0,
     # blockN => 0,
     # edgeN => 0,
+    # duplex => 0,
     #=============
     _QNAME => 0, # SAM fields
     _FLAG => 1,
@@ -86,24 +89,42 @@ use constant {
 my %inlineTypes = map { $_ => 1 } (ALIGNMENT, DELETION, DUPLICATION, INSERTION);
 
 # environment variables
-fillEnvVar(\our $EXTRACT_PREFIX,    'EXTRACT_PREFIX');
-fillEnvVar(\our $USAM_FILE,         'USAM_FILE');
 fillEnvVar(\our $N_CPU,             'N_CPU');
+fillEnvVar(\our $EXTRACT_PREFIX,    'EXTRACT_PREFIX');
+fillEnvVar(\our $PIPELINE_DIR,      'PIPELINE_DIR');
+fillEnvVar(\our $EXTRACT_STEP_DIR,  'EXTRACT_STEP_DIR');
+fillEnvVar(\our $WINDOW_SIZE,       'WINDOW_SIZE');
+fillEnvVar(\our $GENOME_FASTA,      'GENOME_FASTA');
+fillEnvVar(\our $EDGES_NO_SV_FILE,  'EDGES_NO_SV_FILE');
+fillEnvVar(\our $UBAM_DIR,          'UBAM_DIR');
 fillEnvVar(\our $MIN_SV_SIZE,       'MIN_SV_SIZE');
 fillEnvVar(\our $MIN_MAPQ,          'MIN_MAPQ');
 fillEnvVar(\our $MIN_ALIGNMENT_SIZE,        'MIN_ALIGNMENT_SIZE');
 fillEnvVar(\our $MIN_ALIGNMENT_IDENTITY,    'MIN_ALIGNMENT_IDENTITY');
+fillEnvVar(\our $ONT_LIBRARY_TYPE,  'ONT_LIBRARY_TYPE');
 
-# open the usam file for parallel threading of QNAMES
-open my $usamH, "-|", "zcat $USAM_FILE" or die "could not open $USAM_FILE: $!\n";
+# initialize the genome
+use vars qw(%chromIndex);
+setCanonicalChroms();
 
-# ONT adapter information
-# TODO: implement support for mosaic ends in Tn5-based rapid kit
-my $ADAPTER_CORE = "ACTTCGTTCAGTTACGTATTGCT"; # duplex portion of the adapter; last T matches the one-base A-tail
-my $ADAPTER_CORE_RC = $ADAPTER_CORE;          # ADAPTER_CORE is fused to 5' genomic ends, ADAPTER_CORE_RC is fused to 3' ends
-rc(\$ADAPTER_CORE_RC);      
-my $coreLen = length($ADAPTER_CORE);
+# load additional dependencies
+map { require "$EXTRACT_STEP_DIR/$_.pl" } qw(initialize_windows);
+initializeWindowCoverage();
+
+# open the unaligned read files for parallel threading of QNAMES
+open my $ubamH, "-|", "samtools cat $UBAM_DIR/*.unaligned.bam | samtools view -" or die "could not open bam files in $UBAM_DIR: $!\n";
+
+# open output handles
+open my $nosvH,  "|-", "pigz -p $N_CPU -c | slurp -s 10M -o $EDGES_NO_SV_FILE" or die "could not open: $EDGES_NO_SV_FILE\n";
+
+# ONT adapter information, validated here: https://github.com/rrwick/Porechop/blob/master/porechop/adapters.py
+my $ADAPTER_CORE = $ONT_LIBRARY_TYPE; # if not using a standard adapters, user must provide the apapter sequence, where 3' most base is fused to gDNA at the 5' start of the read
+$ONT_LIBRARY_TYPE eq "ligation" and $ADAPTER_CORE = "ACTTCGTTCAGTTACGTATTGCT";    # ligation kit, duplex portion of the adapter; last T matches the one-base A-tail
+$ONT_LIBRARY_TYPE eq "rapid"    and $ADAPTER_CORE = "TTCGCGTTTTTCGTGCGCCGCTTCA";  # rapid kit, 25bp empirically determined using extract_adapters.pl
 my $adapterPadding = 10;
+my $ADAPTER_CORE_RC = $ADAPTER_CORE; # ADAPTER_CORE is fused to 5' genomic ends, ADAPTER_CORE_RC is fused to 3' ends
+rc(\$ADAPTER_CORE_RC);
+my $coreLen = length($ADAPTER_CORE);
 my $outsideLen = $coreLen + $adapterPadding;
 my $maxCheckLen = $coreLen + 2 * $adapterPadding;
 
@@ -122,6 +143,10 @@ sub getCandidate5 {
 }
 sub getCandidate3 {
     my ($edge, $pos3, $readLen) = @_;
+    $ONT_LIBRARY_TYPE eq "rapid" and return { # Tn5 3' ends aren't bonded to an adapter
+        startPos => -1,
+        length   => -1
+    };
     my $endPos = $$edge[$pos3] + $outsideLen;
     my $overrun = $endPos - $readLen;
     {
@@ -131,6 +156,15 @@ sub getCandidate3 {
 }
 sub runAdapterSW {
     my ($x, $qSeq, $ref) = @_;
+    if($$x{startPos} == -1){
+        $$x{sw} = {
+            bestScore => 0,
+            nBases    => 0,
+            qryStart  => 0,
+            qryEnd    => 0
+        };
+        return;
+    }
     my $qry = substr($qSeq, $$x{startPos}, $$x{length});
     my ($qryOnRef, $score, $startQry, $endQry) = smith_waterman($qry, $ref, undef, undef, 1);
     $$x{sw} = {
@@ -144,7 +178,7 @@ my @nullControl = (0) x 8;
 my @nullAdapterScores = (0) x 18;
 sub addAdaptersScores {
     my ($read, $edge, $isSvRead, $isJunction) = @_;
-    my ($pos5, $pos3) = $isJunction ? (QEND, QSTART) : (QSTART, QEND); # edge query positions where 5' and 3' adapters are expected
+    my ($pos5, $pos3) = $isJunction ? (QEND_, QSTART_) : (QSTART_, QEND_); # edge query positions where 5' and 3' adapters are expected
     my $readLen = length($$read[_SEQ]);
 
     # 5' side/start of edge, expected match to adapter
@@ -180,7 +214,10 @@ sub addAdaptersScores {
             outsideLen => $outsideLen
         };
         runAdapterSW($x5C, $$read[_SEQ], $ADAPTER_CORE);
-        my $x3C = {
+        my $x3C = $ONT_LIBRARY_TYPE eq "rapid" ? { # Tn5 3' ends aren't bonded to an adapter
+            startPos => -1,
+            length   => -1
+        } : {
             startPos => $$edge[$pos3] - 2 * $maxCheckLen,
             length => $maxCheckLen
         };
@@ -204,51 +241,86 @@ sub addAdaptersScores {
 launchChildThreads(\&processRead);
 use vars qw(@readH @writeH);
 my $writeH = $writeH[1];
-my ($nReads, $nSv, $nNoSv, $prevQName, @edges) = (0, 0, 0);
-sub printReadToThread {
+my $readH  = $readH[1];
+my ($nReads, $nSv, $nNoSv, $nTrainable, $prevQName, @edges, @edgeArrays) = (0, 0, 0, 0);
+sub printReadEdges {
+    $nReads++;
+    my $read = <$ubamH>;
+    while($read !~ m/^$prevQName\s/){ # handle reads found in SAM that failed to align and are absent from PAF; space is important for duplex names matching!
+        $read = <$ubamH>;
+        $read or last;
+    }
+    !$read and die "$error:\ngot to end of reads in:\n$UBAM_DIR\nwithout encountering read ID:\n$prevQName\n";
+    my @read = split("\t", $read, 12);
+    my ($duplex)  = ($read[_TAGS] =~ m/dx:i:(\S+)/);
+    my ($isSplit) =  $read[_TAGS] =~ m/pi:Z:\S+/ ? 1 : 0;
     my $isSv = (@edges > 1);
-    $nReads++;  
+    my $isSimplex = ($duplex == 0);
     $isSv ? $nSv++ : $nNoSv++;
-    my $read = <$usamH>;
-    while($read !~ m/^$prevQName/){ # handle reads found in SAM that failed to align and are absent from PAF
-        $read = <$usamH>;
-    }  
-    $isSv or $nNoSv <= 10000 or return;
-    print $writeH join("", @edges);
-    print $writeH END_READ_EDGES, "\t", $read;  
+    my $isTrainable = (!$isSv and !$isSplit and $isSimplex and length($read[_SEQ]) > 500);
+    $isTrainable and $nTrainable++;
+    if($isSv or ($isTrainable and $nTrainable <= 10000)){
+        foreach my $edge(@edges){
+            print $writeH $edge;
+            $writeH->flush();
+            $readH->flush();
+        }
+        # print $writeH join("", @edges);
+        # $writeH->flush();
+        # $readH->flush();
+        print $writeH END_READ_EDGES, "\t", $read;
+        $writeH->flush();
+        $readH->flush();
+    }
+    my $increment = $isSimplex ? 1 : -$duplex; # thus increment coverage up on simplex, down on duplex (thus, +1 simplex for non-duplex, +2-1 net for duplex)  
+    foreach my $edgeArray(@edgeArrays){
+        $$edgeArray[EDGE_TYPE_] eq ALIGNMENT or next;
+        incrementWindowCoverage(@$edgeArray[NODE1_, NODE2_], $increment);
+    }
+    !$isSv and print $nosvH $edges[0]; # the record of all simple alignment edges
 }
 while(my $edge = <STDIN>){
-    my ($qName) = split("\t", $edge, 2);     
-    if($prevQName and $qName ne $prevQName){
-        printReadToThread();
+    chomp $edge;
+    my @edgeArray = split("\t", $edge);
+    if($prevQName and $prevQName ne $edgeArray[QNAME_]){
+        printReadEdges();
         $writeH = $writeH[$nReads % $N_CPU + 1];
+        $readH  = $readH [$nReads % $N_CPU + 1];
         @edges = ();
+        @edgeArrays = ();
     }    
-    push @edges, $edge; # commit edge to worker thread
-    $prevQName = $qName;
+    push @edges, $edge."\n"; # commit edge to worker thread
+    push @edgeArrays, \@edgeArray;
+    $prevQName = $edgeArray[QNAME_];
 }
-printReadToThread(); # finish last read
+printReadEdges(); # finish last read
 finishChildThreads();
-close $usamH;
+printWindowCoverage();
+close $ubamH;
+close $nosvH;
 
 # print summary information
 printCount($nReads, 'nReads',   'total reads processed');
 printCount($nSv,    'nSv',      'reads with at least one candidate SV');
-printCount($nNoSv,  'nNoSv',    'single-alignment reads with no SV (up to 10K kept)');
+printCount($nNoSv,  'nNoSv',    'single-alignment reads with no SV (up to 10K simplex kept for adapter training)');
 
 # extend and print one molecule's edges
 sub finishEdge {
-    my ($edge, $blockN, $edgeN, $channel, $pod5File) = @_;
+    my ($edge, $duplex, $isSplit, $blockN, $edgeN, $channel, $pod5File) = @_;
     $$edge[baseQual] ne "NA" and $$edge[baseQual] = int($$edge[baseQual] * 10 + 0.5) / 10;
     push @$edge, (
         $channel || "NA",
         $pod5File || "NA",
         $blockN,
-        $edgeN
+        $edgeN,
+        $duplex,
+        $isSplit
     );
 }
 sub processRead_ {
     my ($read, $edges) = @_;
+    my ($duplex)   = ($$read[_TAGS] =~ m/dx:i:(\S+)/);
+    my ($isSplit) =  $$read[_TAGS] =~ m/pi:Z:\S+/ ? 1 : 0;
 
     # process an SV, junction-containing molecule
     if(@$edges > 1){
@@ -270,13 +342,13 @@ sub processRead_ {
             my $isJunction = ($i % 2);
             if(!$isJunction){
                 $$edge[jxnSeq] = "NA";
-                $$edge[baseQual] = getAvgQual(substr($$read[_QUAL], $$edge[QSTART], $$edge[EVENT_SIZE]));
-            } elsif($$edge[INSERT_SIZE] > 0){
-                $$edge[jxnSeq] = substr($$read[_SEQ], $$edges[$i - 1][QEND], $$edge[INSERT_SIZE]);
-                $$edge[baseQual] = getAvgQual(substr($$read[_QUAL], $$edges[$i - 1][QEND], $$edge[INSERT_SIZE]));
-            } elsif($$edge[INSERT_SIZE] < 0){
-                $$edge[jxnSeq] = substr($$read[_SEQ], $$edges[$i + 1][QSTART], -$$edge[INSERT_SIZE]);
-                $$edge[baseQual] = getAvgQual(substr($$read[_QUAL], $$edges[$i + 1][QSTART], -$$edge[INSERT_SIZE]));
+                $$edge[baseQual] = getAvgQual(substr($$read[_QUAL], $$edge[QSTART_], $$edge[EVENT_SIZE_]));
+            } elsif($$edge[INSERT_SIZE_] > 0){
+                $$edge[jxnSeq] = substr($$read[_SEQ], $$edges[$i - 1][QEND_], $$edge[INSERT_SIZE_]);
+                $$edge[baseQual] = getAvgQual(substr($$read[_QUAL], $$edges[$i - 1][QEND_], $$edge[INSERT_SIZE_]));
+            } elsif($$edge[INSERT_SIZE_] < 0){
+                $$edge[jxnSeq] = substr($$read[_SEQ], $$edges[$i + 1][QSTART_], -$$edge[INSERT_SIZE_]);
+                $$edge[baseQual] = getAvgQual(substr($$read[_QUAL], $$edges[$i + 1][QSTART_], -$$edge[INSERT_SIZE_]));
             } else {
                 $$edge[jxnSeq] = "*";
                 $$edge[baseQual] = "NA";
@@ -289,27 +361,25 @@ sub processRead_ {
             my $edge = $$edges[$i];
             my $isJunction = ($i % 2);
             $$edge[alnBaseQual] = $isJunction ? min($$edges[$i - 1][baseQual],   $$edges[$i + 1][baseQual])   : "NA";
-            $$edge[alnSize]     = $isJunction ? min($$edges[$i - 1][EVENT_SIZE], $$edges[$i + 1][EVENT_SIZE]) : "NA";
-            # $$edge[sStart] = $baseSamples[$$edge[QSTART]] || "NA";
-            # $$edge[sEnd]   = $baseSamples[$$edge[QEND]]   || "NA"; 
-            if($isJunction and $$edge[INSERT_SIZE] >= 5){
+            $$edge[alnSize]     = $isJunction ? min($$edges[$i - 1][EVENT_SIZE_], $$edges[$i + 1][EVENT_SIZE_]) : "NA";
+            if($isJunction and $$edge[INSERT_SIZE_] >= 5){
                 addAdaptersScores($read, $edge, 1, 1); 
             } else {
                 push @$edge, @nullAdapterScores;
             }
 
             # establish block numbering (see analyze/analyze.R for definition of blocks)
-            !$inlineTypes{$$edge[EDGE_TYPE]} and $blockN++;
-            $i > 0 and !$inlineTypes{$$edges[$i - 1][EDGE_TYPE]} and $blockN++; 
-            finishEdge($edge, $blockN, $i + 1, $channel, $i == 0 ? $pod5File : "NA");
+            !$inlineTypes{$$edge[EDGE_TYPE_]} and $blockN++;
+            $i > 0 and !$inlineTypes{$$edges[$i - 1][EDGE_TYPE_]} and $blockN++; 
+            finishEdge($edge, $duplex, $isSplit, $blockN, $i + 1, $channel, $i == 0 ? $pod5File : "NA");
         } 
 
     # for training molecules, just calculate adapter scores
     } else {
         my $aln = $$edges[0];
-        $$aln[CIGAR] = $$aln[jxnSeq] = $$aln[baseQual] = $$aln[alnBaseQual] = $$aln[alnSize] = "NA"; #  = $$aln[sStart] = $$aln[sEnd]
+        $$aln[CIGAR_] = $$aln[jxnSeq] = $$aln[baseQual] = $$aln[alnBaseQual] = $$aln[alnSize] = "NA";
         addAdaptersScores($read, $aln); 
-        finishEdge($aln, 1, 1);
+        finishEdge($aln, $duplex, $isSplit, 1, 1);
     }
 }
 sub processRead {
@@ -333,4 +403,3 @@ sub processRead {
     }
     close $outH;
 }
- 

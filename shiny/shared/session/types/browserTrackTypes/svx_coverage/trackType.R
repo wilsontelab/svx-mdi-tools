@@ -36,6 +36,9 @@ build.svx_coverageTrack <- function(track, reference, coord, layout, loadFn){
         I <- sapply(names(selectedSources), function(x) sampleName %in% selectedSources[[x]]$Sample_ID)
         sourceId <- names(selectedSources)[I] 
         x <- svx_filterCoverageByRange(sourceId, sampleName, coord, maxBins, loadFn)
+
+        dstr(x)
+
         aggregateTabixBins(x$bins, track, coord, plotBinSize) %>%
         svx_setCoverageValue(Plot_Type, x$medianCoverage, Median_Ploidy)
     }

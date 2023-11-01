@@ -56,6 +56,9 @@ svx_rebinCoverage <- function(x0, aggFactor = 10){
 # filter coverage profile by browser coordinates
 svx_filterCoverageByRange <- function(sourceId, sample, coord, maxBins, loadFn){
     coverage <- loadFn(sourceId, sample)  
+
+    dstr(coverage)
+
     startSpinner(session, message = "filtering coverage")
     maxBinDensity <- maxBins / coord$width
     passingPowers <- which(coverage$binDensities <= maxBinDensity) - 1L

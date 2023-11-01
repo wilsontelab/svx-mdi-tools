@@ -42,7 +42,7 @@ svWGS_expandJunction <- function(jxn, track, layout){
     req(jxn)
 
     # collect molecules that provided evidence for the junction call
-    molecules <- svWGS_loadMolecules(jxn$sourceId, jxn$SV_ID)
+    molecules <- svWGS_loadMolecules(jxn$targetId, jxn$SV_ID)
 
     # write the one-line object table with additional junction metadata
     jxn %>% 

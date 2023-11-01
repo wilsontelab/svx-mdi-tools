@@ -16,13 +16,17 @@ loadEdges <- function(type) {
         sep = "\t",
         quote = ""
     )
-    x[, sample := env$DATA_NAME]
+    x[, ":="(
+        foldback = as.logical(foldback),
+        split = as.logical(split),
+        sample = env$DATA_NAME
+    )]
     x
 }
 
 # load and merge analyze edge tables across multiple samples
-loadEdgesRds <- function(){
-    EDGE_FILES <- strsplit(env$EDGE_FILES, "\\s+")[[1]]
+loadEdgesRds <- function(edgeFiles){
+    EDGE_FILES <- strsplit(edgeFiles, "\\s+")[[1]]
     message(paste("loading sample edges", basename(EDGE_FILES[1])))
     edges <- readRDS(EDGE_FILES[1])
     if(length(EDGE_FILES) > 1){

@@ -1,6 +1,7 @@
 #----------------------------------------------------------------------
 # handle junction loading and filtering, for molecule plots, etc.
 #----------------------------------------------------------------------
+svWGSMoleculesCreate <- "asNeeded"
 
 # load all molecules for a specific sourceId (not filtered yet)
 svWGS_loadSourceMolecules <- function(sourceId){
@@ -11,7 +12,7 @@ svWGS_loadSourceMolecules <- function(sourceId){
         key = sourceId, 
         permanent = TRUE, 
         from = "ram", 
-        create = "asNeeded", 
+        create = svWGSMoleculesCreate, 
         createFn = function(...) {
             startSpinner(session, message = "loading molecules .")
             molecules <- readRDS(getSourceFilePath(sourceId, "junctionMolecules")) 
@@ -34,7 +35,7 @@ svWGS_loadMolecules <- function(sourceId, svId_){
         keyObject = list(sourceId = sourceId, svId = svId_), 
         permanent = FALSE, 
         from = "ram", 
-        create = "asNeeded", 
+        create = svWGSMoleculesCreate, 
         createFn = function(...) {
             molecules <- svWGS_loadSourceMolecules(sourceId)
             startSpinner(session, message = "loading junction")

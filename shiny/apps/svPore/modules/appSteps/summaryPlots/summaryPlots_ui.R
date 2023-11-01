@@ -17,9 +17,6 @@ summaryPlotsUI <- function(id, options) {
     filterLabels <- c("passedFlankCheck","passedBandwidth","hasAdapter","isChrM","invert")
     filterLabelsSelected <- c("passedFlankCheck","passedBandwidth","hasAdapter","isChrM")
 
-# mapQ
-# nStrands
-
     # return the UI contents
     standardSequentialTabItem(
 

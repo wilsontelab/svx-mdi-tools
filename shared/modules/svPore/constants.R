@@ -15,7 +15,7 @@ coreEdgeCols <- c(
     "edgeType",
     "eventSize",
     "insertSize",
-    "nStrands"
+    "foldback"
 )
 edgeExtensions1 <- c(
     "jxnSeq",
@@ -53,6 +53,8 @@ edgeExtensions2 <- c(
     "pod5File",
     "blockN",
     "edgeN",
+    "duplex",
+    "split",
     "readI"    
 )
 edgesCols <- c( 
@@ -104,6 +106,8 @@ edgesColClasses <- c(
     #-------------,
     "integer",
     "character",
+    "integer",
+    "integer",
     "integer",
     "integer",
     "integer"

@@ -18,7 +18,9 @@ rm -f $EDGE_GLOB
 
 # assemble the node path of every molecule to yield 
 # one line per 2-node edge, one or more edges per molecule, in molecule order
+# TODO: read aligned bam and convert to PAF if PAF not found
 slurp -s 10M gunzip -c $NAME_PAF_FILE |
+
 perl $EXTRACT_STEP_DIR/extract_nodes.pl | 
 sed 's/ZZ/\t/g' | 
 
@@ -32,10 +34,27 @@ awk 'BEGIN{OFS="\t"}{
     print $0;
 }' | 
 
-# finalize a low-resolution fragment coverage map over all aggregated molecules
-# prints non-sv edges to file and sv and training edges to stream
-perl $EXTRACT_STEP_DIR/window_coverage.pl |
+# # FOR DEVELOPERS: pull putative adapter sequences
+# head -n 100000 |
+# perl $EXTRACT_STEP_DIR/extract_adapters.pl |
+# #-------------------------------------------
+# # this chunk explores adapter lengths
+# # cut -f 1 | 
+# # sort -k1,1n | 
+# # uniq -c | 
+# # awk '{print $2"\t"$1}'
+# # exit 1
+# #-------------------------------------------
+# # this chunk explores adapter sequences, after establishing lengths
+# cut -f 3 | 
+# sort -k1,1 | 
+# bedtools groupby -g 1 -c 1 -o count | 
+# sort -k2,2nr | 
+# head -n 100
+# exit 1
 
+# finalize a low-resolution fragment coverage map over all aggregated molecules
+# print non-sv edges to file
 # add information used for adapter finding, SV analysis, etc.
 perl $EXTRACT_STEP_DIR/extend_edges.pl
 checkPipe

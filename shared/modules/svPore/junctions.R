@@ -4,11 +4,11 @@
 #-------------------------------------------------------------------------------------
 
 # drop reads with no matchable junctions, they can never support an SV call
-dropReadsWithNoJunctions <- function(edges, matchFilterFn){
+dropReadsWithNoJunctions <- function(edges, matchFilterFn, type){
     message("dropping reads with no usable junctions")
     matchable <- matchFilterFn(edges)
     I <- edges[, any(matchable[.I]), by = .(readI)][[2]] # count and report reads with any matchable jxn
-    message(paste(length(I), "reads ->", sum(I), "reads with >=1 matchable junctions"))
+    message(paste(type, "=", length(I), "reads ->", sum(I), "reads with >=1 matchable junctions"))
     I <- edges[, rep(any(matchable[.I]), .N), by = .(readI)][[2]] # keep or drop all edges from the read
     edges[I]
 }
@@ -23,11 +23,15 @@ getJunctionsToMatch <- function(edges){
     x
 }
 getJunctionHardCounts <- function(junctionsToMatch){
-    x <- junctionsToMatch[, .(
-        nInstances      = .N,
-        nCanonical      = sum( isCanonical), # BEFORE considering window adjancies, i.e., based on hard (exact) junction matching only
-        nNonCanonical   = sum(!isCanonical)  # used to pick the index junction below
-    ), by = .(junctionKey)]    
+    x <- junctionsToMatch[, {
+        isDuplex <- duplex == 1
+        .(
+            hasDuplex       = any(isDuplex), # so that duplex reads are picked first as index junctions
+            nInstances      = .N, # used to pick the index junction below
+            nCanonical      = sum( isCanonical[!isDuplex]), # BEFORE considering fuzzy matching, i.e., based on hard (exact) junction matching only
+            nNonCanonical   = sum(!isCanonical[!isDuplex]) 
+        )
+    }, by = .(junctionKey)]    
     setkey(x, junctionKey)
     x
 }
@@ -87,14 +91,14 @@ analyzeJunctionNetwork <- function(junctionMatches, junctionHardCounts){ # use i
         by = "junctionKey", 
         all.x = TRUE
     )
-    setkey(clusters, clusterN, nInstances)
-    clusters[, { # assign an index junction for each cluster as the the most frequently encountered junction edge
+    setkey(clusters, clusterN, hasDuplex, nInstances)
+    clusters[, { # assign an index junction for each cluster as the the most frequently encountered junction edge, preferring duplex reads over simplex
         indexData <- as.integer( strsplit(junctionKey[.N], ":")[[1]][5:7] )
         .(
             junctionKey     = junctionKey,  # thus, output has one row per matched junctionKey, >=2 rows per fuzzy cluster
             isIndexJunctionKey = c(rep(FALSE, .N - 1), TRUE), # multiple junctions below may match this junctionKey
-            nCanonical      = sum(nCanonical), # updated (potentially increased) counts AFTER considering window adjacencies
-            nNonCanonical   = sum(nNonCanonical),
+            nCanonical      = sum(nCanonical),    # updated (potentially increased) counts AFTER considering fuzzy matching
+            nNonCanonical   = sum(nNonCanonical), # these counts are potentially redundant, counting duplexes once on each strand
             icRefPos1       = indexData[1], # "i" prefix means "index junction of clusterN", "c" again means "canonical" orientation
             icRefPos2       = indexData[2],
             iInsertSize     = indexData[3]
@@ -120,11 +124,12 @@ finalizeJunctionClustering <- function(edges, junctionHardCounts, junctionCluste
     clusterNs <- edges[I, .N, by = .(junctionKey)]
     clusterNs[, clusterN := 1:.N + maxClusterN]
     setkey(clusterNs, junctionKey) 
+    jxnKeys <- edges[I, junctionKey]
     edges[I, ":="( 
-        clusterN = clusterNs[junctionKey, clusterN], 
-        isIndexJunctionKey = TRUE,         
-        nCanonical    = junctionHardCounts[junctionKey, nCanonical], 
-        nNonCanonical = junctionHardCounts[junctionKey, nNonCanonical],  
+        clusterN = clusterNs[jxnKeys, clusterN], 
+        isIndexJunctionKey = TRUE,      
+        nCanonical    = junctionHardCounts[jxnKeys, nCanonical], # as above, might count duplex twice, once on each simplex read (but not from duplex read)
+        nNonCanonical = junctionHardCounts[jxnKeys, nNonCanonical],  
         icRefPos1   = cRefPos1,
         icRefPos2   = cRefPos2,
         iInsertSize = insertSize        
@@ -149,16 +154,18 @@ collapseJunctionClusters <- function(edges){
     # account for duplex junctions that escaped prior detection due to the known limitation described in analyze/duplex.R
     # here, each nanopore channel reports the number of times it detected a junction on its most highly represented strand
     # given that detections in _different_ channels or on the _same_ strands must be independent    
-    getNIndependentInstances <- function(junctions, hasSample = TRUE){
-        if(hasSample){
-            junctions[, .(N = max(sum(isCanonical), sum(!isCanonical))), by = .(sample, channel)][, sum(N)]
-        } else {
-            junctions[, .(N = max(sum(isCanonical), sum(!isCanonical))), by = .(channel)][, sum(N)]
-        }
+    getNIndependentInstances <- function(junctions, by = c("sample","channel")){
+        junctions[, 
+            .(N = {
+                isDuplex <- duplex == 1
+                max(sum(isDuplex), sum(isCanonical[!isDuplex]), sum(!isCanonical[!isDuplex])) # No. of independent instances per channel
+            }), 
+            by = by
+        ][, sum(N)] # summed over all channels
     }
 
     # aggregate junctions to clusters
-    junctions <- edges[clustered == TRUE, {
+    junctionClusters <- edges[clustered == TRUE, {
 
         # select one index junction from those matching the indexJunctionKey
         i <- which(isIndexJunctionKey)[1] 
@@ -177,33 +184,34 @@ collapseJunctionClusters <- function(edges){
             cRefPos1        = cRefPos1[i],
             cRefPos2        = cRefPos2[i],
             insertSize      = insertSize[i],
-            mapQ            = max(mapQ), # these values aggregate over all junction in the cluster, even the fuzzy matched ones
+            mapQ            = max(mapQ), # these values aggregate over all junctions in the cluster, even the fuzzy matched ones
             gapCompressedIdentity = max(gapCompressedIdentity),
             baseQual        = max(baseQual),
             alnBaseQual     = max(alnBaseQual),
             alnSize         = max(alnSize),
-            samples         = paste(sort(samples), collapse = ","),
+            samples         = paste0(",", paste(sort(samples), collapse = ","), ","),
             nSamples        = length(samples),
-            nInstances      = getNIndependentInstances(.SD), # usually, but not necessarily == nReads
-            nCanonical      = sum(isCanonical), # given above, nCanonical + nNonCanonical might sometimes exceed nInstances
-            nNonCanonical   = sum(!isCanonical) # since nInstances is guaranteed to be independent detections
+            nInstances      = getNIndependentInstances(.SD), # usually, but not necessarily == # of independent reads
+            nCanonical      = sum(isCanonical), # per above, nCanonical + nNonCanonical might exceed nInstances
+            nNonCanonical   = sum(!isCanonical), # since nInstances is guaranteed to be independent detections
+            duplex          = any(duplex != 0)
         )
     }, by = .(clusterN)]
 
     # stratify nInstances by sample
-    junctionsBySample <- edges[
+    junctionClustersBySample <- edges[
         clustered == TRUE, 
-        .(nInstances = getNIndependentInstances(.SD, hasSample = FALSE)), 
+        .(nInstances = getNIndependentInstances(.SD, "channel")), 
         by = .(clusterN, sample)
     ]
-    junctionsBySample <- dcast(junctionsBySample,
+    junctionClustersBySample <- dcast(junctionClustersBySample,
         clusterN ~ sample,
         fun.aggregate = sum,
         value.var = "nInstances" # the sum of each sample's nInstances should sum to nInstances for the junction cluster
     )
     merge(
-        junctions,
-        junctionsBySample,
+        junctionClusters,
+        junctionClustersBySample,
         by = "clusterN",
         all.x = TRUE
     )

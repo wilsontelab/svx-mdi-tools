@@ -26,16 +26,30 @@
 # this R script uses the scores to create and apply the SVMs
 #-------------------------------------------------------------------------------------
 
+# determine which ends have adapters and are thus trainable, and set the required clip length range
+getTrainableEnds <- function(trainingEdges){
+    adapterLen5 <- trainingEdges[, .N, keyby = .(clip5)][order(-N)][1, clip5]
+    adapterLen3 <- trainingEdges[, .N, keyby = .(clip3)][order(-N)][1, clip3]
+    isAdapter3 <- adapterLen3 >= 10 # 5' adapter must always be present, 3' adapter may not be
+    list(
+        adapterLen5 = adapterLen5,
+        adapterLen3 = adapterLen3,
+        isAdapter3 = isAdapter3,
+        adapterRange5 = c(15, adapterLen5 + 20),
+        adapterRange3 = if(isAdapter3) c(4, adapterLen3 + 20) else c(0, 0)
+    )
+}
+
 # refactor svm scores to create the table suitable for training
-extractSvmTrainingSet <- function(trainingEdges){
+extractSvmTrainingSet <- function(trainingEdges, trainableEnds){
     rbind(trainingEdges[, .( # the true clipped ends of reference alignments, for fitting adapter matches
         candidate = TRUE, # controls never have true adapters, candidates usually do, but not always
-        trainable5 = clip5 %between% c(15, 50), # whether this clip appears to have an adapter, used to establish the training set
+        trainable5 = clip5 %between% trainableEnds$adapterRange5, # whether this clip appears to have an adapter, used to establish the training set
         score5 = score5,
         nBases5 = nBases5,
         start5 = start5,
         end5 = end5,  
-        trainable3 = clip3 %between% c(4, 40), # values for the reference clip lengths we train on are set empirically based on plots
+        trainable3 = trainableEnds$isAdapter3 & clip3 %between% trainableEnds$adapterRange3, # values for the reference clip lengths we train on are set empirically based on plots
         score3 = score3,
         nBases3 = nBases3,
         start3 = start3,
@@ -47,7 +61,7 @@ extractSvmTrainingSet <- function(trainingEdges){
         nBases5 = nBases5C,
         start5 = start5C,
         end5 = end5C,
-        trainable3 = TRUE,
+        trainable3 = trainableEnds$isAdapter3,
         score3 = score3C,
         nBases3 = nBases3C,
         start3 = start3C,
@@ -64,7 +78,8 @@ trainAdapterClassifiers <- function(d){
         "3" = d[, .(candidate = factor(candidate), trainable = trainable3, score = score3, nBases = nBases3, start = start3, end = end3)]
     )
     x <- mclapply(d, function(dd){
-        svm(candidate ~ score + nBases + start + end, data = dd[trainable == TRUE], scale = TRUE)
+        ddt <- dd[trainable == TRUE]
+        if(nrow(ddt) == 0) NA else svm(candidate ~ score + nBases + start + end, data = ddt, scale = TRUE)
     }, mc.cores = 2)
     names(x) <- names(d)
     x
@@ -74,14 +89,15 @@ trainAdapterClassifiers <- function(d){
 checkJunctionsForAdapters <- function(svms, d){
     message("running adapter predictions on SV junctions")
     predictAdapter <- function(endN, insertSize, dd){
+        if(!is.list(svms[[endN]])) return(FALSE)
         scoreThreshold <- if(endN == "3") 7 else 8 # determined empirically based on ligation kit adapters
         predict(svms[[endN]], dd) == TRUE & (insertSize >= 5 | dd$score > scoreThreshold)
     }
     data.table(
         readI = d$readI,
         edgeN    = d$edgeN,
-        hasAdapter5 = predictAdapter("5", d$insertSize, d[, .(score = score5, nBases = nBases5, start = start5, end = end5)]),        
-        hasAdapter3 = predictAdapter("3", d$insertSize, d[, .(score = score3, nBases = nBases3, start = start3, end = end3)])        
+        hasAdapter5 = predictAdapter("5", d$insertSize, d[, .(score = score5, nBases = nBases5, start = start5, end = end5)]),
+        hasAdapter3 = predictAdapter("3", d$insertSize, d[, .(score = score3, nBases = nBases3, start = start3, end = end3)])
     )
 }
 

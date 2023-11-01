@@ -1,13 +1,15 @@
 #----------------------------------------------------------------------
 # handle svWGS window coverage loading
 #----------------------------------------------------------------------
+svWGSCoverageCreate <- "asNeeded"
+
 svWGS_loadSourceCoverage <- function(sourceId){
     sessionCache$get(
         'svWGS_Coverage', 
         key = sourceId, 
         permanent = FALSE, # already an RDS file 
         from = "ram",
-        create = "asNeeded",
+        create = svWGSCoverageCreate,
         createFn = function(...) {
             readRDS(getSourceFilePath(sourceId, "coverageFile"))
         }  
@@ -21,7 +23,7 @@ svWGS_loadSampleCoverage <- function(sourceId, sample){
         keyObject = list(sourceId, sample), 
         permanent = TRUE, 
         from = "ram",
-        create = "asNeeded",
+        create = svWGSCoverageCreate,
         createFn = function(...) {
             coverage <- svWGS_loadSourceCoverage(sourceId)
             startSpinner(session, message = "rebinning coverage")

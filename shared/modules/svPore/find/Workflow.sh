@@ -14,9 +14,11 @@ export USE_CHR_M=1
 echo "setting find mode"
 export FIND_MODE=find
 export EDGE_FILES=`ls -1 $ANALYZE_PREFIX.edges.rds 2>/dev/null`
+export DUPLEX_EDGE_FILES=`ls -1 $ANALYZE_PREFIX.duplexEdges.rds 2>/dev/null`
 if [ "$EDGE_FILES" = "" ]; then
     export FIND_MODE=compare
     export EDGE_FILES=`ls -1 $ANALYZE_GLOB_PREFIX.edges.rds 2>/dev/null`
+    export DUPLEX_EDGE_FILES=`ls -1 $ANALYZE_GLOB_PREFIX.duplexEdges.rds 2>/dev/null`
     if [ "$EDGE_FILES" = "" ]; then
         echo "could not find analyze.edges.rds file(s) in:"
         echo "    $TASK_DIR"

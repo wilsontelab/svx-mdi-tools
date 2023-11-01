@@ -142,21 +142,27 @@ sub getSvSize { # always a positive integer, zero if NA
 
 #===================================================================================================
 # check whether a molecule is consistent with a duplex molecule read as a single-molecule foldback inversion
-# if yes, keep first half only and mark molecules as duplex
-# is most sensitive and acceptable to reject any inversion with reverse-complement overlap between its flanking alignments
+# if yes, only keep the first half up to (but not including) the inversion junction and mark the molecule as duplex by setting a foldback flag
+# it is most sensitive and acceptable to reject any inversion with reverse-complement overlap between its flanking alignments
 #   ----->
 #         | V
 #   <-----
 # strictly speaking we expect symmetry, but cannot count on complete alignment of both flanks
-# we might expect adapters in the junction, but exploration says they may not be there
-# and foldback inversions are so supsect as artifacts that we maintain high sensivitiy for purging them
-# finally, some duplex molecules are output as two distinct reads; these are handled by analyze/duplex.R
+# we might expect adapters in the junction, but they may not be there depending on signal quality and basecalling
+# and foldback inversions are so suspect as artifacts that we maintain high sensivitiy for purging them
+#---------------------------------------------------------------------------------------------------
+# the resulting single read is derived from the proximal part of the source read, i.e., the first sequenced strand, which is often longer and higher quality
+# that read has not been subjected to stereo basecalling, so persists as dx:i:0, foldback=TRUE
+#---------------------------------------------------------------------------------------------------
+# this process is independent of duplex molecules where the two strands gave two reads, which are processed and flagged by Dorado duplex
+# also, as of 0.4.0, Dorado does stereo basecalling on foldback chimeras, but ONLY IF they can be found by adapter splitting
+# see:  https://github.com/nanoporetech/dorado/issues/443
 #---------------------------------------------------------------------------------------------------
 sub checkForDuplex {
     my ($nEdges) = @_;
-    $nEdges > 1 or return 1;
+    $nEdges > 1 or return 0; # i.e., one stranded non-SV = not a foldback
     for(my $i = 0; $i <= $#types; $i++){
-        $types[$i] eq INVERSION or next;     
+        $types[$i] eq INVERSION or next;
         if($outAlns[$i - 1][RSTART] <= $outAlns[$i + 1][REND] and
            $outAlns[$i + 1][RSTART] <= $outAlns[$i - 1][REND]){
             my $j = $i - 1;
@@ -166,10 +172,10 @@ sub checkForDuplex {
             @types  = @types[0..$j];
             @sizes  = @sizes[0..$j];
             @insSizes = @insSizes[0..$j];
-            return 2; # i.e., two strands = duplex
+            return 1; # i.e., two strands = a foldback duplex (may still have an SV upstream of the foldback inversion)
         }
     }
-    return 1; # i.e., one strand = simplex
+    return 0; # i.e., one stranded SV = not a foldback
 }
 #===================================================================================================
 
