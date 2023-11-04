@@ -6,7 +6,7 @@ svWGS_nodesExpand <- reactiveVal(NULL)
 
 # constructor for the S3 class
 new_svWGS_nodesTrack <- function(...) {
-    new_svx_nodesTrack(..., svWGS_nodesExpand)
+    new_svx_nodesTrack(..., expandReactive = svWGS_nodesExpand)
 }
  
 # method for the S3 class to show a relevant trackItemsDialog or trackSamplesDialog
@@ -15,27 +15,41 @@ items.svWGS_nodesTrack <- function(...) showTrackSamplesDialog(...)
 
 # build method for the S3 class; REQUIRED
 build.svWGS_nodesTrack <- function(...){
-    build.svx_nodes_track(..., svWGS_nodesTrackBuffer, svWGS_loadJunctions, idCol = "SV_ID")
+    build.svx_nodes_track(
+        ..., 
+        trackBuffer = svWGS_nodesTrackBuffer, 
+        loadFn      = svWGS_loadJunctions,
+        idCol = "SV_ID"
+    )
 }
 
 # method for the S3 class to populate one or more trackNav inputs above the browser output
 navigation.svWGS_nodesTrack <- function(...){
-    svx_junctionNavTable(..., svWGS_nodesExpand, svWGS_loadJunctions, svWGS_navTable_display, svWGS_expandJunction)
+    svx_junctionNavTable(
+        ..., 
+        expandReactive  = svWGS_nodesExpand, 
+        loadFn          = svWGS_loadJunctions, 
+        navTableFn      = svWGS_navTable_display, 
+        expandFn        = svWGS_expandJunction
+    )
 }
 
 # plot interaction methods for the S3 class
 # called by trackBrowser if track$click, $hover, or $brush is TRUE, above
 click.svWGS_nodesTrack <- function(...){
     svx_handleJunctionClick(
-        ..., svWGS_nodesTrackBuffer, 
-        svWGS_nodesExpand, svWGS_expandJunction, svWGS_summarizeJunctions,
-        distType = "nodes"
-    )                           
+        ..., 
+        buffer          = svWGS_nodesTrackBuffer, 
+        expandReactive  = svWGS_nodesExpand, 
+        expandFn        = svWGS_expandJunction, 
+        summarizeFn     = svWGS_summarizeJunctions,
+        distType        = "nodes"
+    )                         
 }
 
 # expand method for the S3 class
 expand.svWGS_nodesTrack <- function(track, reference, coord, layout){
-    svx_handleJunctionExpansion(track, layout, svWGS_nodesExpand)
+    svx_handleJunctionExpansion(track, layout, expandReactive = svWGS_nodesExpand)
 }
 
 # expand2 method for the S3 class

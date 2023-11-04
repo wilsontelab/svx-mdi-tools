@@ -83,6 +83,9 @@ analyzeInsertion <- function(
 }
 insertions <- reactive({
     svs <- filteredSvs()
+
+    str(svs)
+    
     req(svs)
     properties <- settings$Junction_Properties()
     svs <- svs[
@@ -291,12 +294,102 @@ templateLocations <- staticPlotBoxServer(
         )
 
         # add a point color legend
+        cex <- templateLocations$settings$Points_and_Lines()$Point_Size$value
         templateLocations$addLegend(
             legend = c("cross-junction", "fold-back", "other"),
             col =    c(crossJxn,         foldback,    CONSTANTS$plotlyColors$black),
             x = "top",
             horiz = TRUE,
-            x.intersp = 0
+            x.intersp = 0,
+            pt.cex = cex * 1.5
+        )
+    }
+)
+templateLocations2 <- staticPlotBoxServer(
+    'templateLocations2', 
+    lines = TRUE,
+    margins = TRUE,
+    title = TRUE,
+    immediate = TRUE,
+    template = stepModuleInfo$analyzeInsertions$locationSettings,
+    create = function(...){
+        insertions <- insertions()
+        req(insertions)
+
+        # initialize shared values
+        jxn  <- settings$Junction_Properties()
+        dist <- templateLocations2$settings$Distance()
+        microhomologyLength <- jxn$Flanking_Microhomology$value
+        foldback <- CONSTANTS$plotlyColors$blue
+        crossJxn <- CONSTANTS$plotlyColors$green
+        other    <- CONSTANTS$plotlyColors$black
+        cols <- list(foldback = foldback, crossJxn = crossJxn, other = other)
+        svs <- insertions$svs
+
+        # calculate the plot points and colors
+        getPoints <- function(svId, insSize, match, y, type, multiplier){
+            matchPositions <- as.integer(strsplit(match, ",")[[1]])
+            if(length(matchPositions) == 1 && matchPositions == -1) return(NULL)
+            pos <- matchPositions - insertions$padding - 1 # leftmost position of (uHom)(ins)(uHom) searchSeq
+            pos <- ifelse( # convert to the closest base of the insertion itself
+                pos < 0, 
+                pos + microhomologyLength + insSize - 1, 
+                pos + microhomologyLength
+            )
+            data.table(
+                svId = svId,
+                distance = abs(pos),
+                type = ifelse(multiplier * pos > 0, type, "other")
+            )
+        }
+        d <- do.call(rbind, list(
+            do.call(rbind, 
+                mapply(getPoints, svs$SV_ID, -svs$MICROHOM_LEN, svs$match1,   4, "crossJxn", -1)
+            ),
+            do.call(rbind, 
+                mapply(getPoints, svs$SV_ID, -svs$MICROHOM_LEN, svs$match1rc, 3, "foldback", -1)
+            ),
+            do.call(rbind, 
+                mapply(getPoints, svs$SV_ID, -svs$MICROHOM_LEN, svs$match2,   2, "crossJxn",  1)
+            ),            
+            do.call(rbind, 
+                mapply(getPoints, svs$SV_ID, -svs$MICROHOM_LEN, svs$match2rc, 1, "foldback",  1)
+            )           
+        ))
+
+        # for SVs with multiple possible template, prefer the one closest to the junction
+        d <- unique(d[order(distance)], by = 'svId')
+
+        # calculate the frequency histogram by type and distance
+        limit <- dist$Max_Plotted_Distance$value
+        d <- dcast(d, distance ~ type, fun.aggregate = length, fill = 0)
+        d <- merge(data.table(distance = 1:limit), d, by = "distance", all.x = TRUE)
+
+        # initialize plot frame with genomic molecule tracing and grid
+        plotCols <- c("crossJxn", "foldback", "other")
+        templateLocations2$initializeFrame(
+            xlim = c(0, limit),          
+            ylim = c(0, d[, max(.SD, na.rm = TRUE) * 1.2, .SDcols = plotCols]),
+            xlab = "Distance from Junction (bp)",            
+            ylab = "# of Insertions",
+            # yaxt = "n",
+            bty = "n"
+        )
+
+        # add location histograms for the found putative insertion templates
+        lwd <- templateLocations2$settings$Points_and_Lines()$Line_Width$value
+        for(type in plotCols){
+            lines(d$distance, d[[type]], col = cols[[type]], lwd = lwd)
+        }
+
+        # add a point color legend
+        templateLocations$addLegend(
+            legend = c("cross-junction", "fold-back", "other"),
+            col =    unlist(cols[plotCols]),
+            x = "top",
+            horiz = TRUE,
+            x.intersp = 0,
+            pt.cex = lwd * 0.9
         )
     }
 )
@@ -393,7 +486,7 @@ svsTable <- filteredSvsTableServer(id, input, foundInsertions)
 # ----------------------------------------------------------------------
 # define bookmarking actions
 # ----------------------------------------------------------------------
-observe({
+bookmarkObserver <- observe({
     bm <- getModuleBookmark(id, module, bookmark, locks)
     req(bm)
     settings$replace(bm$settings)
@@ -403,8 +496,10 @@ observe({
         outcomes <<- listToReactiveValues(bm$outcomes)
         sampleSelector$setSelectedSamples(sampleSet, bm$outcomes$samples)
         templateLocations$settings$replace(bm$outcomes$templateLocationsSettings)
+        templateLocations2$settings$replace(bm$outcomes$templateLocationsSettings2)
         templateYield$settings$replace(bm$outcomes$templateYieldSettings)
     }
+    bookmarkObserver$destroy()
 })
 
 #----------------------------------------------------------------------
@@ -417,6 +512,7 @@ list(
     outcomes = reactive({ list(
         samples = sampleSelector$selectedSamples(),
         templateLocationsSettings = templateLocations$settings$all_(),
+        templateLocationsSettings2 = templateLocations2$settings$all_(),
         templateYieldSettings = templateYield$settings$all_()
     ) }),
     isReady  = reactive({ getStepReadiness(options$source, outcomes) })

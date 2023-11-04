@@ -1,0 +1,79 @@
+---
+options:
+    min-flank-size:
+        order: 1
+        short: null
+        type: integer
+        required: false
+        default: 20
+        description: "when calculating effective coverage, require this many read bp flanking a junction" 
+    min-family-size: 
+        order: 2
+        short: null
+        type: integer
+        required: false
+        default: 3
+        description: "only consider source molecules with at least --min-family-size corresponding reads" 
+    min-sv-size: 
+        order: 3
+        short: null
+        type: integer
+        required: false
+        default: 10000
+        description: "only count SVs this size or larger" 
+    max-sv-size: 
+        order: 4
+        short: null
+        type: integer
+        required: false
+        default: 1200000
+        description: "only count SVs this size or smaller" 
+    min-samples: 
+        order: 5
+        short: null
+        type: integer
+        required: false
+        default: 1
+        description: "only count SVs found in at least this many samples" 
+    max-samples: 
+        order: 6
+        short: null
+        type: integer
+        required: false
+        default: 1
+        description: "only count SVs found in at most this many samples" 
+    min-molecules: 
+        order: 7
+        short: null
+        type: integer
+        required: false
+        default: 1
+        description: "only count SVs found in at least this many source DNA molecules" 
+    max-molecules: 
+        order: 8
+        short: null
+        type: integer
+        required: false
+        default: 1
+        description: "only count SVs found in at most this many source DNA molecules" 
+    min-split-reads: 
+        order: 9
+        short: null
+        type: integer
+        required: false
+        default: 0
+        description: "only count SVs explicity sequenced by at least this many molecules" 
+    max-shared-proper: 
+        order: 10
+        short: null
+        type: integer
+        required: false
+        default: 1
+        description: "only count SVs that shared at most this fraction of their ends with proper molecules" 
+    include-clips:   
+        order: 11
+        short: null
+        type: boolean 
+        required: false
+        default: false
+        description: "include outer clipped reads in SV counts" 

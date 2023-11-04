@@ -26,6 +26,7 @@ checkEnvVars(list(
         'GENOME_FASTA',
         'DATA_NAME',
         'EDGE_FILES',
+        'DUPLEX_EDGE_FILES',
         'FIND_PREFIX',
         'MANIFEST_PREFIX'
     ),
@@ -75,7 +76,10 @@ if(env$FIND_MODE == "find"){
 # =====================================================================================
 # initial loading and parsing of edges across potentially multiple samples/nanopores
 # -------------------------------------------------------------------------------------
-edges <- loadEdgesRds()
+edges <- rbind(
+    loadEdgesRds(env$EDGE_FILES),
+    loadEdgesRds(env$DUPLEX_EDGE_FILES)
+)
 # edges[, cigar := "X"] ############### restrict tmp file size while developing
 #=====================================================================================
 
@@ -84,19 +88,8 @@ edges <- loadEdgesRds()
 # -------------------------------------------------------------------------------------
 edges <- setMatchableFlag(edges)
 edges <- setCanonicalNodes(edges, chromSizes)
-
-str(edges[edgeType != edgeTypes$ALIGNMENT])
-str(edges[edgeType != edgeTypes$ALIGNMENT][is.na(cStrand1)])
-print(edges[edgeType != edgeTypes$ALIGNMENT, .N, by = .(cChromIndex1, cStrand1, cChromIndex2, cStrand2)])
-print(edges[edgeType != edgeTypes$ALIGNMENT & cChromIndex1 == 5 & cStrand1 == 1, .N, keyby = .(cRefPos1)])
-
-print(edges[edgeType != edgeTypes$ALIGNMENT, .(nJunctions = .N), by = .(readI)][, .N, keyby = .(nJunctions)])
-
-stop("XXXXXXXXXXXXXXXXXX")
-
 junctionsToMatch <- getJunctionsToMatch(edges)
 junctionHardCounts <- getJunctionHardCounts(junctionsToMatch)
-
 junctionMatches <- findMatchingJunctions(junctionsToMatch) 
 junctionsNetwork <- analyzeJunctionNetwork(junctionMatches, junctionHardCounts)
 edges <- finalizeJunctionClustering(edges, junctionHardCounts, junctionsNetwork)
@@ -124,7 +117,8 @@ coverages <- mergeWindowCoverageFiles()
 
 message("creating sample manifest")    
 manifest <- edges[, {
-    jClusters <- junctionClusters[[sample]]
+    sampleKey <- paste0(",", sample, ",")
+    jClusters <- junctionClusters[[sampleKey]]
     isAlignment <- getAlignmentEdges(.SD)
     .(
         Project = projectName,

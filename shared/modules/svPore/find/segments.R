@@ -56,18 +56,17 @@ splitReadsToSegments <- function(edges, fusableFn = NULL, msg = NULL){
 # every segment has at least one clustered junction with nInstances > 1
 collapseSegments <- function(edges, chromSizes){
     message("collapsing edges into contiguous, trusted read segments")
-    isAlignment <- getAlignmentEdges(edges)
     segments <- edges[, {
-        alignment <- isAlignment[.I]
+        isAlignment <- edgeType == edgeTypes$ALIGNMENT
         clustered <- !is.na(clustered) & clustered
         .(
             sample = sample[1],
             readI = readI[1],
             segmentLength = qEnd[.N] - qStart[1],
             chroms = paste(unique(c(chrom1, chrom2)), collapse = ","),
-            nJxns = sum(!alignment),
+            nJxns = sum(!isAlignment),
             nClusteredJxns = sum(clustered, na.rm = TRUE),
-            pathType = paste0(ifelse(alignment | clustered, edgeType, tolower(edgeType)), collapse = ""),
+            pathType = paste0(ifelse(isAlignment | clustered, edgeType, tolower(edgeType)), collapse = ""),
             isClosedPath = chromIndex1[1] == chromIndex2[.N] && strand1[1] == strand2[.N],
             outerNode1 = node1[1], # original nodes of outer molecule endpoints, on strand(s) as sequenced
             iReadPath = list(getIndexedReadPath(chromSizes, .SD, clustered)), # index readPath, on strand(s) as sequenced
@@ -94,7 +93,8 @@ collapseSegments <- function(edges, chromSizes){
 # assemble the networks of segments with shared junctions, i.e., overlapping segments on a haplotype
 getNuclearSegments <- function(segments){
     message("removing segments confined to chrM (only nuclear genome SVs are reported for assembly)")
-    x <- segments[chroms != "chrM"]
+    discard <- sapply(segments$chroms, function(x) all(grepl("chrM", strsplit(x, ",")[[1]]))) # thus, we also handle species-composite genomes
+    x <- segments[!discard]
     setkey(x, segmentName)
     x
 }

@@ -45,8 +45,13 @@ svx_node_plotChromosomeJxns <- function(jxns, lwd, idCol){
     jxns[, y := svx_jxnType_codeToX(edgeType, "lineN") + 0.5 - (1:.N)/.N, by = .(edgeType)]
     svx_node_plotJxnNodes(jxns[pos1In == TRUE], "pos1")
     svx_node_plotJxnNodes(jxns[pos2In == TRUE], "pos2")
-    svx_node_plotJxnLines(jxns[(pos1In == TRUE | pos2In == TRUE) & edgeType != svx_edgeTypes$TRANSLOCATION], lwd, idCol)
-    axisCodes <- c("D","U","V","T")
+    svx_node_plotJxnLines(jxns[
+        (pos1In == TRUE | pos2In == TRUE) & 
+        !(edgeType %in% c(svx_edgeTypes$TRANSLOCATION, svx_edgeTypes$INTERGENOME))], 
+        lwd, 
+        idCol
+    )
+    axisCodes <- c("D","U","V","T","G")
     axis(
         side = 2, 
         at = svx_jxnType_codeToX(axisCodes, "lineN"), 
@@ -89,11 +94,13 @@ build.svx_nodes_track <- function(track, reference, coord, layout, trackBuffer, 
             xlim = coord$range, xlab = "", xaxt = "n", # nearly always set `xlim`` to `coord$range`
             ylim = ylim, ylab = if(isWholeGenome) "SV Size" else "Unique Junctions", yaxt = if(isWholeGenome) "s" else "n",
             xaxs = "i", yaxs = "i") # always set `xaxs` and `yaxs` to "i" 
+        chromLines(track, reference, coord)
         jxns <- svx_getTrackJunctions(
             track, selectedTargets, loadFn, coord, "endpoint", chromOnly = FALSE, isMultiSample = isMultiSample
         )[order(if(isWholeGenome) sample(.N) else -size)]
         if(!is.null(jxnFilterFn)) jxns <- jxnFilterFn(jxns, track) # apply app-specific filters
-        if(Color_By == "sample") jxns <- dt_colorBySelectedSample(jxns, selectedTargets, isMultiSample)
+        jxns <- if(Color_By == "sample") dt_colorBySelectedSample(jxns, selectedTargets, isMultiSample) 
+                else svx_colorCompositeGenomes(jxns, reference)
         jxns[, lty := ifelse(
             edgeType == svx_edgeTypes$INVERSION, 
             ifelse(cStrand1 == 1, 1, 2), 
@@ -102,7 +109,8 @@ build.svx_nodes_track <- function(track, reference, coord, layout, trackBuffer, 
         jxns <- if(isWholeGenome) svx_node_plotGenomeJxns(jxns, Line_Width, idCol) 
                              else svx_node_plotChromosomeJxns(jxns, Line_Width, idCol)
         if(nrow(jxns) == 0) trackNoData(coord, ylim, "no matching junctions in window")
-        svx_junctionsLegend(track, coord, ylim, selectedTargets, isMultiSample, jxns, sampleNameFn = sampleNameFn)
+        svx_junctionsLegend(track, coord, ylim, selectedTargets, isMultiSample, jxns, sampleNameFn = sampleNameFn, 
+                            hasIntergenome = "interGenome" %in% names(jxns))
         trackBuffer[[track$id]] <- jxns
     })
 

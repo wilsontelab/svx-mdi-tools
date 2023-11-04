@@ -13,6 +13,8 @@ getJunctionEdges  <- function(edges) edges[, edgeType != edgeTypes$ALIGNMENT]
 
 # matchable junctions are compared across reads to accumulate SV evidence
 # unmatchable junctions failed one or more quality checks (flanks, bandwidth, adapters, ...) and are ignored
+# junctions in duplex reads still persist potentially twice in edges, once in each simplex,
+#     and once in duplexEdges if assigned as duplex by Dorado
 getMatchableJunctions <- function(edges){
     isJunction <- getJunctionEdges(edges)
     edges[, 
@@ -29,7 +31,7 @@ getMatchableJunctions <- function(edges){
 setMatchableFlag <- function(edges){ 
     isJunction  <- getJunctionEdges(edges)
     isMatchable <- getMatchableJunctions(edges)
-    edges[isJunction, matchable := isMatchable[isJunction]] # edge matchable == NA, junction == (TRUE|FALSE)
+    edges[isJunction, matchable := isMatchable[isJunction]]
     edges
 }
 

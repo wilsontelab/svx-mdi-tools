@@ -18,7 +18,11 @@ bwa mem -p -Y -t $N_CPU $BWA_GENOME_FASTA - 2>$BWA_REALIGN_LOG_FILE |
 perl $ACTION_DIR/realign/coverage.pl |
 
 # convert to bam/cram and add mate information while still name sorted
-samtools fixmate -@ $N_CPU -m $CRAM_OUTPUT_OPTIONS - - |
+# PROBLEM! fixmate removes the proper flag, perhaps due to FR check, best to avoid!
+# samtools fixmate -@ $N_CPU -m $CRAM_OUTPUT_OPTIONS - - |
+
+# convert to bam/cram
+samtools view -@ $N_CPU $SAMTOOLS_VIEW_COMRESSION_OPTIONS - |
 slurp -s 250M -o $NAME_REALIGNED_BAM_FILE
 checkPipe
 

@@ -20,9 +20,13 @@ svPore_objectTable <- function(jxn){
 svPore_expansionTable <- function(edges){
     req(edges)
     edges[, .(
-        readKey,
-        channel,
-        nStrands,
+        sample,
+        channel,        
+        readI,
+        duplex,
+        duplexI = duplexCluster,
+        duplex2, 
+        duplex2I = duplexCluster2,
         edge = paste(edgeN, edgeType, sep = ":"),
         eventSize,
         insertSize,
@@ -45,7 +49,7 @@ svPore_expandJunction <- function(jxn, track, layout){
     image <- mdiTrackImage(layout, height, message = "svPore_triangle zoom", function(...){
         mai <<- setMdiTrackMai(layout, padding, mar = list(top = 0, bottom = 0))
 
-        edges <- svPore_loadEdges(jxn$sourceId, jxn$clusterN) 
+        edges <- svPore_loadEdges(jxn$targetId, jxn$clusterN) 
 
         jxn %>% 
         svPore_getJunction() %>% 

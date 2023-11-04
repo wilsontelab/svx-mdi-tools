@@ -115,13 +115,13 @@ sub parseMolecule {
 
     # examine SV junctions for evidence of duplex reads
     # adjusts the output arrays as needed
-    my $nStrands = $SKIP_DUPLEX_CHECK ? 1 : checkForDuplex(scalar(@types));
+    my $foldback = $SKIP_DUPLEX_CHECK ? 0 : checkForDuplex(scalar(@types));
 
     # set junction MAPQ as minimum MAPQ of the two flanking alignments
     fillJxnQs();
 
     # print one line per node pair, i.e., per edge, in the collapsed molecule sequence
-    printMolecule($molId, $nStrands);
+    printMolecule($molId, $foldback);
 
     # reset for next molecule
     (@alns, 

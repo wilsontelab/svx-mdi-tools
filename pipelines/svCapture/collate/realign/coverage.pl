@@ -89,6 +89,7 @@ while(my $line = <STDIN>){
                 } 
             } else { # unmerged reads, expect 2 alignments flagged as proper
                 if(@alns == 2 and ($alns[0][FLAG] & _PROPER)){
+                    $alns[0][POS] > $alns[1][POS] and @alns = reverse @alns;
                     addProperMoleculeCoverage(getEnd($alns[1][POS], $alns[1][CIGAR]));
                 } 
             }         

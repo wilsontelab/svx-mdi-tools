@@ -303,7 +303,7 @@ ratesTable <- bufferedTableServer(
 # ----------------------------------------------------------------------
 # define bookmarking actions
 # ----------------------------------------------------------------------
-observe({
+bookmarkObserver <- observe({
     bm <- getModuleBookmark(id, module, bookmark, locks)
     req(bm)
     settings$replace(bm$settings)
@@ -316,6 +316,7 @@ observe({
         sizeDistribution$settings$replace(bm$outcomes$sizeDistributionSettings)
         microhomologyDistribution$settings$replace(bm$outcomes$microhomologyDistributionSettings)
     }
+    bookmarkObserver$destroy()
 })
 
 #----------------------------------------------------------------------

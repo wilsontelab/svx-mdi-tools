@@ -122,15 +122,6 @@ plotJunctionsReactive <- function(filteredJunctions, input) reactive({
     stopSpinner(session)
     d
 })    
-#  [1] "junction"         "qName"            "edge"             "node1" "cigar1"
-#  [5] "node2" "cigar2"            "edgeType"         "mapQ"             "eventSize"       
-#  [9] "insertSize"       "xStart"           "xEnd"             "edgeClass"       
-# [13] "nStrands"         "chromIndex1"      "chrom1"           "windowIndex1"    
-# [17] "strand1"          "chromIndex2"      "chrom2"           "windowIndex2"    
-# [21] "strand2"          "nInstances"       "nMolecules"       "passedBandwidth" 
-# [25] "score3"           "score5"           "start3"           "end5"
-# [29] "hasAdapter3"      "hasAdapter5"      "hasAdapter"       "fractionChimeric"
-# [33] "segment"          "segmentName"
 segmentsReactive <- function(svEdges, filteredJunctions, plotJunctions, summaryPlot) reactive({
     # svEdges <- svEdges()
     # filteredJunctions <- filteredJunctions()

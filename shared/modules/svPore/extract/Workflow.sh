@@ -11,8 +11,9 @@ export EXTRACT_MODULE_DIR=$MODULES_DIR/svPore/extract
 export USE_CHR_M=1
 
 # set file paths, written by extract, read by analyze
-export USAM_FILE=$DATA_FILE_PREFIX.unaligned.sam.gz
-export COVERAGE_FILE=$EXTRACT_PREFIX.windowCoverage.txt.bgz # from low resolution first pass
+if [ "$INPUT_DIR" == "NA" ]; then INPUT_DIR=${TASK_DIR}/ubam; fi
+export UBAM_DIR=$INPUT_DIR
+export COVERAGE_FILE=$EXTRACT_PREFIX.windowCoverage.txt.bgz
 export EDGES_NO_SV_FILE=$EXTRACT_PREFIX.edges.no_sv.txt.gz
 export EDGES_SV_FILE=$EXTRACT_PREFIX.edges.sv.txt.gz
 export EDGES_TMP_FILE=$EXTRACT_PREFIX.edges.tmp.txt.gz

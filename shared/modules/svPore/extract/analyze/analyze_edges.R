@@ -57,7 +57,8 @@ checkEnvVars(list(
         'DATA_NAME',
         'EDGES_SV_FILE',
         'EDGES_TMP_FILE',
-        'ANALYZE_PREFIX'
+        'ANALYZE_PREFIX',
+        'ONT_LIBRARY_TYPE'
     ),
     integer = c(
         'N_CPU',
@@ -102,6 +103,8 @@ edges <- loadEdges("sv")
 edges[, c(controlAdapterScores) := NULL]
 setkey(edges, readI, blockN, edgeN)
 edges <- checkReadBandwidth(edges)
+message("junction counts by bandwidth status")
+print(edges[getJunctionEdges(edges), .(nJunctions = .N), keyby = .(passedBandwidth)]) 
 #=====================================================================================
 
 #=====================================================================================
@@ -111,37 +114,59 @@ edges <- checkReadBandwidth(edges)
 if(is.null(env$SKIP_ADAPTER_CHECK)){
     trainingEdges <- loadEdges("tmp")
     trainingEdges[, cigar := NULL]
-    trainingSet <- extractSvmTrainingSet(trainingEdges)
-    svms <- trainAdapterClassifiers(trainingSet)
+    trainableEnds <- getTrainableEnds(trainingEdges)
+    trainingSet <- extractSvmTrainingSet(trainingEdges, trainableEnds)
     rm(trainingEdges)
+    svms <- trainAdapterClassifiers(trainingSet)
     adapterCheck <- checkJunctionsForAdapters(svms, edges[insertSize >= 5])
     edges <- updateEdgesForAdapters(edges, adapterCheck)
-    rm(trainingSet, svms, adapterCheck)    
+    rm(trainableEnds, trainingSet, svms, adapterCheck)
 } else {
-    message("skipping adapter check")
+    message("skipping additional adapter check")
     edges <- updateEdgesForAdapters(edges)
 }
+message("edge counts by adapter status")
+print(edges[, .(edgeType = ifelse(edgeType == "A", "A", "J"), split, hasAdapter5, hasAdapter3)][, 
+    .(nEdges = .N), 
+    keyby = .(edgeType, split, hasAdapter5, hasAdapter3)
+]) 
 #=====================================================================================
 
 #=====================================================================================
-# remove redundant duplex reads that were not fused during sequencing/basecalling
+# mark redundant duplex reads not yet identified upstream and link simplex read pairs in duplex reads
 # ------------------------------------------------------------------------------------
+edges[, ":="(
+    duplexCluster   = as.character(readI), # duplex and duplexCluster set from Dorado
+    duplex2         = 0,                   # duplex2 and duplexCluster2 set by us
+    duplexCluster2  = as.character(readI)
+)]
+duplexEdges <- edges[duplex == 1] # separate out the stereo basecalled reads for future reference
+edges <- edges[duplex != 1]  
+edges <- assignDoradoDuplexClusters(edges, duplexEdges)
 if(is.null(env$SKIP_DUPLEX_CHECK)){
     reads <- collapseReads(edges, chromSizes)
     readMatches <- findMatchingReads(reads) 
     edges <- analyzeReadsNetwork(readMatches, reads, edges)
     rm(reads, readMatches)
 } else {
-    message("skipping duplex check")
+    message("skipping additional duplex check")
 }
+message("edge counts by duplex status")
+print(edges[, .(edgeType = ifelse(edgeType == "A", "A", "J"), duplex, foldback, duplex2)][, 
+    .(nEdges = .N), 
+    keyby = .(edgeType, duplex, foldback, duplex2)
+]) 
 #=====================================================================================
 
 #=====================================================================================
 # drop reads with no usable junctions and save for (multi-sample) SV finding
 # ------------------------------------------------------------------------------------
-edges <- dropReadsWithNoJunctions(edges, getMatchableJunctions)
 saveRDS(
-    edges, 
+    dropReadsWithNoJunctions(edges, getMatchableJunctions, "edges"), 
     paste(env$ANALYZE_PREFIX, "edges", "rds", sep = ".")
+)
+saveRDS(
+    dropReadsWithNoJunctions(duplexEdges, getMatchableJunctions, "duplexEdges"),
+    paste(env$ANALYZE_PREFIX, "duplexEdges", "rds", sep = ".")
 )
 #=====================================================================================

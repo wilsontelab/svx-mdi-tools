@@ -4,11 +4,11 @@
 
 # app-specific junction loading
 # here, coerce svWGS format toward svPore format (result is cached upstream)
-svWGS_loadJunctions <- function(sourceId){
+svWGS_loadJunctions <- function(targetId){
     startSpinner(session, message = "loading jxns")
-    jxns <- readRDS(getSourceFilePath(sourceId, "structuralVariants")) 
-    chroms <- readRDS(getSourceFilePath(sourceId, "chromosomesFile"))
-    samples_ <- read_yaml(getSourceFilePath(sourceId, "metadata"))$SAMPLES
+    jxns <- readRDS(getSourceFilePath(targetId, "structuralVariants")) 
+    chroms <- readRDS(getSourceFilePath(targetId, "chromosomesFile"))
+    samples_ <- read_yaml(getSourceFilePath(targetId, "metadata"))$SAMPLES
     samples_ <- unlist(strsplit(samples_, "\\s"))
     startSpinner(session, message = "loading jxns .")
     # NOTE: several derivative column values are set downstream by svx_loadJunctions
@@ -54,5 +54,5 @@ svWGS_loadJunctions <- function(sourceId){
 
 # get a single junction cluster for the object table
 svWGS_getJunction <- function(x){
-    svx_loadJunctions(x$sourceId, svWGS_loadJunctions)[SV_ID == x$SV_ID]
+    svx_loadJunctions(x$targetId, svWGS_loadJunctions)[SV_ID == x$SV_ID]
 }

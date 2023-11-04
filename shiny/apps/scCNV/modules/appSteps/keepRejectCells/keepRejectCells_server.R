@@ -404,7 +404,7 @@ observeEvent(input$resetEverything, {
 #----------------------------------------------------------------------
 # define bookmarking actions
 #----------------------------------------------------------------------
-observe({
+bookmarkObserver <- observe({
     bm <- getModuleBookmark(id, module, bookmark, locks)
     req(bm)
     bo <- bm$outcomes
@@ -414,6 +414,7 @@ observe({
     updateTextInput(session, 'cellsPerPage', value = bm$input$cellsPerPage)
     updateTextInput(session, 'pageNumber',   value = bm$input$pageNumber)
     # xxx <- bm$outcomes$xxx
+    bookmarkObserver$destroy()
 })
 
 #----------------------------------------------------------------------

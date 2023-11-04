@@ -17,9 +17,9 @@ setCanonicalNodes <- function(edges, chromSizes){
         edges[, parseSignedNodes(chromSizes, node1, 1)], 
         edges[, parseSignedNodes(chromSizes, node2, 2)]
     )
-    isAlignment <- getAlignmentEdges(edges)
+    groupCols <- c("sample","readI","blockN","edgeN","edgeType")
     x <- edges[, 
-        if(isAlignment[.I]) .(
+        if(edgeType == edgeTypes$ALIGNMENT) .(
             isCanonical = NA, # alignment canonical is determined per segment, later
             cChromIndex1 = chromIndex1,
             cChromIndex2 = chromIndex1,
@@ -44,11 +44,11 @@ setCanonicalNodes <- function(edges, chromSizes){
             cRefPos1 = refPos2,
             cRefPos2 = refPos1 
         ),
-        by = c("sample","readI","blockN","edgeN")
+        by = groupCols
     ]
-    edges <- merge(edges, x, by = c("sample","readI","blockN","edgeN"), all.x = TRUE)
+    edges <- merge(edges, x, by = groupCols, all.x = TRUE)
     setkey(edges, sample, readI, blockN, edgeN)
-    edges[!isAlignment, ":="(
+    edges[edgeType != edgeTypes$ALIGNMENT, ":="(
         junctionKey = paste(cChromIndex1, cChromIndex2, cStrand1, cStrand2, cRefPos1, cRefPos2, insertSize, sep = ":")
     )]
     edges

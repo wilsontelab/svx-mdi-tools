@@ -21,7 +21,7 @@ new_svx_triangleTrack <- function(trackId, expandReactive) {
 }
 
 # track build function
-build.svx_triangle_track <- function(track, reference, coord, layout, trackBuffer, loadFn){    
+build.svx_triangle_track <- function(track, reference, coord, layout, trackBuffer, loadFn){
     req(coord, coord$chromosome)
 
     # get the data to plot
@@ -43,8 +43,10 @@ build.svx_triangle_track <- function(track, reference, coord, layout, trackBuffe
             xlim = coord$range, xlab = "", xaxt = "n", # nearly always set `xlim`` to `coord$range`
             ylim = ylim, ylab = "SV Size", #yaxt = "n",
             xaxs = "i", yaxs = "i") # always set `xaxs` and `yaxs` to "i" 
-        jxns <- svx_getTrackJunctions(track, selectedSources, loadFn, coord, "center", chromOnly = TRUE)[sample(.N)]
-        if(Color_By == "sample") jxns <- dt_colorBySelectedSample(jxns, selectedSources)
+        svx_trianglechromLines(reference, coord)
+        jxns <- svx_getTrackJunctions(track, selectedSources, loadFn, coord, "centerAll", chromOnly = TRUE)[sample(.N)]
+        jxns <- if(Color_By == "sample") dt_colorBySelectedSample(jxns, selectedSources) 
+                else svx_colorCompositeGenomes(jxns, reference)
         points(
             jxns$center, 
             jxns$size,
@@ -53,10 +55,24 @@ build.svx_triangle_track <- function(track, reference, coord, layout, trackBuffe
             col = jxns$color
         )
         if(nrow(jxns) == 0) trackNoData(coord, ylim, "no matching junctions in window")
-        svx_junctionsLegend(track, coord, ylim, selectedSources)
+        svx_junctionsLegend(track, coord, ylim, selectedSources, 
+                            hasIntergenome = "interGenome" %in% names(jxns))
         trackBuffer[[track$id]] <- jxns
     })
 
     # return the track's magick image and associated metadata
     list(ylim = ylim, mai = mai, image = image)
+}
+
+# special diagonal chromsome demarcation lines
+svx_trianglechromLines <- function(reference, coord, color = CONSTANTS$plotlyColors$grey, lwd = 0.5){
+    if(!isProperChromosome(coord$chromosome)) {
+        x <- getChromosomeSizes(reference$genome, reference$metadata)$size
+        for(xx in c(0, cumsum(as.double(x)))){
+            minX <- as.numeric(coord$start)
+            maxX <- as.numeric(coord$end)            
+            lines(c(xx, maxX), c(0,  2 * maxX + 2 * -xx), col = color, lwd = lwd)
+            lines(c(minX, xx), c(-2 * minX + 2 *  xx, 0), col = color, lwd = lwd)
+        }
+    }
 }

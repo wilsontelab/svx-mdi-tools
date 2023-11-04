@@ -59,7 +59,7 @@ uHomPlot <- staticPlotBoxServer(
 # ----------------------------------------------------------------------
 # define bookmarking actions
 # ----------------------------------------------------------------------
-observe({
+bookmarkObserver <- observe({
     bm <- getModuleBookmark(id, module, bookmark, locks)
     req(bm)
     settings$replace(bm$settings)
@@ -71,6 +71,7 @@ observe({
         distancePlot$settings$replace(bm$outcomes$distancePlotSettings)
         uHomPlot$settings$replace(bm$outcomes$uHomDistributionSettings)
     }
+    bookmarkObserver$destroy()
 })
 
 #----------------------------------------------------------------------

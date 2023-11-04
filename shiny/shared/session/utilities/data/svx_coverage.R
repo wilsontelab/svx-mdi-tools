@@ -38,10 +38,14 @@ svx_rebinCoverage <- function(x0, aggFactor = 10){
     ), by = .(chrom, index2)]
 
     startSpinner(session, message = "fitting coverage")
-    medianCoverage <- x2[, peakValue(coverage)]
+    medianCoverage <- x2[, {
+        median <- median(coverage, na.rm = TRUE)
+        peakValue(coverage[coverage > median / 5 & coverage < median * 5])
+    }]
 
-    outCols <- c("chrom","start","genomeStart","coverage")
-    maxPower <- 2            
+    startSpinner(session, message = "aggregating coverage")
+    outCols <- c("chrom","start","genomeStart","coverage")    
+    maxPower <- 2
     list(
         maxPower = maxPower,
         binDensities = sapply(0:maxPower, function(power) binDensity / aggFactor**power),
@@ -63,15 +67,18 @@ svx_filterCoverageByRange <- function(sourceId, sample, coord, maxBins, loadFn){
         else if(passingPowers[1] == 0) 0 
         else passingPowers[1] - 1 # thus, if possible, return the first density that did NOT pass, to allow partial aggregation below
     x <- coverage[[paste0("x", power)]] 
-    isWholeGenome <- coord$chromosome == "all" 
-    x <- if(isWholeGenome) x[data.table::between(as.numeric(genomeStart), as.numeric(coord$start), as.numeric(coord$end))]
-                      else x[data.table::between(start,                   as.numeric(coord$start), as.numeric(coord$end)) & chrom == coord$chromosome]
+    isWholeGenome <- coord$chromosome == "all"
+    isProperChrom <- isProperChromosome(coord$chromosome)
+    isGenome <- isWholeGenome || !isProperChrom
+    x <- if(isGenome) x[data.table::between(as.numeric(genomeStart), as.numeric(coord$start), as.numeric(coord$end))]
+                 else x[data.table::between(start,                   as.numeric(coord$start), as.numeric(coord$end)) & chrom == coord$chromosome]
     list(
         binSize = coverage$binSizes[power + 1],
         medianCoverage = coverage$medianCoverage,
         bins = x[, .(
+            chrom,
             strand = ".",
-            x = if(isWholeGenome) genomeStart else start,
+            x =if(isGenome) genomeStart else start,
             y = coverage
         )]
     )

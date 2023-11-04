@@ -1,0 +1,26 @@
+---
+# options used during read grouping to identify source molecules  
+options:
+    input-dir: 
+        order: 1
+        short: i
+        type: string
+        directory:
+            must-exist: true     
+        required: true
+        default: null
+        description: "data directory containing all project folders identified by --samples-table project column"        
+    samples-table: 
+        order: 2
+        short: s
+        type: string 
+        required: true
+        default: null
+        description: "path to a csv or tsv data source file with at least columns project and sample"
+    warn-only:   
+        order: 3
+        short: w
+        type: boolean 
+        required: false
+        default: false
+        description: "only issue a warning if input samples have different genomes, target regions, etc." 

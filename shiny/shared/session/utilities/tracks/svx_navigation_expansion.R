@@ -16,12 +16,12 @@ svx_junctionNavTable <- function(track, session, browserId, reference, coord,
         jxn <- trackNavDataUnformatted()[selectedRow]
         expandFn_ <- function(jobId){
             expandReactive(list(d = jxn, fn = expandFn))
-            app$browser$expandingTrack(list(trackId = track$id, object = jxn) )
+            app$browser$expandingTrack(1, list(trackId = track$id, object = jxn) )
         }
         if(jxn$edgeType == svx_edgeTypes$TRANSLOCATION){
-            handleTrackNavTableClick(track, "all", abs(jxn$node1), abs(jxn$node2), expandFn = expandFn_)
+            handleTrackNavTableClick(NULL, track, "all", abs(jxn$node1), abs(jxn$node2), expandFn = expandFn_)
         } else {
-            handleTrackNavTableClick(track, jxn$cChrom1, jxn$cRefPos1, jxn$cRefPos2, expandFn = expandFn_)
+            handleTrackNavTableClick(NULL, track, jxn$cChrom1, jxn$cRefPos1, jxn$cRefPos2, expandFn = expandFn_)
         }
     }
     tagList(
@@ -37,11 +37,11 @@ svx_junctionNavTable <- function(track, session, browserId, reference, coord,
 }
 
 # handle SV junction-based browser navigation
-svx_jumpToJunction <- function(jxn){
+svx_jumpToJunction <- function(regionI, jxn){
     if(jxn$edgeType == svx_edgeTypes$TRANSLOCATION){
-        app$browser$jumpToCoordinates("all", abs(jxn$node1), abs(jxn$node2))
+        app$browser$jumpToCoordinates(regionI, "all", abs(jxn$node1), abs(jxn$node2))
     } else {
-        app$browser$jumpToCoordinates(jxn$cChrom1, jxn$cRefPos1, jxn$cRefPos2)
+        app$browser$jumpToCoordinates(regionI, jxn$cChrom1, jxn$cRefPos1, jxn$cRefPos2)
     }
 }
 
@@ -74,12 +74,12 @@ svx_ampliconNavTable <- function(track, session, browserId, browser,
 }
 
 # appropriately disperse a nodes or triangle plot click event
-svx_handleJunctionClick <- function(track, click, buffer, 
-                                    expandReactive, expandFn, summarizeFn,
+svx_handleJunctionClick <- function(track, click, regionI,
+                                    buffer, expandReactive, expandFn, summarizeFn,
                                     distFn = NULL, distType = NULL){
     jxns <- buffer[[track$id]]
     req(nrow(jxns) > 0) 
-    startSpinner(session)
+    # startSpinner(session)
     dist <- if(!is.null(distFn)) distFn(jxns) else switch(
         distType,
         triangle = jxns[, sqrt((center - click$coord$x) ** 2 + (size - click$coord$y) ** 2)],
@@ -94,12 +94,12 @@ svx_handleJunctionClick <- function(track, click, buffer,
     jxn <- jxns[which.min(dist)]  
     if(click$keys$ctrl){
         expandReactive(list(d = jxn, fn = expandFn))
-        app$browser$expandingTrack(list(trackId = track$id, object = jxn) )
+        app$browser$expandingTrack(regionI, list(trackId = track$id, object = jxn) )
     } else if(click$keys$shift){
         expandReactive(list(d = jxns, fn = summarizeFn))
-        app$browser$expandingTrack(list(trackId = track$id, object = jxns) )
+        app$browser$expandingTrack(regionI, list(trackId = track$id, object = jxns) )
     } else {
-        svx_jumpToJunction(jxn)       
+        svx_jumpToJunction(regionI, jxn)       
     }
 }
 svx_handleJunctionExpansion <- function(track, layout, expandReactive){
