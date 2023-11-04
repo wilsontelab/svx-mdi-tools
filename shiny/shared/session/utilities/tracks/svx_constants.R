@@ -8,7 +8,8 @@ svx_edgeTypes <- list(
     DELETION      = "D",
     UNKNOWN       = "?",
     INSERTION     = "I", 
-    PROPER        = "P"
+    PROPER        = "P", 
+    INTERGENOME   = "G"
 )
 svx_jxnTypes <- data.table(
     code = c( # as used in svPore
@@ -17,7 +18,8 @@ svx_jxnTypes <- data.table(
         "U",
         "V",
         "T",
-        "?"
+        "?",
+        "G"
     ),
     altCode = c( # as used in svWGS/capture
         "L",
@@ -25,7 +27,8 @@ svx_jxnTypes <- data.table(
         "D",
         "I",
         "T",
-        "?"
+        "?",
+        "G"
     ),
     name = c(
         "Del",
@@ -33,7 +36,8 @@ svx_jxnTypes <- data.table(
         "Dup",
         "Inv",
         "Trans",
-        "?"
+        "?",
+        "IntGen"
     ),
     longName = c(
         "Deletion",
@@ -41,7 +45,8 @@ svx_jxnTypes <- data.table(
         "Duplication",
         "Inversion",
         "Translocation",
-        "?"
+        "?",
+        "Intergenome"
     ), 
     legend = c(
         TRUE,
@@ -49,16 +54,18 @@ svx_jxnTypes <- data.table(
         TRUE,
         TRUE,
         TRUE,
-        FALSE
+        FALSE,
+        TRUE
     ),
-    order = 1:6,
+    order = 1:7,
     color = c(
         CONSTANTS$plotlyColors$blue,
         CONSTANTS$plotlyColors$black,
         CONSTANTS$plotlyColors$green,
         CONSTANTS$plotlyColors$red,
         CONSTANTS$plotlyColors$orange,
-        NA
+        NA,
+        CONSTANTS$plotlyColors$purple
     ),
     lineN = c(
         1,
@@ -66,7 +73,8 @@ svx_jxnTypes <- data.table(
         2,
         3,
         4,
-        -100
+        -100,
+        4
     )
 )
 svx_jxnType_codeToX <- function(x, col){

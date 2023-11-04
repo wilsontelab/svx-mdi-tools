@@ -25,12 +25,15 @@ svx_setJunctionPointSizes <- function(jxns, track, family = "Points"){
 
 # junctions legend
 svx_junctionsLegend <- function(track, coord, ylim, selectedTargets, 
-                                isMultiSample = TRUE, jxns = NULL, family = "Points", sampleNameFn = NULL){
+                                isMultiSample = TRUE, jxns = NULL, family = "Points", sampleNameFn = NULL,
+                                hasIntergenome = FALSE){
     x <- switch(
         getBrowserTrackSetting(track, family, "Color_By", "edgeType"),
         edgeType = {
             jt <- svx_jxnTypes[order(order)]
-            if(!is.null(jxns)) jt <- jt[code %in% jxns[, unique(edgeType)]] # optionally only shows actual edgeTypes in legend
+            allowedTypeNames <- track$settings$get("Filters", "SV_Type", jt$name)
+            if(hasIntergenome && "Trans" %in% allowedTypeNames) allowedTypeNames <- c(allowedTypeNames, "IntGen")
+            jt <- jt[name %in% allowedTypeNames] # optionally only shows possible edgeTypes in legend
             list(
                 legend = jt$longName[jt$legend],
                 color  = jt$color[jt$legend]

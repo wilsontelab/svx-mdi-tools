@@ -126,6 +126,10 @@ svx_filterJunctionsByRange <- function(jxns, coord, rangeType, chromOnly = FALSE
     ]
     switch(
         rangeType,
+        centerAll = {
+            jxns[ , center := if(isProperChrom) refPosCenter else nodeCenter]
+            jxns
+        },
         center = {
             jxns <- jxns[data.table::between(
                 as.numeric(if(isProperChrom) refPosCenter else nodeCenter), 
@@ -170,4 +174,17 @@ svx_getTrackJunctions <- function(track, selectedTargets, loadFn,
         )
     }), list(fill = TRUE))) # tables from different sources have non-identical columns, so must fill
     if(is.null(coord)) jxns else svx_filterJunctionsByRange(jxns, coord, rangeType, chromOnly)
+}
+
+# support composite genome colors as purple inter-genomic translocation dots/lines
+svx_colorCompositeGenomes <- function(x, reference){
+    if(objectHasData(listCompositeGenomes(reference))){
+        genome1 <- sapply(strsplit(x$cChrom1, "_"), function(x) x[2])
+        genome2 <- sapply(strsplit(x$cChrom2, "_"), function(x) x[2])
+        x[genome1 != genome2, ":="(
+            color = CONSTANTS$plotlyColors$purple,
+            edgeType = svx_edgeTypes$INTERGENOME,
+            interGenome = TRUE
+        )]
+    }
 }

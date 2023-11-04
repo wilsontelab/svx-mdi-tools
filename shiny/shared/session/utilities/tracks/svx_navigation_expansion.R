@@ -5,7 +5,6 @@ svx_junctionNavTable <- function(track, session, browserId, reference, coord,
     trackNavDataUnformatted <- reactive({
         selectedSources <- getSourcesFromTrackSamples(track$settings$items())
         jxns <- svx_getTrackJunctions(track, selectedSources, loadFn, chromOnly = FALSE)
-        dstr(nrow(jxns))
         req(nrow(jxns) <= 10000)
         jxns
     })
