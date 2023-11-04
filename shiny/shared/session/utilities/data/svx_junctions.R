@@ -187,4 +187,5 @@ svx_colorCompositeGenomes <- function(x, reference){
             interGenome = TRUE
         )]
     }
+    x
 }
