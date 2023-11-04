@@ -180,9 +180,9 @@ assemblyPlotsUI <- function(id, options) {
         ),
 
         # output plots
-        assemblyPlotBox("svFrequencies", "SV Frequencies", collapsed = TRUE),
+        assemblyPlotBox("svFrequencies", "SV Frequencies", collapsed = FALSE),
         assemblyPlotBox("microhomology", "Microhomology/Insert Distributions", collapsed = TRUE),
-        assemblyPlotBox("endpoints", "SV Endpoint Distributions", collapsed = FALSE),
+        assemblyPlotBox("endpoints", "SV Endpoint Distributions", collapsed = TRUE),
         assemblyPlotBox("svSizes", "SV Size Distributions", collapsed = TRUE),
         # assemblyPlotBox("insertionTemplates", "Insertion Templates", collapsed = TRUE),
         # assemblyPlotBox("junctionBases", "Junction Base Usage", collapsed = TRUE),
