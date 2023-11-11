@@ -14,7 +14,9 @@ actions:
         module: extract
     find:
         order: 3
-        module: find2        
+        module: find2
+        env-vars:
+            assess-cnv-bins: true # instruct assemble_coverage.R to analyze bin coverage over all non-singleton CNVs 
     pileup:
         order: 4
         module: genomex-mdi-tools//pileup  
@@ -35,6 +37,9 @@ package:
             coverageFile:
                 type: rds-file
                 file: $COVERAGE_PREFIX.rds
+            cnvCoverageFile:
+                type: rds-file
+                file: $COVERAGE_PREFIX.cnvs.rds
             structuralVariants:
                 type: rds-file
                 file: $FIND_PREFIX.structural_variants.rds

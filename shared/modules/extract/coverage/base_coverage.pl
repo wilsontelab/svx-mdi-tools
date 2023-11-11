@@ -2,7 +2,7 @@ use strict;
 use warnings;
 
 # action:
-#     create a map of base-level coverage in a genome
+#     create a map of base-level coverage of _short read pairs_ in a genome
 # input format:
 #     sorted BED3 plus MOL_CLASS
 # output:
