@@ -200,7 +200,7 @@ for(sample in metadata$SAMPLES){
     nullCnvBinCoverage <- cnvBinCoverage
 
     # work on chromosome at a time
-    do.call(rbind, lapply(unique(coverageIndex$chrom), function(chrom_){ # this cannot be reliably parallelized, seemingly due to seek/read collisions?
+    for(chrom_ in unique(coverageIndex$chrom)){ # this cannot be reliably parallelized, seemingly due to seek/read collisions?
         message(paste("     ", chrom_)) 
 
         # load the break spans, i.e., the contiguous segments of the genome covered by the same number of reads
@@ -235,7 +235,7 @@ for(sample in metadata$SAMPLES){
 
         # calculate genome coverage by bin for this sample+chrom
         binAssignments <- assignBins(breakSpans)   
-        binCoverage <- rbind(binCoverage, binAssignments[, .(
+        binCoverage <<- rbind(binCoverage, binAssignments[, .(
             chrom = chrom_,
             coverage = weighted.mean(coverage, pmin(breakEnd, end) - pmax(breakStart, start))
         ), keyby = .(start, end)])
@@ -264,7 +264,7 @@ for(sample in metadata$SAMPLES){
                 )
             }, keyby = .(start, end)]
         }, mc.cores = env$N_CPU)))
-    }))
+    }
     close(breaksFile)
     close(countsFile)
 

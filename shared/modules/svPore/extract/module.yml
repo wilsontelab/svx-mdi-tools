@@ -10,6 +10,7 @@ action: # required
         - genomex-mdi-tools//fastq-dir
         - genomex-mdi-tools//genome
         - genomex-mdi-tools//nanopore-type
+        - genomex-mdi-tools//target-region
         - genomex-mdi-tools//read-filtering 
         - svPore-size-limits
         - svPore-find

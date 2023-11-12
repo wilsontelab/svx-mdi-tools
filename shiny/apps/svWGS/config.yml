@@ -27,6 +27,8 @@ uploadTypes:
                 required: true
             coverageFile:
                 required: true
+            cnvCoverageFile:
+                required: true   
             structuralVariants:
                 required: true
             junctionMolecules:
@@ -49,6 +51,8 @@ uploadTypes:
 appSteps:
     upload: # nearly always the 1st step of every app
         module: sourceFileUpload
+    normalizeGC:
+        module: normalizeGC
     browser:
         module: genomex-mdi-tools//trackBrowser
         options:
@@ -60,24 +64,3 @@ appSteps:
             #         TESTING:
             #             Data:
             #                 Plot_As: points
-    # assign: # usually the 2nd step of every app
-    #     module: assignSamples        
-    #     options:
-    #         allowEmptyCells: true
-    #         categories:
-    #             column: 
-    #                 singular: Column
-    #                 plural: Columns
-    #                 nLevels: 1:10            
-    #             row: 
-    #                 singular: Row
-    #                 plural: Rows
-    #                 nLevels: 1:10
-    # # libraryQC:
-    # #     module: libraryQC
-    # svWGSExplorer:
-    #     module: svWGSExplorer
-    # aggregatePlots:
-    #     module: aggregatePlots
-    # analyzeInsertions:
-    #     module: analyzeInsertions

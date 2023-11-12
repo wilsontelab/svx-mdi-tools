@@ -36,10 +36,6 @@ build.svx_amplicons_track <- function(track, reference, coord, layout,
     itemsList <- x$itemsList
     itemData <- x$itemData
     if(!is.null(trackBuffer)) trackBuffer[[track$id]] <- itemData
-
-    dstr(itemsList)
-    dstr(itemData)
-
     buildSpanTrackImage (
         track, coord, layout,
         itemsList, itemNames, itemData,

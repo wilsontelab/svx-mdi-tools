@@ -35,9 +35,10 @@ build.svx_coverageTrack <- function(track, reference, coord, layout, loadFn){
     dataFn <- function(track, reference, coord, sampleName, sample){
         I <- sapply(names(selectedSources), function(x) sampleName %in% selectedSources[[x]]$Sample_ID)
         sourceId <- names(selectedSources)[I] 
-        x <- svx_filterCoverageByRange(sourceId, sampleName, coord, maxBins, loadFn)
-        aggregateTabixBins(x$bins, track, coord, plotBinSize) %>%
-        svx_setCoverageValue(Plot_Type, x$medianCoverage, Median_Ploidy)
+        x <- svx_filterCoverageByRange(sourceId, sampleName, coord, maxBins, loadFn) %>%
+        svx_setCoverageValue(Plot_Type, Median_Ploidy) %>%
+        aggregateTabixBins(track, coord, plotBinSize) %>%
+        svx_maskLowQualityBins()
     }
 
     # build the binned_XY_track

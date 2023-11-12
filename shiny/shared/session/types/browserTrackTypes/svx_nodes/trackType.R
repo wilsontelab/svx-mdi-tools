@@ -74,7 +74,9 @@ build.svx_nodes_track <- function(track, reference, coord, layout, trackBuffer, 
 
     # get the data to plot
     selectedTargets <- track$settings$items()
+    samples <- names(selectedTargets)
     if(isMultiSample) selectedTargets <- getSourcesFromTrackSamples(selectedTargets)
+    track$settings$setChoices("Filters", "Unique_To_Sample", c(samples, "show all SVs"))
 
     # set the plot layout and axes
     padding <- padding(track, layout)

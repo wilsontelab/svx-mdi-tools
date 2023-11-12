@@ -99,16 +99,17 @@ svx_filterDefaults <- list( # all values here should be ~unfiltered, so that app
     Max_SV_Size = 0,
     Min_Insert_Size = -50,
     Max_Insert_Size = 50,
-    Min_Samples_With_SV = 1,
-    Max_Samples_With_SV = 0,
     Min_Source_Molecules = 1,
     Max_Source_Molecules = 0,
     Min_Sequenced_Molecules = 0,  
     Max_Linked_Junctions = 0, 
+    Min_Samples_With_SV = 1,
+    Max_Samples_With_SV = 0,
+    Unique_To_Sample = "show all SVs",     
+    Show_ChrM = "always",  
     Min_Map_Quality = 0,
     Min_Flank_Length = 0,
-    SV_Type = c("Del","Dup","Inv"),  
-    Show_ChrM = "always"    
+    SV_Type = c("Del","Dup","Inv")  
 )
 svx_nodeClasses <- list(
    'GAP'='0',

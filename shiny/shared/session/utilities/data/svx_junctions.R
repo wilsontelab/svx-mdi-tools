@@ -55,7 +55,7 @@ svx_filterJunctionsBySample <- function(targetId, samples_, loadFn){
             if(is.null(samples_)) return(jxns) # e.g., when track items are amplicons          
             startSpinner(session, message = "filtering junctions")
             I <- FALSE
-            samples_ <- if(startsWith(samples_, ",")) samples_ else paste0(",", samples_, ",")
+            samples_ <- if(startsWith(samples_[1], ",")) samples_ else paste0(",", samples_, ",")
             for(sample_ in samples_) I <- I | jxns[, grepl(sample_, samples)]
             jxns[I]
         }
@@ -87,14 +87,21 @@ svx_filterJunctionsBySettings <- function(track, targetId, samples, loadFn, fami
             jxns <- jxns[insertSize >= filters$Min_Insert_Size] # can be negative
             jxns <- jxns[insertSize <= filters$Max_Insert_Size]
 
-            if(filters$Min_Samples_With_SV > 1) jxns <- jxns[nSamples >= filters$Min_Samples_With_SV]
-            if(filters$Max_Samples_With_SV > 0) jxns <- jxns[nSamples <= filters$Max_Samples_With_SV]
-
             if(filters$Min_Source_Molecules > 1) jxns <- jxns[nInstances >= filters$Min_Source_Molecules]
             if(filters$Max_Source_Molecules > 0) jxns <- jxns[nInstances <= filters$Max_Source_Molecules]
 
             if(filters$Min_Sequenced_Molecules > 0) jxns <- jxns[nSequenced >= filters$Min_Sequenced_Molecules]
             if(filters$Max_Linked_Junctions > 0) jxns <- jxns[nLinkedJunctions <= filters$Max_Linked_Junctions]
+
+            if(filters$Min_Samples_With_SV > 1) jxns <- jxns[nSamples >= filters$Min_Samples_With_SV]
+            if(filters$Max_Samples_With_SV > 0) jxns <- jxns[nSamples <= filters$Max_Samples_With_SV]
+            if(filters$Unique_To_Sample != "show all SVs") jxns <- jxns[samples == paste0(",", filters$Unique_To_Sample, ",")]
+
+            if(filters$Show_ChrM != "always"){
+                hasChrM <- jxns[, cChrom1 == "chrM" | cChrom2 == "chrM"]
+                if(filters$Show_ChrM == "translocations_only") jxns <- jxns[hasChrM == FALSE | xor(cChrom1 == "chrM", cChrom2 == "chrM")]
+                else if(filters$Show_ChrM == "never")          jxns <- jxns[hasChrM == FALSE]
+            }
 
             if(filters$Min_Map_Quality > 0) jxns <- jxns[mapQ >= filters$Min_Map_Quality] 
             if(filters$Min_Flank_Length > 0) jxns <- jxns[flankLength >= filters$Min_Flank_Length] 
@@ -102,12 +109,6 @@ svx_filterJunctionsBySettings <- function(track, targetId, samples, loadFn, fami
             if(length(filters$SV_Type) > 0) {
                 edgeTypes <- svx_jxnType_nameToX(filters$SV_Type, "code")
                 jxns <- jxns[edgeType %in% edgeTypes]
-            }
-
-            if(filters$Show_ChrM != "always"){
-                hasChrM <- jxns[, cChrom1 == "chrM" | cChrom2 == "chrM"]
-                if(filters$Show_ChrM == "translocations_only") jxns <- jxns[hasChrM == FALSE | xor(cChrom1 == "chrM", cChrom2 == "chrM")]
-                else if(filters$Show_ChrM == "never")          jxns <- jxns[hasChrM == FALSE]
             }
 
             jxns %>% svx_setJunctionPointColors(track, family) %>% svx_setJunctionPointSizes(track)
