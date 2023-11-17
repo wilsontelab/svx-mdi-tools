@@ -108,7 +108,7 @@ svx_setCoverageValue <- function(coverage, plotAs, medianPloidy){
             "Read Depth" = y,
             {
                 normalized <- if(is.null(app$normalizeGC)) NULL 
-                              else app$normalizeGC$getBinNormalizedCN(coverage$sourceId, coverage$sample, gc, y)
+                              else app$normalizeGC$getBinNormalizedCN(coverage$sourceId, coverage$sample, "uncollapsed", gc, y)
                 if(is.null(normalized)) y / coverage$medianCoverage * medianPloidy else normalized
             }
         ),
@@ -119,4 +119,19 @@ svx_setCoverageValue <- function(coverage, plotAs, medianPloidy){
 # mask low quality bins from coverage plots
 svx_maskLowQualityBins <- function(bins){
     bins[z <= 0.1, .SD, .SDcols = c("strand", "x", "y")]
+}
+
+# collect copy number data from normalizeGC, if in use
+svx_getCnvJxnNormalizedCN <- function(isMultiSample, targetId){
+    if(!isMultiSample || is.null(app$normalizeGC)) return(list(key = NA, value = NA))
+    app$normalizeGC$getCnvJxnsNormalizedCN(targetId)[c("key","value")]
+}
+svx_getCnvJxnNormalizedCN_singleJunction <- function(targetId, svId){
+    if(is.null(app$normalizeGC)) return(NA)
+    app$normalizeGC$getCnvJxnsNormalizedCN(targetId)$value$dt[SV_ID == svId, maxCNC]
+}
+
+svx_getHmmCnvs <- function(targetId){
+    if(is.null(app$normalizeGC)) return(list(key = NA, value = NA))
+    app$normalizeGC$getNormalizedHmmCnvs(targetId)[c("key","value")]
 }

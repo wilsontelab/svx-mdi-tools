@@ -40,6 +40,9 @@ package:
             cnvCoverageFile:
                 type: rds-file
                 file: $COVERAGE_PREFIX.cnvs.rds
+            genomesFile:
+                type: rds-file
+                file: $COVERAGE_PREFIX.genomes.rds  
             structuralVariants:
                 type: rds-file
                 file: $FIND_PREFIX.structural_variants.rds

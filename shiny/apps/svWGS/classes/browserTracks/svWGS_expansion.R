@@ -6,6 +6,7 @@ svWGS_objectTable <- function(jxn){
     jxn[, .(
         svId = SV_ID,
         type = svx_jxnType_codeToX(edgeType, "name"),
+        cnc = round(maxCNC, 1),
         size = SV_SIZE,
         insertSize = -MICROHOM_LEN,
         mapQ = mapQ,

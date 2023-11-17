@@ -40,6 +40,34 @@ build.svx_coverageTrack <- function(track, reference, coord, layout, loadFn){
         aggregateTabixBins(track, coord, plotBinSize) %>%
         svx_maskLowQualityBins()
     }
+    cnvHighlightsFn <- function(track, reference, coord, sampleName, sample){
+        I <- sapply(names(selectedSources), function(x) sampleName %in% selectedSources[[x]]$Sample_ID)
+        x <- svx_getHmmCnvs(names(selectedSources)[I])
+        if(!isTruthy(x)) return(NULL)
+        x$value[[sampleName]][
+            chrom == coord$chromosome &
+            start <= coord$end & 
+            coord$start <= end &
+            !is.na(JXN_TYPE),
+            .(
+                x1 = start,
+                x2 = end,
+                color = ifelse(JXN_TYPE == "D", rgb(1,0.2,0.2,0.075), rgb(0.2,0.2,1,0.075))
+            )
+        ]
+    }
+
+    # spans <- sapply(names(selectedSources), svx_getHmmCnvs, simplify = FALSE, USE.NAMES = TRUE)
+    # dstr(spans)
+# List of 1
+#  $ e59b0384bfa375dc7846d5c384d62450:List of 2
+#   ..$ key  : chr "7bebd41b95d0709bcd12882c378e014f"
+#   ..$ value:List of 2
+#   .. ..$ HCT116 :Classes ‘data.table’ and 'data.frame': 410 obs. of  13 variable
+# s:
+
+#   .. .. ..$ JXN_TYPE  : chr [1:410] "L" "L" "L" "L" ...
+
 
     # build the binned_XY_track
     isDifference <- nSamples > 1 && getTrackSetting(track, "Data", "Aggregate", "none") == "difference"
@@ -50,5 +78,7 @@ build.svx_coverageTrack <- function(track, reference, coord, layout, loadFn){
         allowNeg = isDifference, 
         ylab = if(isDifference) paste(Plot_Type, "Change") else Plot_Type,
         center = TRUE, binSize = plotBinSize
+        # ,
+        # highlightsFn = cnvHighlightsFn
     )
 }

@@ -18,11 +18,11 @@ echo "extracting READ_LEN"
 # TODO: for unknown reasons, samtools view of cram files works fine for hg38 but hangs indefinitively for mm10
 # it most likely relates to name sorting limitations describe here: https://www.htslib.org/workflow/cram.html
 # it is unclear why this would differ between genomes
-export READ_LEN=`samtools view -f 1 $NAME_BAM_FILE | head -n 1 | awk '{print length($10)}'` # assumes smart-paired alignments
+export READ_LEN=`samtools view $SAMTOOLS_VIEW_REFERENCE -f 1 $NAME_BAM_FILE | head -n 1 | awk '{print length($10)}'` # assumes smart-paired alignments
 echo "READ_LEN = $READ_LEN"
 echo "READ_LEN: $READ_LEN" >> $EXTRACT_PREFIX.library_stats.yml
 
 echo "extracting MAX_TLEN"
-export MAX_TLEN=`samtools view $NAME_BAM_FILE | head -n 100000 | perl $MODULES_DIR/library/get_max_TLEN.pl`
+export MAX_TLEN=`samtools view $SAMTOOLS_VIEW_REFERENCE $NAME_BAM_FILE | head -n 100000 | perl $MODULES_DIR/library/get_max_TLEN.pl`
 echo "MAX_TLEN = $MAX_TLEN"
 echo "MAX_TLEN: $MAX_TLEN" >> $EXTRACT_PREFIX.library_stats.yml

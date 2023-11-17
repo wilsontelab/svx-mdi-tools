@@ -109,7 +109,8 @@ svx_filterDefaults <- list( # all values here should be ~unfiltered, so that app
     Show_ChrM = "always",  
     Min_Map_Quality = 0,
     Min_Flank_Length = 0,
-    SV_Type = c("Del","Dup","Inv")  
+    SV_Type = c("Del","Dup","Inv"),
+    Min_Flank_CNC = 0
 )
 svx_nodeClasses <- list(
    'GAP'='0',

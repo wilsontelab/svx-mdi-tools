@@ -9,6 +9,7 @@ suppressPackageStartupMessages(suppressWarnings({
     library(yaml)
     library(bit64)
     library(parallel)
+    library(yaml)
 }))
 #-------------------------------------------------------------------------------------
 # load, parse and save environment variables
@@ -23,11 +24,11 @@ checkEnvVars(list(
         'FIND_MODE',
         'TASK_DIR',
         'OUTPUT_DIR',
-        'DATA_NAME'
+        'DATA_NAME',
+        'BIN_SIZE'
     ), 
     integer = c(
         'N_CPU',
-        'BIN_SIZE',
         'KMER_LENGTH',
         'N_ERRORS'
     )
@@ -67,12 +68,96 @@ metadata <- lapply(metadata, function(x) strsplit(as.character(x), "\\s+")[[1]])
 #=====================================================================================
 
 #=====================================================================================
+# load CNVs suitable for copy number characterization
+#-------------------------------------------------------------------------------------
+if(env$ASSESS_CNV_BINS){
+    message("loading called CNVs")
+    cnvs <- readRDS(paste(env$FIND_PREFIX, 'structural_variants', 'rds', sep = "."))
+    cnvs <- cnvs[JXN_TYPE %in% c("D", "L")]
+}
+#=====================================================================================
+
+#=====================================================================================
+# support functions for binning coverage
+#-------------------------------------------------------------------------------------
+getCompositeGenomes <- function(){
+    binSizes <- as.integer(strsplit(env$BIN_SIZE, ",")[[1]])
+    singleGenome <- data.table(
+        genome  = env$GENOME,
+        binSize = binSizes[1],
+        isComposite = FALSE
+    )
+    yamlFile <- file.path(env$GENOMES_DIR, env$GENOME, paste0(env$GENOME, ".yml"))
+    if(!file.exists(yamlFile)) return(singleGenome)
+    yaml <- read_yaml(yamlFile)
+    if(is.null(yaml$composite) || !yaml$composite || is.null(yaml$compositeSources)) return(singleGenome)
+    data.table(
+        genome  = names(yaml$compositeSources),
+        binSize = binSizes,
+        isComposite = TRUE,
+        compositeDelimiter = if(is.null(yaml$compositeDelimiter)) "_" else yaml$compositeDelimiter
+    )
+}
+getSampleCoverageIndex <- function(samplePrefix){
+    coverageIndexFile <- paste(samplePrefix, env$GENOME, "coverage.index.gz", sep = ".")
+    coverageIndex <- fread(
+        coverageIndexFile,
+        sep = "\t",
+        header = TRUE,
+        colClasses = c(
+            "integer", # chromIndex, 1-referenced
+            "integer", # chunkIndex, 0-referenced
+            "numeric", # cumNBreaks printed to breaks and counts files through (i.e., including) this chunk
+            "numeric"  # coverage
+        )
+    )
+    coverageIndex[, ":="(
+        chrom = metadata$CHROMS[chromIndex],
+        start = chunkIndex * chunkSize # chrom coordinate, 0-referenced (like BED)
+    )]    
+}
+assignBins <- function(breakSpans, binSize){ # spans either on a whole chromosome, or within a specific CNV
+    binAssignments <- rbind(
+        if(breakSpans[, any(sameBin)]) breakSpans[sameBin == TRUE, .( # handle single-bin break spans separately for speed
+            breakStart = breakStart,
+            breakEnd   = breakEnd,
+            coverage   = coverage,
+            start      = bin1       
+        )] else NULL, 
+        if(breakSpans[, any(!sameBin)]) breakSpans[sameBin == FALSE, .( # thus, some breaks are assigned to two bins
+            breakEnd  = breakEnd,
+            coverage  = coverage,
+            start     = seq(bin1, bin2, binSize)
+        ), by = .(breakStart)] else NULL
+    )
+    binAssignments[, end := start + binSize]
+}
+#=====================================================================================
+
+#=====================================================================================
+# run coverage analysis per genome to allow:
+#   1 - use of different bin sizes depending on genome size
+#   2 - independent GC bias correction in downstream processes
+#-------------------------------------------------------------------------------------
+genomes <- getCompositeGenomes()
+bins_out <- data.table(chrom = character(), start = integer(), end = integer(),
+                       gc = double(), excluded = integer(), genmap = double())
+for(sample in metadata$SAMPLES) bins_out[[sample]] <- double()
+cnvBins_out <- data.table(svId = character(), sample = character(), 
+                          gc = double(), coverage = double(), overlap = integer())
+for(genomeI in 1:nrow(genomes)){
+    genome <- genomes[genomeI]
+    message(paste0(genome$genome, ", bin size = ", genome$binSize))
+#=====================================================================================
+
+#=====================================================================================
 # load fixed-width bins data
 #-------------------------------------------------------------------------------------
-message("loading bin metadata")
-binsDir <- file.path(env$GENOMES_DIR, "bins", env$GENOME, "fixed_width_bins")
+message("  loading bin metadata")
 chunkSize <- 65536 # fixed by extract/base_coverage.pl
-binsFile <- paste0(env$GENOME, ".bins.size_", env$BIN_SIZE, ".k_", env$KMER_LENGTH, ".e_", env$N_ERRORS, ".bed.gz")
+binsDir <- file.path(env$GENOMES_DIR, "bins", genome$genome, "fixed_width_bins")
+if(!dir.exists(binsDir)) binsDir <- file.path(env$GENOMES_DIR, "../bins", genome$genome, "fixed_width_bins")
+binsFile <- paste0(genome$genome, ".bins.size_", genome$binSize, ".k_", env$KMER_LENGTH, ".e_", env$N_ERRORS, ".bed.gz")
 binsFile <- file.path(binsDir, binsFile)
 bins <- if(file.exists(binsFile)) {
     fread(
@@ -118,75 +203,26 @@ bins <- if(file.exists(binsFile)) {
     message(paste0("    ", binsFile))
     message(paste0("    ", "proceeding with dummy values for gc, excluded, genmap"))
     setCanonicalChroms()
-    chromSizes <- loadChromSizes(windowSize = env$BIN_SIZE)
-    start <- (1:as.integer(nChromWindows) - 1) * env$BIN_SIZE
+    chromSizes <- loadChromSizes(windowSize = genome$binSize)
     chromSizes[, .(
-        start = start,
+        start = (1:as.integer(nChromWindows) - 1) * genome$binSize,
         gc = 0.5,
         excluded = 0,
         genmap = 1 
     ), by = .(chrom)]
 }
-#=====================================================================================
-
-#=====================================================================================
-# load CNVs suitable for copy number characterization
-#-------------------------------------------------------------------------------------
-if(env$ASSESS_CNV_BINS){
-    message("loading called CNVs")
-    cnvs <- readRDS(paste(env$FIND_PREFIX, 'structural_variants', 'rds', sep = "."))
-    cnvs <- cnvs[JXN_TYPE %in% c("D", "L")]
-}
-#=====================================================================================
-
-#=====================================================================================
-# support functions for binning coverage
-#-------------------------------------------------------------------------------------
-getSampleCoverageIndex <- function(samplePrefix){
-    coverageIndexFile <- paste(samplePrefix, env$GENOME, "coverage.index.gz", sep = ".")
-    coverageIndex <- fread(
-        coverageIndexFile,
-        sep = "\t",
-        header = TRUE,
-        colClasses = c(
-            "integer", # chromIndex, 1-referenced
-            "integer", # chunkIndex, 0-referenced
-            "numeric", # cumNBreaks printed to breaks and counts files through (i.e., including) this chunk
-            "numeric"  # coverage
-        )
-    )
-    coverageIndex[, ":="(
-        chrom = metadata$CHROMS[chromIndex],
-        start = chunkIndex * chunkSize # chrom coordinate, 0-referenced (like BED)
-    )]    
-}
-assignBins <- function(breakSpans){ # spans either on a whole chromosome, or within a specific CNV
-    binAssignments <- rbind(
-        if(breakSpans[, any(sameBin)]) breakSpans[sameBin == TRUE, .( # handle single-bin break spans separately for speed
-            breakStart = breakStart,
-            breakEnd   = breakEnd,
-            coverage   = coverage,
-            start      = bin1       
-        )] else NULL, 
-        if(breakSpans[, any(!sameBin)]) breakSpans[sameBin == FALSE, .( # thus, some breaks are assigned to two bins
-            breakEnd  = breakEnd,
-            coverage  = coverage,
-            start     = seq(bin1, bin2, env$BIN_SIZE)
-        ), by = .(breakStart)] else NULL
-    )
-    binAssignments[, end := start + env$BIN_SIZE]
-}
+if(genome$isComposite) bins[, chrom := paste(chrom, genome$genome, sep = genome$compositeDelimiter)]
+binChroms <- unique(bins$chrom)
 #=====================================================================================
 
 #=====================================================================================
 # split CNV candidates against the bins for CN estimation after GC bias correction in app
 #-------------------------------------------------------------------------------------
-message("assembling coverage by bin")
-cnvBins <- data.table(svId = character(), sample = character(), gc = double(), coverage = double(), overlap = integer())
+message("  assembling coverage by bin")
 
 # initialize each sample
 for(sample in metadata$SAMPLES){
-    message(paste("   ", sample))
+    message(paste("    ", sample))
     samplePrefix <- getSamplePrefix(sample)
     coverageIndex <- getSampleCoverageIndex(samplePrefix) 
     sampleCnvs <- if(env$ASSESS_CNV_BINS) cnvs[cnvs[[sample]] >= 2] else NULL # ignore singletons for efficiency, they aren't likely to be informativ re: CN
@@ -200,8 +236,10 @@ for(sample in metadata$SAMPLES){
     nullCnvBinCoverage <- cnvBinCoverage
 
     # work on chromosome at a time
-    for(chrom_ in unique(coverageIndex$chrom)){ # this cannot be reliably parallelized, seemingly due to seek/read collisions?
-        message(paste("     ", chrom_)) 
+    coverageChroms <- unique(coverageIndex$chrom)
+    coverageChroms <- coverageChroms[coverageChroms %in% binChroms]
+    for(chrom_ in coverageChroms){ # this cannot be reliably parallelized, seemingly due to seek/read collisions?
+        message(paste("      ", chrom_)) 
 
         # load the break spans, i.e., the contiguous segments of the genome covered by the same number of reads
         breakSpans <- coverageIndex[
@@ -210,10 +248,10 @@ for(sample in metadata$SAMPLES){
                 offset  <- offsets[.I]
                 nBreaks <- cumNBreaks - offset
                 seek(breaksFile, where = offset * 2, origin = "start", rw = "read")
-                seek(countsFile, where = offset,     origin = "start", rw = "read")
+                seek(countsFile, where = offset * 2, origin = "start", rw = "read")
                 .(
                     breaks = readBin(breaksFile, "integer", n = nBreaks, size = 2, signed = FALSE) + start,
-                    counts = readBin(countsFile, "integer", n = nBreaks, size = 1, signed = FALSE)
+                    counts = readBin(countsFile, "integer", n = nBreaks, size = 2, signed = FALSE)
                 )
             },
             by = .(chunkIndex)
@@ -228,13 +266,13 @@ for(sample in metadata$SAMPLES){
 
         # assign the break span ends to their proper fixed width bins; most break spans are contained in a single bin, but not all
         breakSpans[, ":="(
-            bin1 = floor(breakStart / env$BIN_SIZE) * env$BIN_SIZE,
-            bin2 = floor(breakEnd   / env$BIN_SIZE) * env$BIN_SIZE
+            bin1 = floor(breakStart / genome$binSize) * genome$binSize,
+            bin2 = floor(breakEnd   / genome$binSize) * genome$binSize
         )]
         breakSpans[, ":="(sameBin = bin1 == bin2)]
 
         # calculate genome coverage by bin for this sample+chrom
-        binAssignments <- assignBins(breakSpans)   
+        binAssignments <- assignBins(breakSpans, genome$binSize)   
         binCoverage <<- rbind(binCoverage, binAssignments[, .(
             chrom = chrom_,
             coverage = weighted.mean(coverage, pmin(breakEnd, end) - pmax(breakStart, start))
@@ -253,7 +291,7 @@ for(sample in metadata$SAMPLES){
             cnvEnd   <- cnv[, max(POS_1, POS_2)]
             bs <- breakSpans[breakStart %between% c(cnvStart, cnvEnd)]
             if(nrow(bs) == 0) return(nullCnvBinCoverage) # catch rare CNVs with no breaks
-            binAssignments <- assignBins(bs) 
+            binAssignments <- assignBins(bs, genome$binSize) 
             binAssignments[, {
                 overlaps <- pmin(breakEnd, end, cnvEnd) - pmax(breakStart, start, cnvStart)
                 .(
@@ -280,6 +318,7 @@ for(sample in metadata$SAMPLES){
         all.x = TRUE
     )
     names(bins)[ncol(bins)] <- sample
+    bins_out <- rbind(bins_out, bins)
 
     # append this samples CNV bins
     if(env$ASSESS_CNV_BINS){
@@ -289,7 +328,7 @@ for(sample in metadata$SAMPLES){
             by = c("chrom", "start"),
             all.x = TRUE
         )
-        cnvBins <- rbind(cnvBins, cnvBinCoverage[excluded / env$BIN_SIZE < 0.1, .(
+        cnvBins_out <- rbind(cnvBins_out, cnvBinCoverage[excluded / genome$binSize < 0.1, .(
             sample   = sample,
             gc       = paste(round(gc, 3),       collapse = ","),
             coverage = paste(round(coverage, 1), collapse = ","),
@@ -300,15 +339,25 @@ for(sample in metadata$SAMPLES){
 #=====================================================================================
 
 #=====================================================================================
+# close the genomes loop
+#-------------------------------------------------------------------------------------
+}
+#=====================================================================================
+
+#=====================================================================================
 # create the composite bin coverage file
 #-------------------------------------------------------------------------------------
 message("printing results")
 saveRDS(
-    bins, 
+    bins_out, 
     file = paste(env$COVERAGE_PREFIX, 'rds', sep = ".")
 )
 if(env$ASSESS_CNV_BINS) saveRDS(
-    cnvBins, 
+    cnvBins_out, 
     file = paste(env$COVERAGE_PREFIX, 'cnvs.rds', sep = ".")
+)
+saveRDS(
+    genomes, 
+    file = paste(env$COVERAGE_PREFIX, 'genomes.rds', sep = ".")
 )
 #=====================================================================================

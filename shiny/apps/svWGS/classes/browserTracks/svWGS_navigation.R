@@ -6,6 +6,7 @@ svWGS_navTable_display <- function(jxns){
         svId = SV_ID,
         samples = trimws(gsub(",", " ", samples)),
         type = svx_jxnType_codeToX(edgeType, "name"),
+        cnc = round(maxCNC, 1),
         size = SV_SIZE,
         insertSize,
         nSamples,

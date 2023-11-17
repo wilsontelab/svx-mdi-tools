@@ -22,9 +22,9 @@ use constant {
 	END_POS_1   => 2, # i.e, 1-indexed end pos
 	MOL_CLASS   => 3, # either P (proper) or V (variant)
 	#---------------------
-	BUFFER_LEN   => 10000, # number of base positions in the circular buffer (10K is longer than ever needed for short-read pairs)
-	CHUNK_SIZE   => 65536, # size of a chromosome span with progressive numbering == 65536 bp, to control map file size
-	MAX_COVERAGE => 255,   # largest allowed fragment coverage, to control map file size
+	BUFFER_LEN   => 10000,     # number of base positions in the circular buffer (10K is longer than ever needed for short-read pairs)
+	CHUNK_SIZE   => 2**16,     # size of a chromosome span with progressive numbering == 65536 bp, to control map file size
+	MAX_COVERAGE => 2**16 - 1, # largest allowed fragment coverage, to control map file size
 };
 
 # operating variables
@@ -116,7 +116,7 @@ sub commitBreaks {
 		# increment and commit this break 
 		$coverage += $increment;
 		print $posH pack("S", $p0); # implicitly applies modulo to pos
-		print $covH pack("C", $coverage > MAX_COVERAGE ? MAX_COVERAGE : $coverage);
+		print $covH pack("S", $coverage > MAX_COVERAGE ? MAX_COVERAGE : $coverage);
 		$nBreaksPrinted++;
 		$breaks[$p0 % BUFFER_LEN] = 0;
 	}

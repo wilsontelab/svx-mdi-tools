@@ -28,7 +28,9 @@ uploadTypes:
             coverageFile:
                 required: true
             cnvCoverageFile:
-                required: true   
+                required: true  
+            genomesFile:
+                required: true 
             structuralVariants:
                 required: true
             junctionMolecules:

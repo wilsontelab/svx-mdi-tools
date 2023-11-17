@@ -54,5 +54,6 @@ svWGS_loadJunctions <- function(targetId){
 
 # get a single junction cluster for the object table
 svWGS_getJunction <- function(x){
-    svx_loadJunctions(x$targetId, svWGS_loadJunctions)[SV_ID == x$SV_ID]
+    jxn <- svx_loadJunctions(x$targetId, svWGS_loadJunctions)[SV_ID == x$SV_ID]
+    jxn[, maxCNC := svx_getCnvJxnNormalizedCN_singleJunction(x$targetId, x$SV_ID)]
 }

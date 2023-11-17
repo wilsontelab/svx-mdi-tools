@@ -70,7 +70,7 @@ svx_node_plotGenomeJxns <- function(jxns, lwd, idCol){
 build.svx_nodes_track <- function(track, reference, coord, layout, trackBuffer, loadFn, idCol, 
                                   isMultiSample = TRUE, sampleNameFn = NULL, jxnFilterFn = NULL){
     req(coord, coord$chromosome)
-    isWholeGenome <- coord$chromosome == "all"    
+    isWholeGenome <- coord$chromosome == "all"
 
     # get the data to plot
     selectedTargets <- track$settings$items()
@@ -98,7 +98,8 @@ build.svx_nodes_track <- function(track, reference, coord, layout, trackBuffer, 
             xaxs = "i", yaxs = "i") # always set `xaxs` and `yaxs` to "i" 
         chromLines(track, reference, coord)
         jxns <- svx_getTrackJunctions(
-            track, selectedTargets, loadFn, coord, "endpoint", chromOnly = FALSE, isMultiSample = isMultiSample
+            track, selectedTargets, loadFn, coord, "endpoint", 
+            chromOnly = FALSE, isMultiSample = isMultiSample
         )[order(if(isWholeGenome) sample(.N) else -size)]
         if(!is.null(jxnFilterFn)) jxns <- jxnFilterFn(jxns, track) # apply app-specific filters
         jxns <- if(Color_By == "sample") dt_colorBySelectedSample(jxns, selectedTargets, isMultiSample) 

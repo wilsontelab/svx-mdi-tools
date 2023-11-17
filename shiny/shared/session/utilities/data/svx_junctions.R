@@ -8,11 +8,11 @@
 svxLoadCreate <- "asNeeded" # for convenience when debugging load functions
 
 # load all unique junctions for a specific targetId (not filtered by region, type, or sample yet)
-svx_loadJunctions <- function(targetId, loadFn, samples_ = NULL){
+svx_loadJunctions <- function(targetId, loadFn){
     req(targetId)
     sessionCache$get(
-        'junctions', 
-        key = if(!is.null(samples_)) targetId else digest(targetId), 
+        'svx_loadJunctions', 
+        key = targetId, 
         permanent = TRUE, 
         from = "ram", 
         create = svxLoadCreate, 
@@ -45,14 +45,14 @@ svx_loadJunctions <- function(targetId, loadFn, samples_ = NULL){
 # this applies when target items are samples, but junctions are loaded from a parent sourceId carrying multiple samples
 svx_filterJunctionsBySample <- function(targetId, samples_, loadFn){
     sessionCache$get(
-        'junctions', 
+        'svx_filterJunctionsBySample', 
         keyObject = list(targetId = targetId, samples = samples_), 
         permanent = TRUE, 
         from = "ram",
         create = svxLoadCreate, 
         createFn = function(...) {
-            jxns <- svx_loadJunctions(targetId, loadFn, samples_)
-            if(is.null(samples_)) return(jxns) # e.g., when track items are amplicons          
+            jxns <- svx_loadJunctions(targetId, loadFn)
+            if(is.null(samples_)) return(jxns) # e.g., when track items are amplicons
             startSpinner(session, message = "filtering junctions")
             I <- FALSE
             samples_ <- if(startsWith(samples_[1], ",")) samples_ else paste0(",", samples_, ",")
@@ -62,16 +62,38 @@ svx_filterJunctionsBySample <- function(targetId, samples_, loadFn){
     )$value
 }
 
+# when in use in app, add a CN column to CNV junctions
+svx_setCnvJxnCN <- function(jxns, targetId, samples_, cnData){
+    if(is.na(cnData$key)) return(jxns)
+    sessionCache$get(
+        'svx_setCnvJxnCN', 
+        keyObject = list(targetId = targetId, samples = samples_, cnDataKey = cnData$key), 
+        permanent = FALSE, 
+        from = "ram",
+        create = svxLoadCreate, 
+        createFn = function(...) {
+            startSpinner(session, message = "adding junction CN")
+            merge(
+                jxns,
+                cnData$value$dt[, .SD, .SDcols = c("SV_ID", "meanCNC", "maxCNC")],
+                by = "SV_ID",
+                all.x = TRUE
+            )
+        }
+    )$value
+}
+
 # filter junction clusters based on track or other settings
-svx_filterJunctionsBySettings <- function(track, targetId, samples, loadFn, family){
+svx_filterJunctionsBySettings <- function(track, targetId, samples, loadFn, family, cnData = NULL){
     jxns <- sessionCache$get(
-        'junctions', 
-        keyObject = list(targetId = targetId, samples = samples, settings = track$settings$all()), 
+        'svx_filterJunctionsBySettings', 
+        keyObject = list(targetId = targetId, samples = samples, cnDataKey = cnData$key, settings = track$settings$all()), 
         permanent = FALSE,
         from = "ram", 
         create = svxLoadCreate, 
         createFn = function(...) {
-            jxns <- svx_filterJunctionsBySample(targetId, samples, loadFn)
+            jxns <- svx_filterJunctionsBySample(targetId, samples, loadFn) %>% 
+                    svx_setCnvJxnCN(targetId, samples, cnData)
             startSpinner(session, message = paste("getting junctions"))
             filters <- if(is.null(track$settings$Filters)) list()
                        else track$settings$Filters()
@@ -103,14 +125,16 @@ svx_filterJunctionsBySettings <- function(track, targetId, samples, loadFn, fami
                 else if(filters$Show_ChrM == "never")          jxns <- jxns[hasChrM == FALSE]
             }
 
-            if(filters$Min_Map_Quality > 0) jxns <- jxns[mapQ >= filters$Min_Map_Quality] 
+            if(filters$Min_Map_Quality > 0)jxns <- jxns[mapQ >= filters$Min_Map_Quality] 
             if(filters$Min_Flank_Length > 0) jxns <- jxns[flankLength >= filters$Min_Flank_Length] 
+            if(filters$Min_Flank_CNC > 0 && "maxCNC" %in% names(jxns)) jxns <- jxns[!is.na(maxCNC) & abs(maxCNC) >= filters$Min_Flank_CNC] 
 
             if(length(filters$SV_Type) > 0) {
                 edgeTypes <- svx_jxnType_nameToX(filters$SV_Type, "code")
                 jxns <- jxns[edgeType %in% edgeTypes]
             }
 
+            stopSpinner(session)
             jxns %>% svx_setJunctionPointColors(track, family) %>% svx_setJunctionPointSizes(track)
         }
     )$value
@@ -167,7 +191,8 @@ svx_getTrackJunctions <- function(track, selectedTargets, loadFn,
             targetId, 
             if(isMultiSample) selectedTargets[[targetId]]$Sample_ID else NULL,
             loadFn,
-            family
+            family,
+            cnData = svx_getCnvJxnNormalizedCN(isMultiSample, targetId)
         )
         cbind(
             jxns,

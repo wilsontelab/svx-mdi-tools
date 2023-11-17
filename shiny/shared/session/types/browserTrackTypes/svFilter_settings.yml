@@ -97,3 +97,9 @@ Filters:
             - Dup
             - Inv
         inline: TRUE
+    Min_Flank_CNC:
+        type:   numericInput
+        value:  0
+        min:    0
+        max:    10
+        step:   0.1
