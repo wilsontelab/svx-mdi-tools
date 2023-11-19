@@ -99,7 +99,7 @@ svx_filterCoverageByRange <- function(sourceId, sample, coord, maxBins, loadFn){
 }
 
 # support read depth and copy number plots
-svx_setCoverageValue <- function(coverage, plotAs, medianPloidy){
+svx_setCoverageValue <- function(coverage, reference, coord, plotAs, medianPloidy){
     coverage$bins[, .(
         strand = ".",
         x = x,
@@ -107,8 +107,10 @@ svx_setCoverageValue <- function(coverage, plotAs, medianPloidy){
             plotAs,
             "Read Depth" = y,
             {
-                normalized <- if(is.null(app$normalizeGC)) NULL 
-                              else app$normalizeGC$getBinNormalizedCN(coverage$sourceId, coverage$sample, "uncollapsed", gc, y)
+                normalized <- if(is.null(app$normalizeGC)) NULL
+                              else app$normalizeGC$getBinNormalizedCN(coverage$sourceId, coverage$sample, 
+                                                                      reference, coord, 
+                                                                      gc, y)
                 if(is.null(normalized)) y / coverage$medianCoverage * medianPloidy else normalized
             }
         ),

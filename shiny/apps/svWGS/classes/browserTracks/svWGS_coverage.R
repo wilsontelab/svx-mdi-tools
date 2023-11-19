@@ -11,7 +11,7 @@ svWGS_loadSourceCoverage <- function(sourceId){
         from = "ram",
         create = svWGSCoverageCreate,
         createFn = function(...) {
-            readRDS(getSourceFilePath(sourceId, "coverageFile"))
+            readRDS(getSourceFilePath(sourceId, "binsCoverageFile"))
 # Classes ‘data.table’ and 'data.frame':  44983 obs. of  6 variables:
 #  $ chrom             : chr  "chr1" "chr1" "chr1" "chr1" ...
 #  $ start             : int  0 65536 131072 196608 262144 327680 393216 458752 52

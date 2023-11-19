@@ -25,10 +25,12 @@ uploadTypes:
                 required: true       
             manifestFile:
                 required: true
-            coverageFile:
+            binsCoverageFile:
                 required: true
-            cnvCoverageFile:
+            junctionBinsCoverageFile:
                 required: true  
+            junctionGcFile:
+                required: true 
             genomesFile:
                 required: true 
             structuralVariants:
