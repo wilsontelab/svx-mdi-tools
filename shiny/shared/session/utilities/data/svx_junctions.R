@@ -75,7 +75,7 @@ svx_setCnvJxnCN <- function(jxns, targetId, samples_, cnData){
             startSpinner(session, message = "adding junction CN")
             merge(
                 jxns,
-                cnData$value$dt[, .SD, .SDcols = c("SV_ID", "meanCNC", "maxCNC")],
+                cnData$value[, .SD, .SDcols = c("SV_ID", "outerFlankCN", "innerFlankCN", "flankCNC", "junctionCN")],
                 by = "SV_ID",
                 all.x = TRUE
             )
@@ -127,7 +127,7 @@ svx_filterJunctionsBySettings <- function(track, targetId, samples, loadFn, fami
 
             if(filters$Min_Map_Quality > 0)jxns <- jxns[mapQ >= filters$Min_Map_Quality] 
             if(filters$Min_Flank_Length > 0) jxns <- jxns[flankLength >= filters$Min_Flank_Length] 
-            if(filters$Min_Flank_CNC > 0 && "maxCNC" %in% names(jxns)) jxns <- jxns[!is.na(maxCNC) & abs(maxCNC) >= filters$Min_Flank_CNC] 
+            if(filters$Min_Flank_CNC > 0 && "flankCNC" %in% names(jxns)) jxns <- jxns[!is.na(flankCNC) & abs(flankCNC) >= filters$Min_Flank_CNC] 
 
             if(length(filters$SV_Type) > 0) {
                 edgeTypes <- svx_jxnType_nameToX(filters$SV_Type, "code")

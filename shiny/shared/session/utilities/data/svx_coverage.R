@@ -128,9 +128,9 @@ svx_getCnvJxnNormalizedCN <- function(isMultiSample, targetId){
     if(!isMultiSample || is.null(app$normalizeGC)) return(list(key = NA, value = NA))
     app$normalizeGC$getCnvJxnsNormalizedCN(targetId)[c("key","value")]
 }
-svx_getCnvJxnNormalizedCN_singleJunction <- function(targetId, svId){
+svx_getCnvJxnNormalizedCN_singleJunction <- function(targetId, svId_){
     if(is.null(app$normalizeGC)) return(NA)
-    app$normalizeGC$getCnvJxnsNormalizedCN(targetId)$value$dt[SV_ID == svId, maxCNC]
+    app$normalizeGC$getCnvJxnsNormalizedCN(targetId)$value[svId == svId_]
 }
 
 svx_getHmmCnvs <- function(targetId){

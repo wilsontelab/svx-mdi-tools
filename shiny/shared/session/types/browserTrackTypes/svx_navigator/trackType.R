@@ -1,11 +1,11 @@
 #----------------------------------------------------------------------
 # svx_navigator is a track type for creating a junctions navTable 
-# without making any knind of track image
+# without making any kind of track image
 # in this way, you can track a subsets of SVs while visualizing all of them, etc.
 #----------------------------------------------------------------------
 
 # constructor
-new_svx_navigatorTrack <- function(trackId, expandReactive) {
+new_svx_navigatorTrack <- function(trackId, expandReactive, navigationDefault = "navigate") {
     list(
         click  = FALSE,
         hover  = FALSE,
@@ -13,7 +13,7 @@ new_svx_navigatorTrack <- function(trackId, expandReactive) {
         items  = TRUE,
         expand = expandReactive,
         expand2 = FALSE,
-        navigation = TRUE
+        navigation = navigationDefault
     )
 }
 

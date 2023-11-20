@@ -57,18 +57,6 @@ build.svx_coverageTrack <- function(track, reference, coord, layout, loadFn){
         ]
     }
 
-    # spans <- sapply(names(selectedSources), svx_getHmmCnvs, simplify = FALSE, USE.NAMES = TRUE)
-    # dstr(spans)
-# List of 1
-#  $ e59b0384bfa375dc7846d5c384d62450:List of 2
-#   ..$ key  : chr "7bebd41b95d0709bcd12882c378e014f"
-#   ..$ value:List of 2
-#   .. ..$ HCT116 :Classes ‘data.table’ and 'data.frame': 410 obs. of  13 variable
-# s:
-
-#   .. .. ..$ JXN_TYPE  : chr [1:410] "L" "L" "L" "L" ...
-
-
     # build the binned_XY_track
     isDifference <- nSamples > 1 && getTrackSetting(track, "Data", "Aggregate", "none") == "difference"
     build.binned_XY_track(

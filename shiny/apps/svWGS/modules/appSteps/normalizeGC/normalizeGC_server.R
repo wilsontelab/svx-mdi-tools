@@ -612,19 +612,23 @@ observeEvent(input$saveJunctionSet, {
     )
     r <- initializeRecordEdit(d, workingId, savedJunctionSets$list, 'Junction Set', 'junction set', sendFeedback)
     d <- c(d, list( # non-definining attributes saved with junction set but not displayed on Saved Plots table
-        sourceId = sourceId()
+        sourceId = sourceId(),
+        junctions = jxns
     ))
     saveEditedRecord(d, workingId, savedJunctionSets, r)
     workingId <<- NULL
 })
-addDataListObserver(module, savedJunctionSetsTemplate, savedJunctionSets, function(r, id){
+addJunctionSetColumns <- function(dt, r, name = FALSE){
+    for(x in c("Sample","Genome","Min_Instances","N_Samples","N_Junctions","Hash")) dt[[x]] <- r[[x]]
+    for(x in c("SV_Types")) dt[[x]] <- paste(r[[x]], collapse = " ")
+    dt
+}
+addDataListObserver(module, savedJunctionSetsTemplate, savedJunctionSets, function(r, ...){
     dt <- data.table(
         Remove = '', 
         Name   = ''
     )
-    for(x in c("Sample","Genome","Min_Instances","N_Samples","N_Junctions","Hash")) dt[[x]] <- r[[x]]
-    for(x in c("SV_Types")) dt[[x]] <- paste(r[[x]], collapse = "<br>")
-    dt
+    addJunctionSetColumns(dt, r)
 })
 
 # #----------------------------------------------------------------------
@@ -763,63 +767,18 @@ getCnvJxnsNormalizedCN <- function(sourceId){
         create = "asNeeded", 
         createFn = function(...) {
             startSpinner(session, message = "setting junction CN")
-            normalizedJxnsFile <- expandSourceFilePath(sourceId, normalizedJxnsFileName)
-            if(!file.exists(normalizedJxnsFile)) return(NA)
-            normalizedJxns <- readRDS(normalizedJxnsFile)
-            dataKeys <- names(normalizedJxns)
-            dt <- Reduce(
-                function(dt1, dt2) merge(dt1, dt2, by = "svId", all.x = TRUE, all.y = TRUE),
-                lapply(dataKeys, function(dataKey) normalizedJxns[[dataKey]][, .(svId, flankCNC)])
-            )
-            names(dt) <- c("SV_ID", dataKeys)
-            m <- dt[, .SD, .SDcols = dataKeys]
-            list(
-                dt = dt[, ":="(
-                    meanCNC = apply(m, 1, mean, na.rm = TRUE),
-                    maxCNC  = apply(m, 1, function(v) max(abs(v), 0, na.rm = TRUE))
-                )],
-                dataKeys = dataKeys
-            )                
+            x <- do.call(rbind, lapply(names(gcBiasModels), function(x) {
+                gcBiasModels[[x]]$jxnCN[, .(svId, outerFlankCN, innerFlankCN, flankCNC, junctionCN)]
+            }))
+            x[, .(
+                outerFlankCN = mean(outerFlankCN, na.rm = TRUE), 
+                innerFlankCN = mean(innerFlankCN, na.rm = TRUE), 
+                flankCNC     = mean(flankCNC, na.rm = TRUE),
+                junctionCN   = mean(junctionCN, na.rm = TRUE)
+            ), by = .(svId)][, SV_ID := svId]            
         }
     )
 }
-# getNormalizedHmmCnvs <- function(sourceId){
-
-#     return(NA)
-
-#     gcBiasModels <- getGcBiasModels_externalCall(sourceId)
-#     sessionCache$get(
-#         'getNormalizedHmmCnvs', 
-#         keyObject = list(sourceId = sourceId, gcBiasModels = gcBiasModels), # thus, this cached object updates as gc bias is refit
-#         permanent = FALSE, 
-#         from = "ram",
-#         create = "asNeeded", 
-#         createFn = function(...) {
-#             startSpinner(session, message = "extracting HMM CNVs")
-#             hmmCnvsFile <- expandSourceFilePath(sourceId, hmmCnvsFileName)
-#             if(!file.exists(hmmCnvsFile)) return(NA)
-#             readRDS(hmmCnvsFile)
-
-#             # hmmCnvs <- readRDS(hmmCnvsFile)
-#             # samples <- names(hmmCnvs)
-
-
-#             # dt <- Reduce(
-#             #     function(dt1, dt2) merge(dt1, dt2, by = "svId", all.x = TRUE, all.y = TRUE),
-#             #     lapply(samples, function(sample) normalizedJxns[[sample]][, .(svId, flankCNC)])
-#             # )
-#             # names(dt) <- c("SV_ID", samples)
-#             # m <- dt[, .SD, .SDcols = samples]
-#             # list(
-#             #     dt = dt[, ":="(
-#             #         meanCNC = apply(m, 1, mean, na.rm = TRUE),
-#             #         maxCNC  = apply(m, 1, function(v) max(abs(v), na.rm = TRUE))
-#             #     )],
-#             #     fittedSamples = samples
-#             # )
-#         }
-#     )
-# }
 
 #----------------------------------------------------------------------
 # define bookmarking actions
@@ -844,6 +803,29 @@ list(
         junctionSets     = reactive(savedJunctionSets$list),
         junctionSetNames = reactive(savedJunctionSets$names)
     ),
+    getSavedJunctionSets = reactive({ # lists saved junction sets, used to populate the junctionSets track items list, etc.
+        jss   <- app$normalizeGC$outcomes$junctionSets()
+        names <- app$normalizeGC$outcomes$junctionSetNames()
+        do.call(rbind, lapply(names(jss), function(id){
+            r <- jss[[id]]            
+            dt <- data.table(Name = if(is.null(names[[id]])) r$Name else names[[id]]) # user name overrides
+            addJunctionSetColumns(dt, r)
+        }))        
+    }),
+    getJunctionSetSvs = function(hashes){ # expand the junctions found in a sample set, for navigator tables, etc.
+        jss <- app$normalizeGC$outcomes$junctionSets()
+        req(hashes, jss)   
+        do.call(rbind, lapply(jss, function(js){
+            if(js$Hash %in% hashes) {
+                merge(
+                    svx_loadJunctions(js$sourceId, svWGS_loadJunctions)[SV_ID %in% js$junctions$svId],
+                    getCnvJxnsNormalizedCN(js$sourceId)$value[, .SD, .SDcols = c("SV_ID", "outerFlankCN", "innerFlankCN", "flankCNC", "junctionCN")],
+                    by = "SV_ID",
+                    all.x = TRUE
+                )
+            } else NULL
+        }))
+    },
     # isReady = reactive({ getStepReadiness(options$source, ...) }),
     getBinNormalizedCN = getBinNormalizedCN,
     getCnvJxnsNormalizedCN = getCnvJxnsNormalizedCN,
