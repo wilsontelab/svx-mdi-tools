@@ -264,17 +264,17 @@ calculateChromCN <- function(sampleGenome, genome, fit){
         by = .(chrom)
     ]
     x[, expectedCN := input$ploidy]  
-    if(any(startsWith(toupper(bins$chrom), "CHRY"))){ # do nothing if not an XY sex chromosome system
+    if(any(startsWith(toupper(x$chrom), "CHRY"))){ # do nothing if not an XY sex chromosome system
         expectedSex <- if(input$expectedSex == "auto"){ # in auto mode, determine expecteSex from chrY
-            chrYCN <- x[toupper(chrom) == "CHRY", predominantCN]
+            chrYCN <- x[startsWith(toupper(chrom), "CHRY"), predominantCN]
             if(chrYCN == 0) "XX" else "XY"
         } else input$expectedSex
         if(expectedSex == "XX"){
-            x[toupper(chrom) == "CHRX", expectedCN := input$ploidy]  
-            x[toupper(chrom) == "CHRY", expectedCN := 0]  
+            x[startsWith(toupper(chrom), "CHRX"), expectedCN := input$ploidy]  
+            x[startsWith(toupper(chrom), "CHRY"), expectedCN := 0]  
         } else if(expectedSex == "XY"){
-            x[toupper(chrom) == "CHRX", expectedCN := input$ploidy - 1]  
-            x[toupper(chrom) == "CHRY", expectedCN := 1]  
+            x[startsWith(toupper(chrom), "CHRX"), expectedCN := input$ploidy - 1]  
+            x[startsWith(toupper(chrom), "CHRY"), expectedCN := 1]  
         }
     } 
     setkey(x, chrom)
@@ -396,240 +396,6 @@ chromDensityPlot <- interactiveScatterplotServer(
     vLines = chromDensityPlotVLines,
     grid = gridColors
 )  
-
-#----------------------------------------------------------------------
-# interactive plot to correlate two junction properties
-#----------------------------------------------------------------------
-cnAxisLim  <- c(0,4)
-cncAxisLim <- c(-3.5,3.5)
-junctionAxisChoices <- list(
-    junctionCN = list(
-        lab = "Junction CN",
-        lim = cnAxisLim
-    ),
-    outerFlankCN = list(
-        lab = "Non-SV Flank CN",
-        lim = cnAxisLim
-    ),
-    innerFlankCN = list(
-        lab = "SV Flank CN",
-        lim = cnAxisLim
-    ),
-    eventSpanCN = list(
-        lab = "SV Span CN",
-        lim = cnAxisLim
-    ),
-    flankCNC = list(
-        lab = "SV Flank CNC",
-        lim = cncAxisLim
-    ),
-    eventCNC = list(
-        lab = "SV Span CNC",
-        lim = cncAxisLim
-    ),
-    chromCNC = list(
-        lab = "CNC",
-        lim = cncAxisLim
-    ),
-    gc = list(
-        lab = "Fraction GC",
-        lim = c(0.2, 0.75)
-    ),
-    N_SAMPLES = list(
-        lab = "# of Samples",
-        lim = c(0.5, 2.5)
-    ),
-    SV_SIZE = list(
-        lab = "log10(SV Size)",
-        lim = c(2.9, 7.5)
-    )
-)
-jxnValue <- function(d, col) switch(
-    col,
-    SV_SIZE = log10(d[[col]]),
-    N_SAMPLES = jitter(d[[col]]),
-    d[[col]]
-)
-jxnPlotData <- reactive({
-    gcBiasModel <- gcBiasModel()    
-    if(!isTruthy(gcBiasModel)) return(NULL) 
-    setkey(SVX$jxnTypes, name)
-    jxnTypes <- SVX$jxnTypes[input$jxnPlotSVTypes, code]
-    d <- gcBiasModel$jxnCN[JXN_TYPE %in% jxnTypes &
-                          N_TOTAL  >= input$jxnPlotMinNInstances &
-                          N_SPLITS >= input$jxnPlotMinSequenced]
-    d <- if(input$jxnPlotNSamples == "Unique") d[N_SAMPLES == 1] # therefore, restricts to junctions unique to this sample
-         else d[N_SAMPLES > 1]                                   # therefore, excludes     junctions unique to this sample
-    setkey(SVX$jxnTypes, code)
-    d[, ":="(
-        x = jxnValue(d, input$jxnPlotXAxis),
-        y = jxnValue(d, input$jxnPlotYAxis),
-        color = SVX$jxnTypes[d$JXN_TYPE, color]
-    )]
-    setkey(d, svId)
-    d
-})
-jxnPlot <- interactiveScatterplotServer(
-    "jxnPlot",
-    plotData = jxnPlotData,
-    accelerate = TRUE,
-    pointSize = 4,
-    xtitle = reactive( junctionAxisChoices[[input$jxnPlotXAxis]]$lab),
-    xrange = reactive( junctionAxisChoices[[input$jxnPlotXAxis]]$lim),
-    ytitle = reactive( junctionAxisChoices[[input$jxnPlotYAxis]]$lab),
-    yrange = reactive( junctionAxisChoices[[input$jxnPlotYAxis]]$lim),
-    grid = gridColors,
-    selectable = TRUE,
-    keyColumn = "svId"
-)  
-jxnPlotSelected <- reactive({
-    selected <- jxnPlot$selected() 
-    req(selected, nrow(selected) > 0)    
-    jxnPlotData()[selected$customdata] # as keyed by svId, passed to custom data via keyColumn above    
-})
-
-#----------------------------------------------------------------------
-# interactive plot to correlate two junction properties, applied to the gated susbset of junctions from plot above
-#----------------------------------------------------------------------
-gatedJxnPlotData <- reactive({
-    d <- jxnPlotSelected()
-    d[, ":="(
-        x = jxnValue(d, input$gatedJxnPlotXAxis),
-        y = jxnValue(d, input$gatedJxnPlotYAxis)
-    )]
-    setkey(d, svId)
-    d
-})
-gatedJxnPlot <- interactiveScatterplotServer(
-    "gatedJxnPlot",
-    plotData = gatedJxnPlotData,
-    accelerate = TRUE,
-    pointSize = 4,
-    xtitle = reactive( junctionAxisChoices[[input$gatedJxnPlotXAxis]]$lab),
-    xrange = reactive( junctionAxisChoices[[input$gatedJxnPlotXAxis]]$lim),
-    ytitle = reactive( junctionAxisChoices[[input$gatedJxnPlotYAxis]]$lab),
-    yrange = reactive( junctionAxisChoices[[input$gatedJxnPlotYAxis]]$lim),
-    grid = gridColors,
-    selectable = TRUE,
-    keyColumn = "svId"
-)  
-gatedJxnPlotSelected <- reactive({
-    selected <- gatedJxnPlot$selected() 
-    if(!isTruthy(selected)) return(jxnPlotSelected())
-    gatedJxnPlotData()[selected$customdata] # as keyed by svId, passed to custom data via keyColumn above    
-})
-
-#----------------------------------------------------------------------
-# table of filtered and gated SVs
-#----------------------------------------------------------------------
-gatedSvsData <- reactive({
-    gcBiasModel <- gcBiasModel()
-    req(gcBiasModel, gcBiasModel$genome)    
-    jxns <- getGenomeJxns(gcBiasModel$genome)
-    selected <- gatedJxnPlotSelected()
-    jxns[selected$svId]
-})
-gatedSvs <- bufferedTableServer(
-    "gatedSvs",
-    id,
-    input,
-    tableData = reactive({
-        d <- gatedSvsData()
-        d[, .(
-            svId = SV_ID,
-            type = svx_jxnType_codeToX(JXN_TYPE, "name"),
-            size = SV_SIZE,
-            insertSize,
-            nInstances,
-            nSequenced,
-            flankLength,
-            nLinkedJxns = nLinkedJunctions,
-            rStart = paste0(cChrom1, ":", cRefPos1, ifelse(cStrand1 == 1, "+", "-")),
-            rEnd   = paste0(cChrom2, ":", cRefPos2, ifelse(cStrand2 == 1, "+", "-"))
-        )] 
-    }),
-    selection = 'none',
-    options = list(
-    )
-)
-
-#----------------------------------------------------------------------
-# saving gated SV sets
-#----------------------------------------------------------------------
-workingId <- NULL # set to a plot id when editing a previously saved set
-sendFeedback <- function(x, ...) output$saveJunctionSetFeedback <- renderText(x)
-getJunctionSetName <- function(id){
-    name <- savedJunctionSets$names[[id]] # user name overrides
-    if(is.null(name)) savedJunctionSets$list[[id]]$Name else name
-}
-getJunctionSetNames <- function(rows = TRUE){
-    sapply(names(savedJunctionSets$list)[rows], getJunctionSetName)
-}
-savedJunctionSetsTemplate <- data.table(
-    Remove          = character(),
-    Name            = character(),
-    Sample          = character(),
-    Genome          = character(),
-    SV_Types        = character(),
-    Min_Instances   = character(),
-    N_Samples       = character(),
-    N_Junctions     = integer(),
-    Hash            = character()
-)
-savedJunctionSets <- summaryTableServer(
-    id = 'savedJunctionSets', # NOT ns(id) when nesting modules!
-    parentId = id,
-    stepNumber = options$stepNumber,
-    stepLocks = locks[[id]],
-    sendFeedback = sendFeedback,
-    template = savedJunctionSetsTemplate,
-    type = 'shortList',
-    remove = list(
-        message = "Remove this set of saved junctions?",
-        name = getJunctionSetName
-    ),
-    names = list(
-        get = getJunctionSetNames,
-        source = id
-    )
-) 
-observeEvent(input$saveJunctionSet, {
-    sourceId <- sourceId()
-    gcBiasModel <- gcBiasModel()
-    jxns <- gatedJxnPlotSelected()
-    req(sourceId, gcBiasModel, input$saveJunctionSet, input$saveJunctionSet != 0, jxns, nrow(jxns) > 0)
-    d <- list( # plot-defining metadata, shown on Saved Plots table; these define the data available to the plot
-        Name = paste("SV Set #", length(savedJunctionSets$list) + 1),
-        # Source = getSourceFilePackageName(sourceId), # use the source name, not its unique ID, to allow sample additions to saved plots
-        Sample          = gcBiasModel$sampleGenome$Sample,
-        Genome          = gcBiasModel$sampleGenome$Genome,
-        SV_Types        = input$jxnPlotSVTypes,
-        Min_Instances   = input$jxnPlotMinNInstances,
-        Min_Sequence    = input$jxnPlotMinSequenced,
-        N_Samples       = input$jxnPlotNSamples,
-        N_Junctions     = nrow(jxns),
-        Hash            = digest(jxns)
-    )
-    r <- initializeRecordEdit(d, workingId, savedJunctionSets$list, 'Junction Set', 'junction set', sendFeedback)
-    d <- c(d, list( # non-definining attributes saved with junction set but not displayed on Saved Plots table
-        sourceId = sourceId(),
-        junctions = jxns
-    ))
-    saveEditedRecord(d, workingId, savedJunctionSets, r)
-    workingId <<- NULL
-})
-addJunctionSetColumns <- function(dt, r, name = FALSE){
-    for(x in c("Sample","Genome","Min_Instances","N_Samples","N_Junctions","Hash")) dt[[x]] <- r[[x]]
-    for(x in c("SV_Types")) dt[[x]] <- paste(r[[x]], collapse = " ")
-    dt
-}
-addDataListObserver(module, savedJunctionSetsTemplate, savedJunctionSets, function(r, ...){
-    dt <- data.table(
-        Remove = '', 
-        Name   = ''
-    )
-    addJunctionSetColumns(dt, r)
-})
 
 # #----------------------------------------------------------------------
 # # hmmCnvsFileName <- "hmmCnvs.rds"
@@ -786,8 +552,6 @@ getCnvJxnsNormalizedCN <- function(sourceId){
 observe({
     bm <- getModuleBookmark(id, module, bookmark, locks)
     req(bm)
-    savedJunctionSets$list  <- bm$outcomes$junctionSets
-    savedJunctionSets$names <- bm$outcomes$junctionSetNames
     # settings$replace(bm$settings)
     # updateTextInput(session, 'xxx', value = bm$outcomes$xxx)
     # xxx <- bm$outcomes$xxx
@@ -800,33 +564,9 @@ list(
     input = input,
     # settings = settings$all_,
     outcomes = list(
-        junctionSets     = reactive(savedJunctionSets$list),
-        junctionSetNames = reactive(savedJunctionSets$names)
     ),
-    getSavedJunctionSets = reactive({ # lists saved junction sets, used to populate the junctionSets track items list, etc.
-        jss   <- app$normalizeGC$outcomes$junctionSets()
-        names <- app$normalizeGC$outcomes$junctionSetNames()
-        do.call(rbind, lapply(names(jss), function(id){
-            r <- jss[[id]]            
-            dt <- data.table(Name = if(is.null(names[[id]])) r$Name else names[[id]]) # user name overrides
-            addJunctionSetColumns(dt, r)
-        }))        
-    }),
-    getJunctionSetSvs = function(hashes){ # expand the junctions found in a sample set, for navigator tables, etc.
-        jss <- app$normalizeGC$outcomes$junctionSets()
-        req(hashes, jss)   
-        do.call(rbind, lapply(jss, function(js){
-            if(js$Hash %in% hashes) {
-                merge(
-                    svx_loadJunctions(js$sourceId, svWGS_loadJunctions)[SV_ID %in% js$junctions$svId],
-                    getCnvJxnsNormalizedCN(js$sourceId)$value[, .SD, .SDcols = c("SV_ID", "outerFlankCN", "innerFlankCN", "flankCNC", "junctionCN")],
-                    by = "SV_ID",
-                    all.x = TRUE
-                )
-            } else NULL
-        }))
-    },
-    # isReady = reactive({ getStepReadiness(options$source, ...) }),
+    # isReady = reactive({ getStepReadiness(options$source, gcBiasModels()) }),
+    getGcBiasModels = getGcBiasModels_externalCall,
     getBinNormalizedCN = getBinNormalizedCN,
     getCnvJxnsNormalizedCN = getCnvJxnsNormalizedCN,
     # getNormalizedHmmCnvs = getNormalizedHmmCnvs,

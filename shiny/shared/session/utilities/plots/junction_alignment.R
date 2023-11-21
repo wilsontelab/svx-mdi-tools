@@ -48,8 +48,8 @@ junctionAlignmentServer <- function(output, junctionMap, alignmentSettings){
 }
 
 # alternative to fill app$browser$expansionUI when reacting to browser track click
-junctionAlignmentTrackExpansionUI <- function(track, junctionMap){ 
-    req(junctionMap)
+junctionAlignmentTrackExpansionUI <- function(junctionMap, Bases_Per_Line, Alignment_Mode){ 
+    req(junctionMap)    
     tags$div(
         tags$style(HTML("
             .junction { background-color: #ddd;}
@@ -63,8 +63,8 @@ junctionAlignmentTrackExpansionUI <- function(track, junctionMap){
             style = "font-family: monospace; font-weight: bold; width: 100; overflow: auto; margin-top: 10px;",
             HTML(getJunctionAlignment(
                 junctionMap,
-                getTrackSetting(track, "Junctions", "Bases_Per_Line", 100),
-                getTrackSetting(track, "Junctions", "Alignment_Mode", "Evidence Consensus")
+                Bases_Per_Line,
+                Alignment_Mode
             ))
         )
     )

@@ -57,6 +57,8 @@ appSteps:
         module: sourceFileUpload
     normalizeGC:
         module: normalizeGC
+    junctionSets:
+        module: junctionSets
     browser:
         module: genomex-mdi-tools//trackBrowser
         options:

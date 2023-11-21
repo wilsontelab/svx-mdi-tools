@@ -17,7 +17,7 @@ items.svWGS_junctionSetsTrack <- function(track, session, ...){
         session,
         title = "Select Junction Set",
         itemTypePlural = "Junction Sets",
-        tableData = reactive(app$normalizeGC$getSavedJunctionSets()[, .(
+        tableData = reactive(app$junctionSets$getSavedJunctionSets()[, .(
             Name,
             Sample,
             Genome,
@@ -49,7 +49,7 @@ navigation.svWGS_junctionSetsTrack <- function(track, ...){
         jxnsReactive = reactive({
             junctionSets <- track$settings$items()
             req(junctionSets)
-            app$normalizeGC$getJunctionSetSvs(names(junctionSets))
+            app$junctionSets$getJunctionSetSvs(names(junctionSets))
         })
     )
 }

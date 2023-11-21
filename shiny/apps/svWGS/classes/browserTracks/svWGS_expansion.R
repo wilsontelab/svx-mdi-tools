@@ -41,56 +41,98 @@ svWGS_expansionTable <- function(molecules, jxn){
 }
 
 # show a detailed plot and table of the molecule support for a junction cluster
-svWGS_expandJunction <- function(jxn, track, layout){
-    req(jxn)
+svWGS_expandJunction_ <- function(jxn, track = NULL, targetId = NULL,  # called by any appStep that can expand junctions
+                                  objectTableFn = NULL, expansionTableFn = NULL, expansionUIFn = NULL,
+                                  Pixels_Per_Base = 2, Bases_Per_Line = 100, Alignment_Mode = "Reference Molecule"){
 
     # collect molecules that provided evidence for the junction call
-    molecules <- svWGS_loadMolecules(jxn$targetId, jxn$SV_ID)
+    if(is.null(targetId)) targetId <- jxn$targetId
+    molecules <- svWGS_loadMolecules(targetId, jxn$SV_ID)
 
     # write the one-line object table with additional junction metadata
-    jxn %>% 
-    svWGS_getJunction() %>% 
-    svWGS_objectTable() %>% 
-    app$browser$objectTableData() # junction metadata    
-
-    # write the multi-line table with one line per supporting molecule
-    molecules %>% 
-    svWGS_expansionTable(jxn) %>% 
-    app$browser$expansionTableData()
-
-    # if the junction was sequence, create the expansion2 elements
-    # a map and an alignment at base-level detail
-    junctionMap <- tryCatch({
-        getJunctionMap(list(sv = jxn, mols = molecules[sample.int(.N)]))
-    }, error = function(e) {
-        stopSpinner(session)
-        NULL
-    })
-    if(is.null(junctionMap)){
-        app$browser$expansionUI("")
-    } else {
-        startSpinner(session, message = "analyzing junction")
-        app$browser$expansionUI(tagList(
-            tryCatch({       junctionMapTrackExpansionUI(track, junctionMap) }, error = function(e) ""),
-            tryCatch({ junctionAlignmentTrackExpansionUI(track, junctionMap) }, error = function(e) { print(e); "" })
-        ))     
+    if(!is.null(objectTableFn)){
+        jxn %>% 
+        svWGS_getJunction() %>% 
+        svWGS_objectTable() %>% 
+        objectTableFn() # junction metadata   
     }
 
-    # do not show an in-browser track expansion, it is all too big and shown in expansionUI
-    # leave code block below in case we come up with some else to plot as a track...
-    req(FALSE)
+    # write the multi-line table with one line per supporting molecule
+    if(!is.null(expansionTableFn)){
+        molecules %>% 
+        svWGS_expansionTable(jxn) %>% 
+        expansionTableFn()
+    }
 
-    # # set the expansion track layout
-    # padding <- padding(track, layout)
-    # height <- getBrowserTrackSetting(track, "Junctions", "Junction_Plot_Height", 3) # height in inches
+    # if the junction was sequenced, create the expansion2 elements
+    # a map and an alignment at base-level detail
+    if(!is.null(expansionUIFn)){
+        junctionMap <- tryCatch({
+            getJunctionMap(list(sv = jxn, mols = molecules[sample.int(.N)]))
+        }, error = function(e) {
+            stopSpinner(session)
+            NULL
+        })
+        if(is.null(junctionMap)){
+            expansionUIFn("")
+        } else {
+            startSpinner(session, message = "analyzing junction")
+            expansionUIFn(tagList(
+                tryCatch({       
+                    junctionMapTrackExpansionUI(junctionMap, Pixels_Per_Base) 
+                }, error = function(e) ""),
+                tryCatch({ 
+                    junctionAlignmentTrackExpansionUI(junctionMap, Bases_Per_Line, Alignment_Mode) 
+                }, error = function(e) { print(e); "" })
+            ))     
+        }
+    }
+}
+svWGS_expandJunction <- function(jxn, track, layout){ # called from a browser track
+    req(jxn)
+    svWGS_expandJunction_(
+        jxn = jxn,
+        track = track,
+        objectTableFn    = app$browser$objectTableData, 
+        expansionTableFn = app$browser$expansionTableData, 
+        expansionUIFn    = app$browser$expansionUI,
+        Pixels_Per_Base  = getTrackSetting(track, "Junctions", "Pixels_Per_Base", 2),
+        Bases_Per_Line   = getTrackSetting(track, "Junctions", "Bases_Per_Line", 100),
+        Alignment_Mode   = getTrackSetting(track, "Junctions", "Alignment_Mode", "Reference Molecule")        
+    )
+    stopSpinner(session)
 
-    # # use the mdiTrackImage helper function to create the track image
-    # mai <- NULL
-    # image <- mdiTrackImage(layout, height, message = "svWGS_triangle zoom", function(...){
-    #     mai <<- setMdiTrackMai(layout, padding, mar = list(top = 0, bottom = 0))
+    # # collect molecules that provided evidence for the junction call
+    # molecules <- svWGS_loadMolecules(jxn$targetId, jxn$SV_ID)
+
+    # # write the one-line object table with additional junction metadata
+    # jxn %>% 
+    # svWGS_getJunction() %>% 
+    # svWGS_objectTable() %>% 
+    # app$browser$objectTableData() # junction metadata    
+
+    # # write the multi-line table with one line per supporting molecule
+    # molecules %>% 
+    # svWGS_expansionTable(jxn) %>% 
+    # app$browser$expansionTableData()
+
+    # # if the junction was sequence, create the expansion2 elements
+    # # a map and an alignment at base-level detail
+    # junctionMap <- tryCatch({
+    #     getJunctionMap(list(sv = jxn, mols = molecules[sample.int(.N)]))
+    # }, error = function(e) {
+    #     stopSpinner(session)
+    #     NULL
     # })
-    # stopSpinner(session)  
+    # if(is.null(junctionMap)){
+    #     app$browser$expansionUI("")
+    # } else {
+    #     startSpinner(session, message = "analyzing junction")
+    #     app$browser$expansionUI(tagList(
+    #         tryCatch({       junctionMapTrackExpansionUI(track, junctionMap) }, error = function(e) ""),
+    #         tryCatch({ junctionAlignmentTrackExpansionUI(track, junctionMap) }, error = function(e) { print(e); "" })
+    #     ))     
+    # }
 
-    # # return the track's magick image and associated metadata
-    # list(ylim  = NA, mai   = mai, image = image)
+    req(FALSE) # do not show an in-browser track expansion, it is all too big and shown in expansionUI
 }
