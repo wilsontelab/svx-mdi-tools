@@ -92,9 +92,8 @@ tabulateSmallVariants <- function(filteredSvs, settings){
         matchThreshold <- SVX$matchTypes$REFERENCE
         variantBaseSymbols <- c("X", ".")
     }
-    setkey(SVX$jxnTypes, code)
     x <- svs[, .(
-        jxnType = SVX$jxnTypes[JXN_TYPE, name],
+        jxnType = svx_jxnType_codeToX(edgeType, "name"),
         hasSmallVariant = MATCH_TYPE >= matchThreshold,
         nInterrogatedBases = {
             sum(isInterrogatedPos(INF_1, JXN_1, MATCH_1)) + 

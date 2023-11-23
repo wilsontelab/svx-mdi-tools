@@ -1,8 +1,25 @@
-# junction types
+#----------------------------------------------------------------------
+# constants relevant to svPore and similar node graph representations of reads
+# (as opposed to earlier, single-junction encoding like svCapture)
+#----------------------------------------------------------------------
 
-svx_edgeTypes <- list(
-    ALIGNMENT     = "A", # the single type for a contiguous aligned segment
-    TRANSLOCATION = "T", # edge/junction types (might be several per source molecule)
+#----------------------------------------------------------------------
+# node classes
+#----------------------------------------------------------------------
+svx_nodeClasses <- list(
+   'GAP'='0',
+   'SPLIT'='1',
+   'CLIP'='2'
+)
+svx_nodeClasses_rev <- names(svx_nodeClasses)
+
+#----------------------------------------------------------------------
+# node graph edge types, carried in column "edgeType"
+# all _apps_ now adopt this nomenclature for junction/edge codification, for consistency
+#----------------------------------------------------------------------
+svx_edgeTypes <- list( # edges represent all parts of a read/molecule
+    ALIGNMENT     = "A", # the single edge type for a contiguous aligned segment
+    TRANSLOCATION = "T", # junction types (might be several per source molecule)
     INVERSION     = "V",
     DUPLICATION   = "U",
     DELETION      = "D",
@@ -11,19 +28,19 @@ svx_edgeTypes <- list(
     PROPER        = "P", 
     INTERGENOME   = "G"
 )
-svx_jxnTypes <- data.table(
-    code = c( # as used in svPore
-        "D",
-        "I",
+svx_jxnTypes <- data.table( # junctions are the subset of edges that cross SVs, potentially several per read/molecule
+    code = c( # edgeType as used in svPore, others
+        "D", # deletion type uses CIGAR-consistent codes
+        "I", # insertion type supported in edgeType encoding, maintain CIGAR codes, necessitating adjustment of duplication inversion, etc.
         "U",
         "V",
         "T",
         "?",
         "G"
     ),
-    altCode = c( # as used in svWGS/capture
-        "L",
-        "X", # not used
+    altCode = c( # JXN_TYPE as used in svWGS/svCapture, converted to edgeType==code by SV load functions
+        "L", 
+        "X", # insertion type not used in this encoding
         "D",
         "I",
         "T",
@@ -77,28 +94,36 @@ svx_jxnTypes <- data.table(
         4
     )
 )
-svx_jxnType_codeToX <- function(x, col){
+svx_jxnType_codeToX <- function(codes, col){ # use these helper functions for converting between jxnType columns
     jt <- svx_jxnTypes
     setkey(jt, code)
-    jt[x][[col]]
+    jt[codes][[col]]
 }
-svx_jxnType_altCodeToX <- function(x, col){
+svx_jxnType_altCodeToX <- function(altCodes, col){
     jt <- svx_jxnTypes
     setkey(jt, altCode)
-    jt[x][[col]]
+    jt[altCodes][[col]]
 }
-svx_jxnType_nameToX <- function(x, col){
+svx_jxnType_nameToX <- function(names, col){
     jt <- svx_jxnTypes
     setkey(jt, name)
-    jt[x][[col]]
+    jt[names][[col]]
+}
+svx_jxnType_longNameToX <- function(longNames, col){
+    jt <- svx_jxnTypes
+    setkey(jt, longName)
+    jt[longNames][[col]]
 }
 
+#----------------------------------------------------------------------
 # junction filters
-svx_filterDefaults <- list( # all values here should be ~unfiltered, so that apps that don't offer the setting don't apply the filter
+# all values here should be ~unfiltered, so that apps that don't offer the setting don't apply the filter
+#----------------------------------------------------------------------
+svx_filterDefaults <- list( 
     Min_SV_Size = 1,
     Max_SV_Size = 0,
-    Min_Insert_Size = -50,
-    Max_Insert_Size = 50,
+    Min_Insert_Size = -10000,
+    Max_Insert_Size =  10000,
     Min_Source_Molecules = 1,
     Max_Source_Molecules = 0,
     Min_Sequenced_Molecules = 0,  
@@ -112,9 +137,3 @@ svx_filterDefaults <- list( # all values here should be ~unfiltered, so that app
     SV_Type = c("Del","Dup","Inv"),
     Min_Flank_CNC = 0
 )
-svx_nodeClasses <- list(
-   'GAP'='0',
-   'SPLIT'='1',
-   'CLIP'='2'
-)
-svx_nodeClasses_rev <- names(svx_nodeClasses)

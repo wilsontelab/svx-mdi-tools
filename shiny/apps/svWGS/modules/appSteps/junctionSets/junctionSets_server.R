@@ -151,18 +151,16 @@ jxnValue <- function(d, col) switch(
 jxnPlotData <- reactive({
     gcBiasModel <- gcBiasModel()
     if(!isTruthy(gcBiasModel)) return(NULL) 
-    setkey(SVX$jxnTypes, name)
-    jxnTypes <- SVX$jxnTypes[input$jxnPlotSVTypes, code]
-    d <- gcBiasModel$jxnCN[JXN_TYPE %in% jxnTypes &
+    edgeTypes <- svx_jxnType_nameToX(input$jxnPlotSVTypes, "code")
+    d <- gcBiasModel$jxnCN[edgeType %in% edgeTypes &
                           N_TOTAL  >= input$jxnPlotMinNInstances &
                           N_SPLITS >= input$jxnPlotMinSequenced]
     d <- if(input$jxnPlotNSamples == "Unique") d[N_SAMPLES == 1] # therefore, restricts to junctions unique to this sample
          else d[N_SAMPLES > 1]                                   # therefore, excludes     junctions unique to this sample
-    setkey(SVX$jxnTypes, code)
     d[, ":="(
         x = jxnValue(d, input$jxnPlotXAxis),
         y = jxnValue(d, input$jxnPlotYAxis),
-        color = SVX$jxnTypes[d$JXN_TYPE, color]
+        color = svx_jxnType_codeToX(d$edgeType, "color")
     )]
     setkey(d, svId)
     d
@@ -235,7 +233,7 @@ gatedSvs <- bufferedTableServer(
         d <- gatedSvsData()
         d[, .(
             svId = SV_ID,
-            type = svx_jxnType_codeToX(JXN_TYPE, "name"),
+            type = svx_jxnType_codeToX(edgeType, "name"),
             size = SV_SIZE,
             insertSize,
             nInstances,

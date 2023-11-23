@@ -313,7 +313,7 @@ normalizeJxnCN <- function(sampleGenome, genome, fit, chromCN){
             svId,
             CHROM_1,
             CHROM_2,
-            JXN_TYPE,
+            edgeType,
             SV_SIZE,
             N_SAMPLES,
             N_TOTAL,
@@ -333,7 +333,7 @@ normalizeJxnCN <- function(sampleGenome, genome, fit, chromCN){
         svId,
         CHROM_1,
         CHROM_2,
-        JXN_TYPE,
+        edgeType,
         SV_SIZE,
         N_SAMPLES,
         N_TOTAL,
@@ -464,7 +464,7 @@ chromDensityPlot <- interactiveScatterplotServer(
 # #             cnc        = cn - chromCN[d$chrom, expectedCN] # event copy number relative to Mendelian expectations
 # #         )]
 # #         d[, ":="(
-# #             JXN_TYPE   = ifelse(cnc > 0, "D", "L")
+# #             edgeType   = ifelse(cnc > 0, "U", "D")
 # #         )]
 # #     }))
 # # }

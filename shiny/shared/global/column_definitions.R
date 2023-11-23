@@ -1,9 +1,11 @@
 #----------------------------------------------------------------------
-# ../column_definitions.R defines the expected extract and find column formats
+# constants relevant to older single-junction encoding like svCapture
+# defines the expected extract and find column formats from pipeline files
+# junction type encoding should be updated to edgeType in all apps to use svx_edgeTypes encoding
 #----------------------------------------------------------------------
 
 #----------------------------------------------------------------------
-# types
+# type declarations
 #----------------------------------------------------------------------
 SVX <- list()
 SVX$nodeClasses <- list(
@@ -28,32 +30,32 @@ SVX$getMolColors <- function(x){
         )
     )
 }
-SVX$jxnTypes <- data.table(
-    code = c(
-        "D",
-        "L",
-        "I",
-        "T",
-        "P",
-        "?"
-    ),
-    name = c(
-        "Dup",
-        "Del",
-        "Inv",
-        "Trans",
-        "Prop",
-        "?"
-    ),
-    color = c(
-        CONSTANTS$plotlyColors$green,
-        CONSTANTS$plotlyColors$blue,
-        CONSTANTS$plotlyColors$red,
-        CONSTANTS$plotlyColors$orange,
-        NA,
-        NA
-    )
-)
+# SVX$jxnTypes <- data.table( # older junction encoding, deprecated; convert to edgeType and use svx_jxnTypes in apps
+#     code = c(
+#         "D",
+#         "L",
+#         "I",
+#         "T",
+#         "P",
+#         "?"
+#     ),
+#     name = c(
+#         "Dup",
+#         "Del",
+#         "Inv",
+#         "Trans",
+#         "Prop",
+#         "?"
+#     ),
+#     color = c(
+#         CONSTANTS$plotlyColors$green,
+#         CONSTANTS$plotlyColors$blue,
+#         CONSTANTS$plotlyColors$red,
+#         CONSTANTS$plotlyColors$orange,
+#         NA,
+#         NA
+#     )
+# )
 SVX$targetClasses <- list(
     "both on target" = c("TT", "TA", "AA"),
     "one on target"  = c("TT", "TA", "AA", "tt", "ta", "aa"),

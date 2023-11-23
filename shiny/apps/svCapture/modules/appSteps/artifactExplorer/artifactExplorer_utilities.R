@@ -79,7 +79,7 @@ makeArtifactDistancePlot <- function(settings, sampleSelector, plot){
         paste("#SVs Off Target =", classCounts[TARGET_CLASS == "t-", commify(sum(N))]),
         sep = "\n"
     )
-    svs <- svs[JXN_TYPE != "T"]
+    svs <- svs[edgeType != svx_edgeTypes$TRANSLOCATION]
 
     # calculate distance of the farthest SV junction point from the relevant target region center
     svs <- svs[TARGET_REGION %in% targetRegionNames, .( # must be a single target region

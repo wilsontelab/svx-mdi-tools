@@ -2,7 +2,7 @@
 pipeline:
     name: svCapture
     description: "Characterize structural variant junctions in short-read, paired-end capture library(s)"
-    version: v1.0.0
+    version: v1.1.0
 suiteVersions:
     genomex-mdi-tools: main 
 actions:

@@ -48,11 +48,11 @@ build.svx_coverageTrack <- function(track, reference, coord, layout, loadFn){
             chrom == coord$chromosome &
             start <= coord$end & 
             coord$start <= end &
-            !is.na(JXN_TYPE),
+            !is.na(edgeType),
             .(
                 x1 = start,
                 x2 = end,
-                color = ifelse(JXN_TYPE == "D", rgb(1,0.2,0.2,0.075), rgb(0.2,0.2,1,0.075))
+                color = ifelse(edgeType == svx_edgeTypes$DUPLICATION, rgb(1,0.2,0.2,0.075), rgb(0.2,0.2,1,0.075))
             )
         ]
     }

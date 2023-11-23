@@ -190,6 +190,7 @@ assembly <- reactive({
         createFn = function(...) {
             startSpinner(session, message = "loading assembly")
             assembly <- readRDS(rdsFile)
+            assembly$svs[, edgeType := svx_jxnType_altCodeToX(JXN_TYPE, "code")]
             for(col in names(assembly$samples)){
                 if(col %in% internalUseSampleColumns) next
                 values <- assembly$samples[[col]] # ensure that all empty/zero-dose cells have the value "-"
@@ -525,7 +526,8 @@ matchingSvs <- reactive({
                 assembly$svs[
                     PROJECT == project & 
                     grepl(paste0(",", sample, ","), SAMPLES) & 
-                    JXN_TYPE %in% svTypesToSymbols(input$SV_Types)]
+                    edgeType %in% svx_jxnType_longNameToX(input$SV_Types, "code")
+                ]
             }, by = c("project", "sample", groupingCols)]
             x <- setGroupLabels(x, groupingCols)
             stopSpinner(session)

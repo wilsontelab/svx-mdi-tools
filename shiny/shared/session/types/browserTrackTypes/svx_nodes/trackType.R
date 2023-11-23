@@ -86,7 +86,7 @@ build.svx_nodes_track <- function(track, reference, coord, layout, trackBuffer, 
     ylim <- if(isWholeGenome) {
         Max_SV_Size <- getBrowserTrackSetting(track, "Filters", "Max_SV_Size", 0)
         if(Max_SV_Size == 0) coord$range else c(1, as.numeric(Max_SV_Size))
-    } else c(0.45, 4.55)
+    } else c(0.25, 4.75)
 
     # use the mdiTrackImage helper function to create the track image
     mai <- NULL

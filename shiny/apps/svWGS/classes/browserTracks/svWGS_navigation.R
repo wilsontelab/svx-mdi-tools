@@ -5,7 +5,7 @@ svWGS_navTable_display <- function(jxns){
     jxns[, .(
         svId = SV_ID,
         samples = trimws(gsub(",", " ", samples)),
-        type = svx_jxnType_codeToX(edgeType, "name"),
+        type = svx_jxnType_codeToX(edgeType, "name"), # edgeType converted to svx style code by svWGS_loadJunctions
         size = SV_SIZE,
         insertSize,
         nSamples,

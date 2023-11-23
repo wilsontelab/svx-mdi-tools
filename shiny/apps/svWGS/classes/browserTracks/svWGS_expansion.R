@@ -5,7 +5,7 @@ svWGS_objectTable <- function(jxn){
     req(jxn)
     jxn[, .(
         svId = SV_ID,
-        type = svx_jxnType_codeToX(edgeType, "name"),
+        type = svx_jxnType_codeToX(edgeType, "name"), # edgeType converted to svx style code by svWGS_loadJunctions
         size = SV_SIZE,
         insertSize = -MICROHOM_LEN,
         mapQ = mapQ,

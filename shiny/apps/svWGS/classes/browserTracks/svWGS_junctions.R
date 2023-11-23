@@ -14,7 +14,7 @@ svWGS_loadJunctions <- function(targetId){
     # NOTE: several derivative column values are set downstream by svx_loadJunctions
     # this function must set values whose input columns might differ between data sources
     jxns[, ":="(
-        edgeType = svx_jxnType_altCodeToX(JXN_TYPE, "code"),
+        edgeType = svx_jxnType_altCodeToX(JXN_TYPE, "code"), # convert to edgeType, i.e., to svx style sv-code
         chromIndex1 = unlist(chroms$chromIndex[CHROM_1]),
         chromIndex2 = unlist(chroms$chromIndex[CHROM_2]),
         strand1 = ifelse(SIDE_1 == "L", "+", "-"),
