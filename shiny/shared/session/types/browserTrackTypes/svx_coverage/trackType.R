@@ -35,9 +35,26 @@ build.svx_coverageTrack <- function(track, reference, coord, layout, loadFn){
     dataFn <- function(track, reference, coord, sampleName, sample){
         I <- sapply(names(selectedSources), function(x) sampleName %in% selectedSources[[x]]$Sample_ID)
         sourceId <- names(selectedSources)[I] 
-        x <- svx_filterCoverageByRange(sourceId, sampleName, coord, maxBins, loadFn)
-        aggregateTabixBins(x$bins, track, coord, plotBinSize) %>%
-        svx_setCoverageValue(Plot_Type, x$medianCoverage, Median_Ploidy)
+        x <- svx_filterCoverageByRange(sourceId, sampleName, coord, maxBins, loadFn) %>%
+        svx_setCoverageValue(reference, coord, Plot_Type, Median_Ploidy) %>%
+        aggregateTabixBins(track, coord, plotBinSize) %>%
+        svx_maskLowQualityBins()
+    }
+    cnvHighlightsFn <- function(track, reference, coord, sampleName, sample){
+        I <- sapply(names(selectedSources), function(x) sampleName %in% selectedSources[[x]]$Sample_ID)
+        x <- svx_getHmmCnvs(names(selectedSources)[I])
+        if(!isTruthy(x)) return(NULL)
+        x$value[[sampleName]][
+            chrom == coord$chromosome &
+            start <= coord$end & 
+            coord$start <= end &
+            !is.na(edgeType),
+            .(
+                x1 = start,
+                x2 = end,
+                color = ifelse(edgeType == svx_edgeTypes$DUPLICATION, rgb(1,0.2,0.2,0.075), rgb(0.2,0.2,1,0.075))
+            )
+        ]
     }
 
     # build the binned_XY_track
@@ -49,5 +66,7 @@ build.svx_coverageTrack <- function(track, reference, coord, layout, loadFn){
         allowNeg = isDifference, 
         ylab = if(isDifference) paste(Plot_Type, "Change") else Plot_Type,
         center = TRUE, binSize = plotBinSize
+        # ,
+        # highlightsFn = cnvHighlightsFn
     )
 }

@@ -16,11 +16,10 @@ filteredSvsTableServer <- function(id, input, svs, matchThreshold = NULL){
         tableData = reactive({
             svs <- svs()
             if(is.null(svs)) return( data.frame(message = "analysis not available for these data") )     
-            setkey(SVX$jxnTypes, code)
             svs[, .(
                 svId = SV_ID,
                 #---------------
-                type = SVX$jxnTypes[JXN_TYPE, name],
+                type = svx_jxnType_codeToX(edgeType, "name"),
                 class = TARGET_CLASS,
                 target = TARGET_REGION,
                 #---------------

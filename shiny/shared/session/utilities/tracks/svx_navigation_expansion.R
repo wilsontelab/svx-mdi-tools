@@ -1,13 +1,14 @@
 # construct a junction cluster trackNav table
 svx_junctionNavTable <- function(track, session, browserId, reference, coord, 
-                                 expandReactive, loadFn, navTableFn, expandFn){
-    navTableName <- initTrackNav(track, session, "navTable") # table reactive functions are provided below  
-    trackNavDataUnformatted <- reactive({
+                                 expandReactive, loadFn, navTableFn, expandFn,
+                                 jxnsReactive = NULL){
+    navTableName <- initTrackNav(track, session, "navTable") # table reactive functions are provided below 
+    trackNavDataUnformatted <- if(is.null(jxnsReactive)) reactive({
         selectedSources <- getSourcesFromTrackSamples(track$settings$items())
         jxns <- svx_getTrackJunctions(track, selectedSources, loadFn, chromOnly = FALSE)
         req(nrow(jxns) <= 10000)
         jxns
-    })
+    }) else jxnsReactive
     trackNavDataFormatted <- reactive({
         navTableFn(trackNavDataUnformatted())
     })

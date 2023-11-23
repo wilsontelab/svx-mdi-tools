@@ -44,7 +44,10 @@ build.svx_triangle_track <- function(track, reference, coord, layout, trackBuffe
             ylim = ylim, ylab = "SV Size", #yaxt = "n",
             xaxs = "i", yaxs = "i") # always set `xaxs` and `yaxs` to "i" 
         svx_trianglechromLines(reference, coord)
-        jxns <- svx_getTrackJunctions(track, selectedSources, loadFn, coord, "centerAll", chromOnly = TRUE)[sample(.N)]
+        jxns <- svx_getTrackJunctions(
+            track, selectedSources, loadFn, coord, 
+            "centerAll", chromOnly = TRUE
+        )[sample(.N)]
         jxns <- if(Color_By == "sample") dt_colorBySelectedSample(jxns, selectedSources) 
                 else svx_colorCompositeGenomes(jxns, reference)
         points(

@@ -42,8 +42,10 @@ build.svx_arcs_track <- function(track, reference, coord, layout, trackBuffer, l
     mai <- NULL
     image <- mdiTrackImage(layout, height, message = "svx_arcs", function(...){
         mai <<- setMdiTrackMai(layout, padding, mar = list(top = 0, bottom = 0))
-        jxns <- svx_getTrackJunctions(track, selectedTargets, loadFn, coord, "endpoint", 
-                                      chromOnly = FALSE, isMultiSample = isMultiSample, family = "Arcs")
+        jxns <- svx_getTrackJunctions(
+            track, selectedTargets, loadFn, coord, "endpoint", 
+            chromOnly = FALSE, isMultiSample = isMultiSample, family = "Arcs"
+        )
         if(!is.null(jxnFilterFn)) jxns <- jxnFilterFn(jxns, track) # apply app-specific filters
         if(Color_By == "sample") jxns <- dt_colorBySelectedSample(jxns, selectedTargets, isMultiSample)
         ymax <- switch(

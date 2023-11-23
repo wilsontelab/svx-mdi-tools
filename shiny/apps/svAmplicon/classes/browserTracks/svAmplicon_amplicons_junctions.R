@@ -52,8 +52,8 @@ svAmplicon_loadJunctions <- function(ampliconKey){ # Project_08673:Sample_Chr1_S
         cChrom2 = chrom2,        
         cRefPos1 = pos1,
         cRefPos2 = pos2,
-        cStrand1 = ifelse(edgeType == "V" & strand1 == "+", 1, -1),
-        cStrand2 = ifelse(edgeType == "V" & strand2 == "+", 1, -1),
+        cStrand1 = ifelse(edgeType == svx_edgeTypes$INVERSION & strand1 == "+", 1, -1),
+        cStrand2 = ifelse(edgeType == svx_edgeTypes$INVERSION & strand2 == "+", 1, -1),
         sampleUniqueId = sampleUniqueId,  
         samples = x$Sample_ID,
         nSamples = 1, # svAmplicon only has find, not multiSample compare

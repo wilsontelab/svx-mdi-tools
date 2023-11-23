@@ -14,7 +14,7 @@ svWGS_loadJunctions <- function(targetId){
     # NOTE: several derivative column values are set downstream by svx_loadJunctions
     # this function must set values whose input columns might differ between data sources
     jxns[, ":="(
-        edgeType = svx_jxnType_altCodeToX(JXN_TYPE, "code"),
+        edgeType = svx_jxnType_altCodeToX(JXN_TYPE, "code"), # convert to edgeType, i.e., to svx style sv-code
         chromIndex1 = unlist(chroms$chromIndex[CHROM_1]),
         chromIndex2 = unlist(chroms$chromIndex[CHROM_2]),
         strand1 = ifelse(SIDE_1 == "L", "+", "-"),
@@ -54,5 +54,7 @@ svWGS_loadJunctions <- function(targetId){
 
 # get a single junction cluster for the object table
 svWGS_getJunction <- function(x){
-    svx_loadJunctions(x$targetId, svWGS_loadJunctions)[SV_ID == x$SV_ID]
+    jxn <- svx_loadJunctions(x$targetId, svWGS_loadJunctions)[SV_ID == x$SV_ID]
+    cn <- svx_getCnvJxnNormalizedCN_singleJunction(x$targetId, x$SV_ID)
+    if(!isTruthy(cn)) return(jxn) else merge(jxn, cn, by = "SV_ID")
 }

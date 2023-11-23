@@ -51,14 +51,14 @@ viterbi.nbinomCountsGC <- function(nb, # a nbinomCountsGC model
     # calculate emissProbs
     size <- nb$theta 
     rpa <- predict(nb, fractionGC, type = 'mu')
-    if(!is.null(percentile)) rpa <- qnbinom(percentile, size = size, mu = rpa)     
+    if(!is.null(percentile)) rpa <- qnbinom(percentile, size = size, mu = rpa)    
     CNs <- 0:maxCN    
     binCounts[binCounts < 0] <- NA
     binCounts <- as.integer( round(binCounts, 0) )    
     emissProbs <- sapply(CNs, function(CN){
         dnbinom(binCounts, size = size, mu = if(CN == 0) 0.1 else rpa * CN, log = TRUE)
     })
-    
+
     # apply forced states
     forceStateIs <- if(!is.null(forceCNs)) {
         forceCNs <- pmin(maxCN, forceCNs)

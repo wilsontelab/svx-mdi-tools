@@ -38,14 +38,19 @@ svPore_loadSampleCoverage <- function(sourceId, sample){
 
             startSpinner(session, message = "rebinning coverage")
             req(file.exists(sampleCoverageZipFile))
+            # TODO: convert this to bin coverage, like svWGS?
             x0 <- as.data.table(read.table( # fread balks at reading bgz directly, even when renamed
                 sampleCoverageZipFile,
                 col.names = c("chrom","start","index","coverage"),
                 colClasses = c("character","integer","integer64","integer")
             ))
             binSize <- x0[1:2, diff(start)]
-            x0[, ":="(genomeStart = index * binSize)]
-            svx_rebinCoverage(x0)
+            x0[, ":="(
+                genomeStart = index * binSize,
+                gc = NA_real_,
+                excluded = 0
+            )]
+            svx_rebinCoverage(sourceId, sample, x0)
         }
     )$value
 }

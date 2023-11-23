@@ -5,12 +5,15 @@ svWGS_navTable_display <- function(jxns){
     jxns[, .(
         svId = SV_ID,
         samples = trimws(gsub(",", " ", samples)),
-        type = svx_jxnType_codeToX(edgeType, "name"),
+        type = svx_jxnType_codeToX(edgeType, "name"), # edgeType converted to svx style code by svWGS_loadJunctions
         size = SV_SIZE,
         insertSize,
         nSamples,
         nInstances,
         nSequenced,
+        flnkCN = round(outerFlankCN, 1),
+        cnc    = round(flankCNC, 1),           
+        jxnCN  = round(junctionCN, 1),
         flankLength,
         nLinkedJxns = nLinkedJunctions,
         rStart = paste0(cChrom1, ":", cRefPos1, ifelse(cStrand1 == 1, "+", "-")),

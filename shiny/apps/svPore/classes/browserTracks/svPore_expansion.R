@@ -38,7 +38,7 @@ svPore_expansionTable <- function(edges){
 }
 
 # show a detailed plot and table of the molecule support for a junction cluster
-svPore_expandJunction <- function(jxn, track, layout){
+svPore_expandJunction <- function(jxn, track, layout, ...){
     req(jxn)
     padding <- padding(track, layout)
     height <- getBrowserTrackSetting(track, "Junctions", "Junction_Plot_Height", 3) # height in inches

@@ -6,7 +6,6 @@ getSvPointColors <- function(filteredSvs, settings, sampleSelector, isCapture = 
         svs <- filteredSvs()
         req(svs)
         ps <- settings$Plot_Settings()
-        setkey(SVX$jxnTypes, code)
         blue <- list(
             colors = CONSTANTS$plotlyColors$blue, 
             color = NULL,
@@ -16,9 +15,9 @@ getSvPointColors <- function(filteredSvs, settings, sampleSelector, isCapture = 
             type = {
                 svFilters <- settings$SV_Filters()
                 list(
-                    colors = svs[, SVX$jxnTypes[JXN_TYPE, color]],
-                    color = SVX$jxnTypes[!is.na(color) & name %in% svFilters$SV_Type$value, color],
-                    label = SVX$jxnTypes[!is.na(color) & name %in% svFilters$SV_Type$value, name]
+                    colors = svs[, svx_jxnType_codeToX(edgeType, "color")],
+                    color = svx_jxnTypes[legend == TRUE & name %in% svFilters$SV_Type$value, color],
+                    label = svx_jxnTypes[legend == TRUE & name %in% svFilters$SV_Type$value, name]
                 )                
             },
             sample = {

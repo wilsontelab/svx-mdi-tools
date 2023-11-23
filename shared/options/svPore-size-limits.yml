@@ -3,7 +3,7 @@
 options:
     window-size:
         order: 1
-        short: P
+        short: z
         type: integer
         required: false
         default: 1000

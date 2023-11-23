@@ -22,7 +22,31 @@ Filters:
         value:  50
         min:    -1000
         max:    1000
-        step:   10
+        step:   10 
+    Min_Source_Molecules:
+        type:   numericInput
+        value:  1
+        min:    1
+        max:    10000
+        step:   1    
+    Max_Source_Molecules:
+        type:   numericInput
+        value:  0 # i.e., no limit
+        min:    1
+        max:    10000
+        step:   1   
+    Min_Sequenced_Molecules:
+        type:   numericInput
+        value:  0
+        min:    0
+        max:    10
+        step:   1
+    Max_Linked_Junctions:
+        type:   numericInput
+        value:  0
+        min:    0
+        max:    100
+        step:   1         
     Min_Samples_With_SV:
         type:   numericInput
         value:  1
@@ -35,30 +59,18 @@ Filters:
         min:    1
         max:    100
         step:   1  
-    Min_Source_Molecules:
-        type:   numericInput
-        value:  1
-        min:    1
-        max:    10000
-        step:   1    
-    Max_Source_Molecules:
-        type:   numericInput
-        value:  0 # i.e., no limit
-        min:    1
-        max:    10000
-        step:   1  
-    Min_Sequenced_Molecules:
-        type:   numericInput
-        value:  0
-        min:    0
-        max:    10
-        step:   1
-    Max_Linked_Junctions:
-        type:   numericInput
-        value:  0
-        min:    0
-        max:    100
-        step:   1  
+    Unique_To_Sample:
+        type:   selectInput
+        choices:
+            - show all SVs
+        value: show all SVs
+    Show_ChrM:
+        type:   selectInput
+        choices:
+            - always
+            - translocations_only
+            - never
+        value: never  
     Min_Map_Quality:
         type:   numericInput
         value:  0
@@ -72,7 +84,7 @@ Filters:
         max:    1000
         step:   50  
     # SPACER_1:
-    #     type: spacer       
+    #     type: spacer 
     SV_Type:
         type:   checkboxGroupInput
         choices:
@@ -85,10 +97,9 @@ Filters:
             - Dup
             - Inv
         inline: TRUE
-    Show_ChrM:
-        type:   selectInput
-        choices:
-            - always
-            - translocations_only
-            - never
-        value: never
+    Min_Flank_CNC:
+        type:   numericInput
+        value:  0
+        min:    0
+        max:    10
+        step:   0.1

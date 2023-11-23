@@ -11,7 +11,6 @@ getFilteredSvs <- function(settings, sampleSelector,
     startSpinner(session, 'getFilteredSvs')
     svFilters <- settings$SV_Filters()
     samples <- sampleSelector$selectedSamples()
-    setkey(SVX$jxnTypes, name)
     x <- do.call(rbind, lapply(assignments[, unique(Source_ID)], function(sourceId){
         project <- assignments[Source_ID == sourceId][1, Project]
         
@@ -19,9 +18,11 @@ getFilteredSvs <- function(settings, sampleSelector,
         svFile <- loadPersistentFile(sourceId = sourceId, contentFileType = "structuralVariants") 
 
         # apply SV filters
-        x <- persistentCache[[svFile]]$data[
-            JXN_TYPE %in% SVX$jxnTypes[svFilters$SV_Type$value, code] &
-            (JXN_TYPE == "T" | 
+        x <- persistentCache[[svFile]]$data[, 
+            edgeType := svx_jxnType_altCodeToX(JXN_TYPE, "code")
+        ][
+            edgeType %in% svx_jxnType_nameToX(svFilters$SV_Type$value, "code") &
+            (edgeType == svx_edgeTypes$TRANSLOCATION | 
              (SV_SIZE >= svFilters$Min_SV_Size$value & 
               SV_SIZE <= svFilters$Max_SV_Size$value)) &
             N_SAMPLES >= svFilters$Min_Samples_With_SV$value &
@@ -78,36 +79,6 @@ getFilteredSvs <- function(settings, sampleSelector,
             PROJECT = project,
             PROJECT_SAMPLES = lapply(strsplit(SAMPLES, ","), function(x) paste(project, x, sep = ":"))
         )]
-
-#          [1] "SV_ID"                     "MAPQ_1"
-#  [3] "UMI_1"                     "N_TOTAL"
-#  [5] "N_GAPS"                    "N_SPLITS"
-#  [7] "N_OUTER_CLIPS"             "JXN_TYPE"
-#  [9] "N_DUPLEX"                  "N_DUPLEX_GS"
-# [11] "STRAND_COUNT"              "STRAND_COUNT_GS"
-# [13] "STRAND_COUNT1"             "STRAND_COUNT2"
-# [15] "TARGET_CLASS"              "SHARED_PROPER"
-# [17] "SHARED_PROPER_GS"          "SAMPLES"
-# [19] "N_SAMPLES"                 "MAPQ_2"
-# [21] "UMI_2"                     "CHROM_1"
-# [23] "SIDE_1"                    "POS_1"
-# [25] "CHROM_2"                   "SIDE_2"
-# [27] "POS_2"                     "JUNCTION_NAME"
-# [29] "JUNCTION_NAMES"            "N_AMBIGUOUS"
-# [31] "N_DOWNSAMPLED"             "N_COLLAPSED"
-# [33] "JXN_SEQ"                   "MERGE_LEN"
-# [35] "MICROHOM_LEN"              "JXN_BASES"
-# [37] "SV_SIZE"                   "GEN_REF_1"
-# [39] "GEN_REF_2"                 "GEN_COV_1"
-# [41] "GEN_COV_2"                 "TARGET_REGION"
-# [43] "TARGET_POS_1"              "TARGET_POS_2"
-# [45] "HCT_0.2APH_Ro3_Colch_G2_a" "HCT_0.2APH_Ro3_Colch_G2_b"
-# [47] "HCT_0.2APH_Ro3_Colch_M_a"  "HCT_0.2APH_Ro3_Colch_M_b"
-# [49] "HCT_Ro3_Colch_G2_a"        "HCT_Ro3_Colch_M_a"
-# [51] "MAX_MAPQ"                  "matchesSamples"
-# [53] "PROJECT"                   "PROJECT_SAMPLES"
-
-# FLANK_LEN1, FLANK_LEN2, N_CLUSTERED_JUNCTIONS
         if(!("FLANK_LEN1" %in% names(x))) x[, ":="(
             FLANK_LEN1 = 0,
             FLANK_LEN2 = 0,
@@ -116,6 +87,7 @@ getFilteredSvs <- function(settings, sampleSelector,
 
         x[matchesSamples == TRUE, .SD, .SDcols = c(
             names(SVX$find$structural_variants), 
+            "edgeType",
             "PROJECT", "PROJECT_SAMPLES", "MAX_MAPQ"
         )]
     }))

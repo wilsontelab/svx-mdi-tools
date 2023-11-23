@@ -114,11 +114,6 @@ dcastSvsByGroup <- function(svs, formula, groups_, step = 1){
     dt
 }
 
-# convert between SV type designations
-svTypesToSymbols <- function(types){
-    sapply(types, switch, deletion = "L", duplication = "D", inversion = "I", translocation = "T")
-}
-
 # builders for plotting reactives
 getAssemblyPlotFrame <- function(plot, insideWidth, insideHeight, mar){
     maiHorizonatal <- sum(mar[c(2, 4)]) / CONSTANTS$assemblyPlots$linesPerInch

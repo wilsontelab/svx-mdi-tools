@@ -42,10 +42,9 @@ junctionMapServer <- function(output, junctionMap, mapSettings){
 }
 
 # alternative to fill app$browser$expansionUI when reacting to browser track click
-junctionMapTrackExpansionUI <- function(track, junctionMap){ 
+junctionMapTrackExpansionUI <- function(junctionMap, Pixels_Per_Base){ 
     req(junctionMap)
     pngFile <- file.path(sessionDirectory, "junctionMapImage.png")
-    Pixels_Per_Base <- getTrackSetting(track, "Junctions", "Pixels_Per_Base", 2)
     library(imager) # strangely, imager seems to call imager::as.cimg internally in a manner that assumes the library is attached
     suppressWarnings(
         imager::as.cimg(junctionMap$image[junctionMap$usedPos, , ]) %>% 

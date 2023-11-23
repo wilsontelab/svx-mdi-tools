@@ -26,11 +26,10 @@ svPropertiesPlotServer <- function(settings, svPointColors, filteredSvs){
                 color = svPointColors$colors,
                 MICROHOM_LEN, 
                 SV_SIZE,
-                SHARED_PROPER,
-                JXN_TYPE
+                edgeType
             )]
             svs[
-                JXN_TYPE == "T", 
+                edgeType == svx_edgeTypes$TRANSLOCATION, 
                 SV_SIZE := rnorm(.N, svFilters$Max_SV_Size$value, svFilters$Max_SV_Size$value / 10)
             ]
             par(mar = c(4.1, 4.1, 0.1, 1.1))

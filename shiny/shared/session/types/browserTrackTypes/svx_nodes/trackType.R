@@ -70,11 +70,13 @@ svx_node_plotGenomeJxns <- function(jxns, lwd, idCol){
 build.svx_nodes_track <- function(track, reference, coord, layout, trackBuffer, loadFn, idCol, 
                                   isMultiSample = TRUE, sampleNameFn = NULL, jxnFilterFn = NULL){
     req(coord, coord$chromosome)
-    isWholeGenome <- coord$chromosome == "all"    
+    isWholeGenome <- coord$chromosome == "all"
 
     # get the data to plot
     selectedTargets <- track$settings$items()
+    samples <- names(selectedTargets)
     if(isMultiSample) selectedTargets <- getSourcesFromTrackSamples(selectedTargets)
+    track$settings$setChoices("Filters", "Unique_To_Sample", c(samples, "show all SVs"))
 
     # set the plot layout and axes
     padding <- padding(track, layout)
@@ -84,7 +86,7 @@ build.svx_nodes_track <- function(track, reference, coord, layout, trackBuffer, 
     ylim <- if(isWholeGenome) {
         Max_SV_Size <- getBrowserTrackSetting(track, "Filters", "Max_SV_Size", 0)
         if(Max_SV_Size == 0) coord$range else c(1, as.numeric(Max_SV_Size))
-    } else c(0.45, 4.55)
+    } else c(0.25, 4.75)
 
     # use the mdiTrackImage helper function to create the track image
     mai <- NULL
@@ -96,7 +98,8 @@ build.svx_nodes_track <- function(track, reference, coord, layout, trackBuffer, 
             xaxs = "i", yaxs = "i") # always set `xaxs` and `yaxs` to "i" 
         chromLines(track, reference, coord)
         jxns <- svx_getTrackJunctions(
-            track, selectedTargets, loadFn, coord, "endpoint", chromOnly = FALSE, isMultiSample = isMultiSample
+            track, selectedTargets, loadFn, coord, "endpoint", 
+            chromOnly = FALSE, isMultiSample = isMultiSample
         )[order(if(isWholeGenome) sample(.N) else -size)]
         if(!is.null(jxnFilterFn)) jxns <- jxnFilterFn(jxns, track) # apply app-specific filters
         jxns <- if(Color_By == "sample") dt_colorBySelectedSample(jxns, selectedTargets, isMultiSample) 
