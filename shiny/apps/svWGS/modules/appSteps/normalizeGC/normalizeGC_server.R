@@ -536,12 +536,14 @@ getCnvJxnsNormalizedCN <- function(sourceId){
             x <- do.call(rbind, lapply(names(gcBiasModels), function(x) {
                 gcBiasModels[[x]]$jxnCN[, .(svId, outerFlankCN, innerFlankCN, flankCNC, junctionCN)]
             }))
-            x[, .(
+            x <- x[, .(
                 outerFlankCN = mean(outerFlankCN, na.rm = TRUE), 
                 innerFlankCN = mean(innerFlankCN, na.rm = TRUE), 
                 flankCNC     = mean(flankCNC, na.rm = TRUE),
                 junctionCN   = mean(junctionCN, na.rm = TRUE)
-            ), by = .(svId)][, SV_ID := svId]            
+            ), by = .(svId)][, SV_ID := svId]          
+            stopSpinner(session)  
+            x
         }
     )
 }
