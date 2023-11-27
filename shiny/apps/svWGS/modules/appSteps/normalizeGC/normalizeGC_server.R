@@ -288,6 +288,7 @@ getNormalizedSpanCn <- function(nb, gc, coverage, overlap = NULL){
 normalizeJxnCN <- function(sampleGenome, genome, fit, chromCN){
     startSpinner(session, message = "normalizing junctions") 
     nonSingletonJxns <- getGenomeJxns(genome)[N_TOTAL - N_OUTER_CLIPS > 1] # never analyze singleton junctions, they aren't expected to impact CN
+    startSpinner(session, message = "normalizing junctions.") 
     nonSingletonJxns[, svId := SV_ID]
     setkey(nonSingletonJxns, svId)
     sampleBins <- getGenomeBins(genome, includeExcluded = FALSE)
@@ -299,6 +300,7 @@ normalizeJxnCN <- function(sampleGenome, genome, fit, chromCN){
     setkey(sampleBins, chrom)
     setindex(sampleBins, start)
     setkey(sampleJxnGc, svId)
+    startSpinner(session, message = "normalizing junctions..") 
     x <- sampleJxnBins[, {
         gc       <- as.numeric(strsplit(gc, ",")[[1]])
         coverage <- as.numeric(strsplit(coverage, ",")[[1]])
@@ -327,6 +329,7 @@ normalizeJxnCN <- function(sampleGenome, genome, fit, chromCN){
         by = "svId",
         all.x = TRUE
     )
+    startSpinner(session, message = "normalizing junctions...") 
     setkey(x, svId)    
     x[, junctionCN := getNormalizedSpanCn(fit, gc, N_TOTAL), by = .(svId)]   
     x[, .(
