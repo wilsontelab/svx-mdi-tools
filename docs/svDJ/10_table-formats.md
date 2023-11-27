@@ -1,8 +1,9 @@
 ---
-title: svDJ-table-formats
+title: Table Formats
+parent: svDJ
 has_children: false
 nav_order: 10
-published: false
+published: true
 ---
 
 ## {{page.title}}

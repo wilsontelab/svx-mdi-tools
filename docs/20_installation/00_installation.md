@@ -1,7 +1,7 @@
 ---
 title: Installation and usage
 has_children: true
-nav_order: 10
+nav_order: 20
 published: true
 ---
 
