@@ -56,9 +56,9 @@ appSteps:
     upload: # nearly always the 1st step of every app
         module: sourceFileUpload
     normalizeGC:
-        module: normalizeGC
+        module: svWGS_normalizeGC
     junctionSets:
-        module: junctionSets
+        module: svWGS_junctionSets
     browser:
         module: genomex-mdi-tools//trackBrowser
         options:
@@ -70,3 +70,5 @@ appSteps:
             #         TESTING:
             #             Data:
             #                 Plot_As: points
+    junctionExplorer:
+        module: svx_junctionExplorer

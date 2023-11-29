@@ -3,13 +3,13 @@
 #----------------------------------------------------------------------
 
 # module ui function
-junctionSetsUI <- function(id, options) {
+svWGS_junctionSetsUI <- function(id, options) {
 
     # initialize namespace
     ns <- NS(id)
     
     # override missing options to module defaults
-    options <- setDefaultOptions(options, stepModuleInfo$junctionSets)
+    options <- setDefaultOptions(options, stepModuleInfo$svWGS_junctionSets)
 
     # UI functions
     junctionAxisChoices <- list(

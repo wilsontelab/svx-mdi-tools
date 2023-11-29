@@ -5,7 +5,7 @@
 #----------------------------------------------------------------------
 # BEGIN MODULE SERVER
 #----------------------------------------------------------------------
-normalizeGCServer <- function(id, options, bookmark, locks) { 
+svWGS_normalizeGCServer <- function(id, options, bookmark, locks) { 
     moduleServer(id, function(input, output, session) {    
 #----------------------------------------------------------------------
 

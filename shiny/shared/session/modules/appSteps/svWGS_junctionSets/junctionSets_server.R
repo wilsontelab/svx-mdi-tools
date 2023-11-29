@@ -5,7 +5,7 @@
 #----------------------------------------------------------------------
 # BEGIN MODULE SERVER
 #----------------------------------------------------------------------
-junctionSetsServer <- function(id, options, bookmark, locks) { 
+svWGS_junctionSetsServer <- function(id, options, bookmark, locks) { 
     moduleServer(id, function(input, output, session) {    
 #----------------------------------------------------------------------
 
@@ -257,6 +257,8 @@ gatedSvsSelected <- reactive({
 #----------------------------------------------------------------------
 # expanded molecule support for an SV junction selected in gatedSvs table
 #----------------------------------------------------------------------
+expansionTableData <- reactiveVal(NULL)
+expansionUIContents <- reactiveVal()
 observeEvent(gatedSvsSelected(), {
     svWGS_expandJunction_(
         jxn = gatedSvsSelected(),
@@ -298,7 +300,6 @@ observeEvent(gatedSvsSelected(), {
     #     ))     
     # }
 })
-expansionTableData <- reactiveVal(NULL)
 expansionTable <- bufferedTableServer(
     "expansionTable",
     id,
@@ -308,7 +309,6 @@ expansionTable <- bufferedTableServer(
     options = list(
     )
 )
-expansionUIContents <- reactiveVal()
 output$expansionUI <- renderUI({
     expansionUIContents()
 })
