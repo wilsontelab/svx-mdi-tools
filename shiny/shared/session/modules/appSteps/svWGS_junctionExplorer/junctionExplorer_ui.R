@@ -3,13 +3,13 @@
 #----------------------------------------------------------------------
 
 # module ui function
-svx_junctionExplorerUI <- function(id, options) {
+svWGS_junctionExplorerUI <- function(id, options) {
 
     # initialize namespace
     ns <- NS(id)
     
     # override missing options to module defaults
-    options <- setDefaultOptions(options, stepModuleInfo$svx_junctionExplorer)
+    options <- setDefaultOptions(options, stepModuleInfo$svWGS_junctionExplorer)
 
     # UI functions
     plotBox_ <- function(type, title){
@@ -20,7 +20,7 @@ svx_junctionExplorerUI <- function(id, options) {
             solidHeader = TRUE,
             status = "primary",
             collapsible = TRUE,
-            collapsed = FALSE
+            collapsed = FALSE         
         )
     }
 
@@ -40,23 +40,7 @@ svx_junctionExplorerUI <- function(id, options) {
         settings = TRUE,
 
         # data source selectors
-        fluidRow(
-            dataSourceTableUI(
-                ns("sources"), 
-                "Data Source", 
-                width = 6, 
-                collapsible = TRUE,
-                inFluidRow = FALSE
-            ),
-            bufferedTableUI(
-                ns("sampleGenomes"),
-                "Sample with Genome",
-                width = 6,
-                solidHeader = TRUE,
-                status = "primary",
-                collapsible = TRUE
-            )
-        ),
+        svWGS_explorer_dataSelectorsUI(ns("dataSelectors")),
         
         # microhomology plots and tables
         fluidRow(
@@ -77,7 +61,27 @@ svx_junctionExplorerUI <- function(id, options) {
                     )
                 )
             ),
-            plotBox_("microhomology", "Microhomology/Insertion Distribution")
+            # plotBox_("microhomology", "Microhomology/Insertion Distribution")
+            mdiDensityPlotBoxUI(
+                ns("insertSizeDensityPlot"),
+                title = "Microhomology/Insertion Distribution",
+                width = 8,
+                solidHeader = TRUE,
+                status = "primary",
+                collapsible = TRUE,
+                collapsed = FALSE    
+            )
+        ),
+        fluidRow(
+            column(width = 2),
+            svx_sizeCorrelationPlotBoxUI(
+                ns("sizeCorrelationPlot"),
+                width = 8,
+                solidHeader = TRUE,
+                status = "primary",
+                collapsible = TRUE,
+                collapsed = FALSE    
+            )
         ),
         fluidRow(
             bufferedTableUI(
@@ -90,18 +94,18 @@ svx_junctionExplorerUI <- function(id, options) {
                 downloadable = TRUE
             )
         ),
-        # fluidRow(
-        #     bufferedTableUI(
-        #         id = ns("expansionTable"), 
-        #         title = "Supporting Molecules", 
-        #         downloadable = TRUE, 
-        #         width = 12,
-        #         solidHeader = TRUE,
-        #         status = "primary",
-        #         collapsible = TRUE,
-        #         collapsed = FALSE
-        #     )  
-        # ),
+        fluidRow(
+            bufferedTableUI(
+                id = ns("expansionTable"), 
+                title = "Supporting Molecules", 
+                downloadable = TRUE, 
+                width = 12,
+                solidHeader = TRUE,
+                status = "primary",
+                collapsible = TRUE,
+                collapsed = FALSE
+            )  
+        ),
         fluidRow(
             uiOutput(ns("expansionUI"))
         ),        

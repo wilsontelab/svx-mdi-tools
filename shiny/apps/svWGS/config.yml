@@ -71,4 +71,6 @@ appSteps:
             #             Data:
             #                 Plot_As: points
     junctionExplorer:
-        module: svx_junctionExplorer
+        module: svWGS_junctionExplorer
+    sampleExplorer:
+        module: svWGS_sampleExplorer

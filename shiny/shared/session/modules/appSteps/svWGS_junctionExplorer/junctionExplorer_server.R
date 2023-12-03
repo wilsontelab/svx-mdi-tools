@@ -5,7 +5,7 @@
 #----------------------------------------------------------------------
 # BEGIN MODULE SERVER
 #----------------------------------------------------------------------
-svx_junctionExplorerServer <- function(id, options, bookmark, locks) { 
+svWGS_junctionExplorerServer <- function(id, options, bookmark, locks) { 
     moduleServer(id, function(input, output, session) {    
 #----------------------------------------------------------------------
 
@@ -30,125 +30,13 @@ gridColors <- list(x = "#aaaaaa", y = "#aaaaaa")
 #----------------------------------------------------------------------
 # data package sources and source-level data objects derived from pipeline
 #----------------------------------------------------------------------
-sourceIds <- dataSourceTableServer("sources", selection = "multiple") 
-samples <- reactive({ # vector of the names of all co-analyzed samples
-    sourceIds <- sourceIds()
-    req(sourceIds)
-    do.call(rbind, lapply(sourceIds, function(sourceId){
-        source <- getSourceFromId(sourceId)
-        source$manifest[, .(sourceId = sourceId, Project = Project, Sample_ID = Sample_ID)]
-    }))
-})
-genomes <- reactive({ # data.table
-    sourceIds <- sourceIds()
-    req(sourceIds)
-    do.call(rbind, lapply(sourceIds, function(sourceId){
-        source <- getSourceFromId(sourceId)
-        sourceGenome <- source$config$task$find$genome$genome
-        customGenome <- loadCustomGenomeMetadata(sourceGenome)
-        isCompositeGenome <- !is.null(customGenome) && isCompositeGenome2(customGenome)
-        compositeDelimiter <- if(isCompositeGenome) getCustomCompositeDelimiter(customGenome) else NA
-        genomes <- readRDS(getSourceFilePath(sourceId, "genomesFile"))
-        genomes[, ":="(
-            sourceId = sourceId,
-            sourceGenome = sourceGenome,
-            isCompositeGenome = isCompositeGenome,
-            compositeDelimiter = compositeDelimiter
-        )]
-    }))
-})
-getJunctionGenome <- function(genome, sourceId_, chrom){
-    if(genome$isCompositeGenome) sapply(chrom, function(x) strsplit(x, genome$compositeDelimiter)[[1]][2]) 
-    else genome$sourceGenome
-}
-junctions <- reactive({
-    sourceIds <- sourceIds()
-    req(sourceIds) 
-    samples <- samples()
-    genomes <- genomes() # TODO: cache this?
-    startSpinner(session, message = "loading junctions")
-    x <- do.call(rbind, lapply(sourceIds, function(sourceId_){
-        samples_ <- samples[sourceId == sourceId_]
-        genome <- genomes[sourceId == sourceId_][1]
-        x <- svx_loadJunctions(sourceId_, svWGS_loadJunctions)[, ":="(
-            X = 1,
-            sourceId = sourceId_,
-            sourceGenome = genome$sourceGenome,
-            Project = samples_$Project[1],
-            Sample_ID = gsub(",", "", samples),
-            Clonal = ifelse(nInstances > 1, "Clonal", "Single"),
-            SV_Type = svx_jxnType_codeToX(edgeType, "name"),
-            genome1 = getJunctionGenome(genome, sourceId_, cChrom1),
-            genome2 = getJunctionGenome(genome, sourceId_, cChrom2)
-        )][, 
-            Genome := ifelse(genome1 == genome2, genome1, "Intergenome")
-        ]
-        cols <- names(x)
-        x[, .SD, .SDcols = cols[!(cols %in% c(samples_$Sample_ID))]] # to allow merging across sources with different samples
-
-    }))
-    stopSpinner(session)
-    x
-})
-filteredJunctions <- reactive({ # junction subjected to page-level filters only
-    x <- junctions() 
-    startSpinner(session, message = "filtering junctions.")
-    x <- svx_applyJunctionFilters(x, settings)
-    stopSpinner(session)
-    x
-})
-
-#----------------------------------------------------------------------
-# source samples, stratified by composite genomes when applicable
-#----------------------------------------------------------------------
-sampleGenomesTableData <- reactive({
-    sourceIds <- sourceIds()
-    req(sourceIds)
-    samples <- samples()
-    genomes <- genomes()
-    do.call(rbind, lapply(sourceIds, function(sourceId_){
-        genomes <- genomes[sourceId == sourceId_]
-        isCompositeGenome <- genomes$isCompositeGenome[1]
-        samples[
-            sourceId == sourceId_, 
-            .(
-                Source_Genome = genomes$sourceGenome[1],
-                Genome = if(isCompositeGenome) c(genomes$genome, "Intergenome") else genomes$genome, 
-                isCompositeGenome = isCompositeGenome, 
-                compositeDelimiter = genomes$compositeDelimiter[1]
-            ), 
-            by = .(sourceId, Project, Sample_ID)
-        ]
-    }))
-    # [, ":="(
-    #     key = paste(Project, Sample_ID, Genome)
-    # )]
-})
-sampleGenomesTable <- bufferedTableServer(
-    "sampleGenomes",
+data <- svWGS_explorer_dataSelectorsServer(
+    "dataSelectors",
     id,
-    input,
-    tableData = reactive( sampleGenomesTableData()[, .(Project, Sample_ID, Source_Genome, Genome)] ),
-    selection = 'multiple',
-    options = list(
-        paging = FALSE,
-        searching = FALSE  
-    )
+    settings, 
+    sourceSelection = "multiple",
+    sampleGenomesSelection = "multiple"
 )
-sampleGenomes <- reactive({
-    rows <- sampleGenomesTable$rows_selected()
-    req(rows)
-    sampleGenomesTableData()[rows]
-})
-sampleGenomeJunctions <- reactive({ # further apply the sampleGenome filters
-    jxns <- filteredJunctions()
-    sampleGenomes <- sampleGenomes()    
-    startSpinner(session, message = "filtering junctions..")
-    x <- jxns[sourceGenome %in% sampleGenomes$Source_Genome &
-              Genome       %in% sampleGenomes$Genome]
-    stopSpinner(session)
-    x
-})
 
 #----------------------------------------------------------------------
 # microhomology/insertion distribution plot
@@ -172,7 +60,7 @@ parseGroupingCols <- function(jxns, lhsCols, groupingCols){
         nGroups = length(groups),
         hasGroups = nGroupingCols > 1 || groupingCols != "X",
         groupCounts = groupCounts[groups, N],
-        jxns = jxns[, .SD, .SDcols = c(lhsCols, "group")]
+        jxns = jxns[, .SD, .SDcols = c(lhsCols, "SV_SIZE", "group")]
     )
 }
 dcastSvsByGroup <- function(svs, lhsCols, groups_, step = 1){
@@ -196,90 +84,107 @@ dcastSvsByGroup <- function(svs, lhsCols, groups_, step = 1){
     dt[, .SD, .SDcols = c(lhsCols, groups_)]
 }
 microhomologyData <- reactive({
-    # req(!input$suspendDataProcessing)
-    jxns <- sampleGenomeJunctions()[N_SPLITS > 0]
+    jxns <- data$sampleGenomeJunctions()[N_SPLITS > 0]
     req(jxns, nrow(jxns) > 0)
     jxns[, insertSize := -MICROHOM_LEN]
-    lhsCols <- "insertSize"
-    grouping <- parseGroupingCols(
-        jxns, 
-        lhsCols,
-        input$microhomologyGroupBy
-    )
+    # lhsCols <- "insertSize"
+    # grouping <- parseGroupingCols(
+    #     jxns, 
+    #     lhsCols,
+    #     input$microhomologyGroupBy
+    # )
     list(
-        grouping = grouping,
-        dists = dcastSvsByGroup(
-            grouping$jxns, 
-            lhsCols,
-            grouping$groups, 
-            step = 1
-        ),
+        # grouping = grouping,
+        # dists = dcastSvsByGroup(
+        #     grouping$jxns, 
+        #     lhsCols,
+        #     grouping$groups, 
+        #     step = 1
+        # ),
         jxns = jxns
     )
 })
 #----------------------------------------------------------------------
-microhomologyPlot <- staticPlotBoxServer(
-    "microhomologyPlot",
-    margins = TRUE,
-    title = TRUE,
-    settings = list(
-        Limits = list(
-            Min_X_Value = list(
-                type = "numericInput",
-                value = -10,
-                min = -50, 
-                max = 0,
-                step = 5
-            ),
-            Max_X_Value = list(
-                type = "numericInput",
-                value = 15,
-                min = 0, 
-                max = 50,
-                step = 5
-            )
-        )
-    ), 
-    size = "m",
-    create = function() {
-        d <- microhomologyData()
-        xlim <- c(
-            microhomologyPlot$settings$get("Limits","Min_X_Value"),
-            microhomologyPlot$settings$get("Limits","Max_X_Value")
-        )
-        maxY <- d$dists[, max(.SD, na.rm = TRUE), .SDcols = d$grouping$groups] * 1.05 
-        title <- microhomologyPlot$settings$get("Plot_Frame", "Title", NULL)
-        totalJxns <- paste(trimws(commify(sum(d$grouping$groupCounts))), "Total Junctions")
-        title <- if(is.null(title)) totalJxns else paste0(title, " (", totalJxns, ")")
-        microhomologyPlot$initializeFrame(
-            xlim = xlim,
-            ylim = c(0, maxY),
-            xlab = "Insert Size (bp)",
-            ylab = "Frequency",
-            xaxs = "i",
-            yaxs = "i",
-            title = title,
-            cex.main = 0.95
-        )
-        abline(v = c(seq(-50, 50, 5), -1, -2), col = "grey")
-        abline(v = 0) 
-        lwd <- 1.5
-        for(i in 2:ncol(d$dists)){ # overplot individual data points on the bar plot
-            microhomologyPlot$addLines(
-                x = d$dists[[1]],
-                y = d$dists[[i]],
-                col = CONSTANTS$plotlyColors[[i - 1]],
-                lwd = lwd
-            )
-        }
-        if(d$grouping$hasGroups) microhomologyPlot$addMarginLegend(
-            xlim[2] * 1.1, maxY, lty = 1, lwd = 1.5, 
-            legend = paste0(d$grouping$groups, " (", trimws(commify(d$grouping$groupCounts)), ")"),
-            col = unlist(CONSTANTS$plotlyColors[1:d$grouping$nGroups]),
-            bty = "n"
-        )
-        stopSpinner(session)
-    }
+insertSizeDensityPlot <- mdiDensityPlotBoxServer(
+    id = "insertSizeDensityPlot",
+    data = reactive( microhomologyData()$jxns ),
+    lhsCols = "insertSize", # columns on the left hand side of the dcast formula, usually the X-axis value
+    groupingCols = reactive( input$microhomologyGroupBy ), # columns used to define the groups to summarize
+    step = 1, # the bin resolution on the X axis
+    xlab = "Insert Size (bp)",
+    extraCols = NULL # additional column to maintain from the original data
+)
+
+# microhomologyPlot <- staticPlotBoxServer(
+#     "microhomologyPlot",
+#     margins = TRUE,
+#     title = TRUE,
+#     settings = list(
+#         Limits = list(
+#             Min_X_Value = list(
+#                 type = "numericInput",
+#                 value = -10,
+#                 min = -50, 
+#                 max = 0,
+#                 step = 5
+#             ),
+#             Max_X_Value = list(
+#                 type = "numericInput",
+#                 value = 15,
+#                 min = 0, 
+#                 max = 50,
+#                 step = 5
+#             )
+#         )
+#     ), 
+#     size = "m",
+#     create = function() {
+#         d <- microhomologyData()
+#         xlim <- c(
+#             microhomologyPlot$settings$get("Limits","Min_X_Value"),
+#             microhomologyPlot$settings$get("Limits","Max_X_Value")
+#         )
+#         maxY <- d$dists[, max(.SD, na.rm = TRUE), .SDcols = d$grouping$groups] * 1.05 
+#         title <- microhomologyPlot$settings$get("Plot_Frame", "Title", NULL)
+#         totalJxns <- paste(trimws(commify(sum(d$grouping$groupCounts))), "Total Junctions")
+#         title <- if(is.null(title)) totalJxns else paste0(title, " (", totalJxns, ")")
+#         microhomologyPlot$initializeFrame(
+#             xlim = xlim,
+#             ylim = c(0, maxY),
+#             xlab = "Insert Size (bp)",
+#             ylab = "Frequency",
+#             xaxs = "i",
+#             yaxs = "i",
+#             title = title,
+#             cex.main = 0.95
+#         )
+#         abline(v = c(seq(-50, 50, 5), -1, -2), col = "grey")
+#         abline(v = 0) 
+#         lwd <- 1.5
+#         for(i in 2:ncol(d$dists)){ # overplot individual data points on the bar plot
+#             microhomologyPlot$addLines(
+#                 x = d$dists[[1]],
+#                 y = d$dists[[i]],
+#                 col = CONSTANTS$plotlyColors[[i - 1]],
+#                 lwd = lwd
+#             )
+#         }
+#         if(d$grouping$hasGroups) microhomologyPlot$addMarginLegend(
+#             xlim[2] * 1.1, maxY, lty = 1, lwd = 1.5, 
+#             legend = paste0(d$grouping$groups, " (", trimws(commify(d$grouping$groupCounts)), ")"),
+#             col = unlist(CONSTANTS$plotlyColors[1:d$grouping$nGroups]),
+#             bty = "n"
+#         )
+#         stopSpinner(session)
+#     }
+# )
+
+#----------------------------------------------------------------------
+# insert size vs. SV size
+#----------------------------------------------------------------------
+sizeCorrelationPlot <- svx_sizeCorrelationPlotBoxServer(
+    "sizeCorrelationPlot",
+    reactive( microhomologyData()$jxns )
 )
 
 #----------------------------------------------------------------------
@@ -363,15 +268,15 @@ observeEvent(matchingJunctionsSelected(), {
     )
     stopSpinner(session)
 })
-# expansionTable <- bufferedTableServer(
-#     "expansionTable",
-#     id,
-#     input,
-#     tableData = expansionTableData,
-#     selection = 'none',
-#     options = list(
-#     )
-# )
+expansionTable <- bufferedTableServer(
+    "expansionTable",
+    id,
+    input,
+    tableData = expansionTableData,
+    selection = 'none',
+    options = list(
+    )
+)
 output$expansionUI <- renderUI({
     expansionUIContents()
 })
@@ -391,7 +296,8 @@ bookmarkObserver <- observe({
     bm <- getModuleBookmark(id, module, bookmark, locks)
     req(bm)
     settings$replace(bm$settings)
-    microhomologyPlot$settings$replace(bm$outcomes$microhomologyPlotSettings)
+    insertSizeDensityPlot$settings$replace(bm$outcomes$insertSizeDensityPlotSettings)
+    sizeCorrelationPlot$settings$replace(bm$outcomes$sizeCorrelationPlotSettings)
     # updateTextInput(session, 'xxx', value = bm$outcomes$xxx)
     # xxx <- bm$outcomes$xxx
     bookmarkObserver$destroy()
@@ -404,7 +310,8 @@ list(
     input = input,
     settings = settings$all_,
     outcomes = list(
-        microhomologyPlotSettings = microhomologyPlot$settings$all_
+        insertSizeDensityPlotSettings = insertSizeDensityPlot$settings$all_,
+        sizeCorrelationPlotSettings = sizeCorrelationPlot$settings$all_
     ),
     # isReady = reactive({ getStepReadiness(options$source, gcBiasModels()) }),
     # getGcBiasModels = getGcBiasModels_externalCall,
