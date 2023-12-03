@@ -47,9 +47,14 @@ plot <- staticPlotBoxServer(
                 type = "radioButtons",
                 choices = c("levelplot", "scatterplot"),
                 value = "levelplot"
+            ),
+            Group_Points_By = list(
+                type = "radioButtons",
+                choices = c("SV Type", "Sample"),
+                value = "SV Type"
             )
         )
-    ), mdiLevelPlotSettings), 
+    ), mdiLevelPlotSettings, mdiXYPlotSettings), 
     size = "m",
     create = function() {
         jxns <- jxns()
@@ -72,6 +77,8 @@ plot <- staticPlotBoxServer(
             title = title,
             cex.main = 0.95
         )
+        v <- c(seq(-50, 50, 5), -1, -2)
+        h <- 0:10
         if(plot$settings$get("Size_Plot","Size_Plot_Type") == "levelplot"){
             mdiLevelPlot(
                 dt = jxns[, .(x = insertSize, y = round(log10(size), 1))],
@@ -83,32 +90,37 @@ plot <- staticPlotBoxServer(
                 z.column = "x",
                 settings = plot$settings,
                 legendTitle = "# Junctions",
-                v = c(seq(-50, 50, 5), -1, -2),
-                h = 0:10,
+                v = v,
+                h = h,
                 border = NA
             )            
         } else {
-            d <- jxns[, .(
-                x = insertSize,
-                y = log10(size),
-                color = svx_jxnType_codeToX(edgeType, "color")
-            )][sample.int(.N)]
-            plot$addPoints(
-                x = jitter(d$x, a = 0.5),
-                y = jitter(d$y),
-                col = d$color
-            )
-            edgeTypes <- svx_jxnTypes$code[svx_jxnTypes$code %in% unique(jxns$edgeType)]
-            plot$addMarginLegend(
-                xlim[2] * 1.1, 
-                ylim[2], 
-                lty = NULL, 
-                lwd = NULL, 
-                legend = svx_jxnType_codeToX(edgeTypes, "longName"),
-                col = svx_jxnType_codeToX(edgeTypes, "color"),
-                bty = "n",
-                pt.cex = 1,
-                cex = 0.85
+            groupBy <- plot$settings$get("Size_Plot","Group_Points_By")
+            if(groupBy == "SV Type"){
+                jxns[, group := svx_jxnType_codeToX(edgeType, "longName")]
+                edgeTypes <- svx_jxnTypes$code[svx_jxnTypes$code %in% unique(jxns$edgeType)] 
+                groupColors <- as.list(svx_jxnType_codeToX(edgeTypes, "color")) 
+                names(groupColors) <- svx_jxnType_codeToX(edgeTypes, "longName")
+            } else {
+                jxns[, group := gsub(",", " ", samples)]
+                groupColors <- NULL
+            }
+            mdiXYPlot(
+                plot,
+                dt = jxns[, .(
+                    x = insertSize, 
+                    y = log10(size), 
+                    group = group
+                )],
+                groupingCols = "group",
+                groupColors = groupColors,
+                xlim = xlim,
+                ylim = ylim,
+                plotAs = "points",
+                legendTitle = groupBy,
+                v = v,
+                h = h,
+                x0Line = TRUE
             )
         }
         stopSpinner(session)

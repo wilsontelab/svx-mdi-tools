@@ -56,16 +56,15 @@ svWGS_junctionExplorerUI <- function(id, options) {
                     checkboxGroupInput(
                         ns("microhomologyGroupBy"),
                         NULL,
-                        choices = c("Project", "Sample_ID", "Genome", "Clonal", "SV_Type"),
+                        choices = c("Project", "Sample", "Sample_ID", "Genome", "Clonal", "SV_Type"),
                         inline = FALSE
                     )
                 )
             ),
-            # plotBox_("microhomology", "Microhomology/Insertion Distribution")
             mdiDensityPlotBoxUI(
                 ns("insertSizeDensityPlot"),
                 title = "Microhomology/Insertion Distribution",
-                width = 8,
+                width = 10,
                 solidHeader = TRUE,
                 status = "primary",
                 collapsible = TRUE,
@@ -76,7 +75,7 @@ svWGS_junctionExplorerUI <- function(id, options) {
             column(width = 2),
             svx_sizeCorrelationPlotBoxUI(
                 ns("sizeCorrelationPlot"),
-                width = 8,
+                width = 10,
                 solidHeader = TRUE,
                 status = "primary",
                 collapsible = TRUE,

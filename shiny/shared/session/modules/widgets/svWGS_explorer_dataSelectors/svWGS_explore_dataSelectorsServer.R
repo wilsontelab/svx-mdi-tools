@@ -63,14 +63,14 @@ junctions <- reactive({
             sourceId = sourceId_,
             sourceGenome = genome$sourceGenome,
             Project = samples_$Project[1],
-            Sample_ID = gsub(",", "", samples),
+            Sample_ID = trimws(gsub(",", " ", samples)),
             Clonal = ifelse(nInstances > 1, "Clonal", "Single"),
             SV_Type = svx_jxnType_codeToX(edgeType, "name"),
             genome1 = getJunctionGenome(genome, sourceId_, cChrom1),
             genome2 = getJunctionGenome(genome, sourceId_, cChrom2)
-        )][, 
-            Genome := ifelse(genome1 == genome2, genome1, "Intergenome")
-        ]
+        )][, ":="(
+            Genome = ifelse(genome1 == genome2, genome1, "Intergenome")
+        )]
         if(sourceSelection == "multiple"){ # to allow merging across multiple sources with different samples 
             cols <- names(x)
             x[, .SD, .SDcols = cols[!(cols %in% c(samples_$Sample_ID))]]           
@@ -104,7 +104,8 @@ sampleGenomesTableData <- reactive({
                 Source_Genome = genomes$sourceGenome[1],
                 Genome = if(isCompositeGenome) c(genomes$genome, "Intergenome") else genomes$genome, 
                 isCompositeGenome = isCompositeGenome, 
-                compositeDelimiter = genomes$compositeDelimiter[1]
+                compositeDelimiter = genomes$compositeDelimiter[1],
+                Sample = getSampleNames(sampleIds = Sample_ID)
             ), 
             by = .(sourceId, Project, Sample_ID)
         ]
@@ -114,7 +115,7 @@ sampleGenomesTable <- bufferedTableServer(
     "sampleGenomes",
     id,
     input,
-    tableData = reactive( sampleGenomesTableData()[, .(Project, Sample_ID, Source_Genome, Genome)] ),
+    tableData = reactive( sampleGenomesTableData()[, .(Project, Sample, Source_Genome, Genome)] ),
     selection = sampleGenomesSelection,
     options = list(
         paging = FALSE,
