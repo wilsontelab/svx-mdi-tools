@@ -102,9 +102,11 @@ edges <- loadEdges("sv")
 # edges[, cigar := "X"]
 edges[, c(controlAdapterScores) := NULL]
 setkey(edges, readI, blockN, edgeN)
+edges <- dropReadsWithNoJunctions(edges, getHighQualityJunctions, "high-quality", "edges")
+edges <- setHighQualityFlag(edges)
 edges <- checkReadBandwidth(edges)
-message("junction counts by bandwidth status")
-print(edges[getJunctionEdges(edges), .(nJunctions = .N), keyby = .(passedBandwidth)]) 
+message("junction counts by quality and bandwidth status")
+print(edges[getJunctionEdges(edges), .(nJunctions = .N), keyby = .(highQuality, passedBandwidth)]) 
 #=====================================================================================
 
 #=====================================================================================
@@ -118,7 +120,7 @@ if(is.null(env$SKIP_ADAPTER_CHECK)){
     trainingSet <- extractSvmTrainingSet(trainingEdges, trainableEnds)
     rm(trainingEdges)
     svms <- trainAdapterClassifiers(trainingSet)
-    adapterCheck <- checkJunctionsForAdapters(svms, edges[insertSize >= 5])
+    adapterCheck <- checkJunctionsForAdapters(svms, edges[highQuality == TRUE & insertSize >= 5])
     edges <- updateEdgesForAdapters(edges, adapterCheck)
     rm(trainableEnds, trainingSet, svms, adapterCheck)
 } else {
@@ -162,11 +164,11 @@ print(edges[, .(edgeType = ifelse(edgeType == "A", "A", "J"), duplex, foldback, 
 # drop reads with no usable junctions and save for (multi-sample) SV finding
 # ------------------------------------------------------------------------------------
 saveRDS(
-    dropReadsWithNoJunctions(edges, getMatchableJunctions, "edges"), 
+    dropReadsWithNoJunctions(edges, getMatchableJunctions, "matchable", "edges"), 
     paste(env$ANALYZE_PREFIX, "edges", "rds", sep = ".")
 )
 saveRDS(
-    dropReadsWithNoJunctions(duplexEdges, getMatchableJunctions, "duplexEdges"),
+    dropReadsWithNoJunctions(duplexEdges, getMatchableJunctions, "matchable", "duplexEdges"),
     paste(env$ANALYZE_PREFIX, "duplexEdges", "rds", sep = ".")
 )
 #=====================================================================================

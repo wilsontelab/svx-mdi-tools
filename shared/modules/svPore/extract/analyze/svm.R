@@ -95,7 +95,7 @@ checkJunctionsForAdapters <- function(svms, d){
     }
     data.table(
         readI = d$readI,
-        edgeN    = d$edgeN,
+        edgeN = d$edgeN,
         hasAdapter5 = predictAdapter("5", d$insertSize, d[, .(score = score5, nBases = nBases5, start = start5, end = end5)]),
         hasAdapter3 = predictAdapter("3", d$insertSize, d[, .(score = score3, nBases = nBases3, start = start3, end = end3)])
     )

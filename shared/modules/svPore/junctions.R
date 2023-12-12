@@ -4,12 +4,12 @@
 #-------------------------------------------------------------------------------------
 
 # drop reads with no matchable junctions, they can never support an SV call
-dropReadsWithNoJunctions <- function(edges, matchFilterFn, type){
-    message("dropping reads with no usable junctions")
-    matchable <- matchFilterFn(edges)
-    I <- edges[, any(matchable[.I]), by = .(readI)][[2]] # count and report reads with any matchable jxn
-    message(paste(type, "=", length(I), "reads ->", sum(I), "reads with >=1 matchable junctions"))
-    I <- edges[, rep(any(matchable[.I]), .N), by = .(readI)][[2]] # keep or drop all edges from the read
+dropReadsWithNoJunctions <- function(edges, matchFilterFn, filterType, edgeType){
+    message(paste("dropping reads with no", filterType, "junctions"))
+    usable <- matchFilterFn(edges)
+    I <- edges[, any(usable[.I]), by = .(readI)][[2]] # count and report reads with any usable jxn
+    message(paste0(edgeType, ": ", length(I), " reads -> ", sum(I), " reads with >=1 ", filterType, " junctions"))
+    I <- edges[, rep(any(usable[.I]), .N), by = .(readI)][[2]] # keep or drop all edges from the read
     edges[I]
 }
 
