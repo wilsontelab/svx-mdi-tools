@@ -38,6 +38,8 @@ appSteps:
         module: sourceFileUpload
     plots:
         module: assemblyPlots
+        options:
+            assemblyType: svCapture
     # assign: # usually the 2nd step of every app
     #     module: assignSamples        
     #     options:

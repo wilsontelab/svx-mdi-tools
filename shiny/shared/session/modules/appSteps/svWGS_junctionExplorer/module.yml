@@ -1,15 +1,15 @@
 #----------------------------------------------------------------------
 # ui
 #----------------------------------------------------------------------
-shortLabel:       "Assemble Plots" # shown on dashboard menu 
-shortDescription: "Create and save aggregated plots of SV formation frequencies, microhomologies, sizes, positions, etc." # shown on Overview page
-longLabel:        "Assemble svCapture summary plots" # shown at top of appStep page 
+shortLabel:       "Junction Explorer" # shown on dashboard menu 
+shortDescription: "Plot the properties of junctions matching specific sets of filter criteria." # shown on Overview page
+longLabel:        "Explore junction properties" # shown at top of appStep page 
 
 #----------------------------------------------------------------------
 # server
 #----------------------------------------------------------------------
 types: # names of the type(s) of this module ...
-    - plots
+    - junctionExplorer
 sourceTypes: upload # ... and of the module(s) on which it depends
 
 #----------------------------------------------------------------------
@@ -30,19 +30,9 @@ packages: # required R packages
 # module-level settings
 #----------------------------------------------------------------------
 settings:
-    Data:
-        Adjust_Read_Lengths:
-            type: checkboxInput
-            value: true 
-        Enforce_Min_Family_Size:
-            type: checkboxInput
-            value: true 
-        Merge_Clones:
-            type: checkboxInput
-            value: true 
-        Merge_Doses:
-            type: checkboxInput
-            value: true 
+    shared:
+        - svFilter_settings.yml
+#     <settingsTabName>:
 #         <settingName>:
 #             type:   textInput
 #             value:  abc  

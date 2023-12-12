@@ -25,8 +25,9 @@ svWGS_expansionTable <- function(molecules, jxn){
     req(molecules)
     cbind(
         molecules[, .(
-            sample = SAMPLE,
-            isRef = as.logical(IS_REFERENCE),            
+            sample = SAMPLE, 
+            molId = MOL_ID,
+            isRef = as.logical(IS_REFERENCE),
             merge = IS_MERGED,
             nodeClass = tolower(svx_nodeClasses_rev[NODE_CLASS + 1]),
             strand = ifelse(MOL_STRAND == 1, "-", "+"),            
