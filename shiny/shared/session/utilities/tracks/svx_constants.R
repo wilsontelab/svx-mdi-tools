@@ -105,12 +105,12 @@ svx_jxnType_altCodeToX <- function(altCodes, col){
     jt[altCodes][[col]]
 }
 svx_jxnType_nameToX <- function(names, col){
-    jt <- svx_jxnTypes[, name := tolower(name)]
+    jt <- copy(svx_jxnTypes)[, name := tolower(name)]
     setkey(jt, name)
     jt[tolower(names)][[col]]
 }
 svx_jxnType_longNameToX <- function(longNames, col){
-    jt <- svx_jxnTypes[, longName := tolower(longName)]
+    jt <- copy(svx_jxnTypes)[, longName := tolower(longName)]
     setkey(jt, longName)
     jt[tolower(longNames)][[col]]
 }

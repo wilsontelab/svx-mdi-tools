@@ -15,17 +15,16 @@ settings:
 plotTypes:
     svFrequencies:
         label: SV Frequencies # title of the box
-        collapsed: true # whether the box is collapsed by default
-    # microhomology:
-    #     label: Microhomology/Insert Distributions
-    #     collapsed: true
-    #     plotBoxUI: mdiDensityPlotBoxUI
-    # endpoints:
-    #     label: SV Endpoint Distributions
-    #     collapsed: true
-    # svSizes:
-    #     label: SV Size Distributions
-    #     collapsed: true
+        collapsed: false # whether the box is collapsed by default
+    microhomology:
+        label: Microhomology/Insert Distributions
+        collapsed: true
+    svSizes:
+        label: SV Size Distributions
+        collapsed: true
+    endpoints:
+        label: SV Endpoint Distributions
+        collapsed: true
 # assemblyPlotBox("insertionTemplates", "Insertion Templates", collapsed = TRUE),
 # assemblyPlotBox("junctionBases", "Junction Base Usage", collapsed = TRUE),
 
@@ -81,5 +80,5 @@ internalUseSampleColumns:
 showGroupColumns:
     - coverage
     - nSvs
-    - meanFrequency
-    - sdFrequency
+    - meanSampleValue
+    - sdSampleValue
