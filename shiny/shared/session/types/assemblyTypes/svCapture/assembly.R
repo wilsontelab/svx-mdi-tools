@@ -133,28 +133,24 @@ svCapture_parseDataByTarget <- function(
     targets <- svCapture_assemblyTargets(assembly)
     keyedTargets <- copy(targets)
     setkey(keyedTargets, name)
-    svs <- svCapture_matchingAssemblySvs(
+    x <- svCapture_matchingAssemblySvs(
         input,
-        assemblyOptions, 
+        assemblyOptions,
         assembly, groupedProjectSamples, groupingCols
-    ) %>% expandFn()
-    dt <- do.call(rbind, lapply(targets$name, function(target){
-        x <- regroupToUserConditions(
-            svs[TARGET_REGION == target], 
-            groupingCols, conditions, groupLabels
-        )
-        x$dt[, ":="(
-            x = x$dt[[xCol]],
-            trackLabel = keyedTargets[target, trackLabel]
-        )]
-    }))
-    list(
-        titleSuffix = NULL,
-        groupLabels = unique(dt$groupLabel),
-        groupCounts = dt[, .N, by = .(groupLabel)],
-        trackLabels = targets$trackLabel,
-        dt = dt
+    )[
+        groupLabel %in% groupLabels
+    ] %>% regroupToUserConditions(
+        groupingCols, conditions, groupLabels
     )
+    x$dt <- expandFn(x$dt)
+    x$dt[, ":="(
+        x = x$dt[[xCol]],
+        trackLabel = unlist(keyedTargets[TARGET_REGION, trackLabel])
+    )]
+    x$trackLabels <- targets$trackLabel
+    x$groupCounts <- x$dt[, .N, by = .(groupLabel)]
+    x$trackCounts <- x$dt[, .N, by = .(trackLabel)]
+    x 
 }
 svCapture_xlimByTarget <- function(assembly){
     reactive({
@@ -269,13 +265,13 @@ svCapture_endpointsServer <- function(
         isProcessingData, assemblyOptions,
         sourceId, assembly, groupedProjectSamples, groupingCols, groups,
         xlab = "SV Endpoint Coordinate (Mbp)",
-        eventPlural = "SVs",        
+        eventPlural = "ends",
         insideWidth = 2.5, 
         insideHeightPerBlock = 0.75,
-        trackCols = "trackLabel",         
+        trackCols = "trackLabel",
         trackSameXLim = FALSE,
         trackSameYLim = TRUE,
-        xlim = svCapture_xlimByTarget(assembly),        
+        xlim = svCapture_xlimByTarget(assembly),
         defaultBinSize = 10000 / 1e6,
         v = svCapture_vLinesByTarget(assembly),
         vShade = svCapture_vShadeByTarget(assembly),
@@ -289,9 +285,8 @@ svCapture_endpointsServer <- function(
                 assembly, groupedProjectSamples, groupingCols,
                 conditions, groupLabels,
                 xCol = "POS", 
-                expandFn = function(dt) dt[
-                    groupLabel %in% groupLabels, 
-                    .(POS = c(POS_1, POS_2) / 1e6) , 
+                expandFn = function(dt) dt[, 
+                    .(POS = c(POS_1, POS_2) / 1e6), 
                     by = .(TARGET_REGION, groupLabel)
                 ]
             )
@@ -299,3 +294,285 @@ svCapture_endpointsServer <- function(
     )
 }
 #----------------------------------------------------------------------
+svx_getInsertionsProperty <- function(assembly, settings, assemblyKey, settingsKey, default = NA){
+    if(is.null(assembly) || is.null(assembly$env[[assemblyKey]])){
+        settingsFamily <- if("Junction_Properties" %in% names(settings)) "Junction_Properties" else "Insertions"
+        if(is.null(settings[[settingsFamily]])) return(default)
+        settings[[settingsFamily]]()[[settingsKey]]$value
+    } else {
+        assembly$env[[assemblyKey]]
+    }
+}
+svx_getInsertionsTitle <- function(assembly, settings, nSvs, family = "Plot"){
+    title <- settings$get("Plot", "Title", NA)
+    nSvs <- paste(nSvs, "SVs")
+    if(!isTruthy(title) && !is.null(assembly)) title <- assembly$env$DATA_NAME
+    if(isTruthy(title)) paste0(title, " (", nSvs, ")")
+    else nSvs
+}
+svx_plotInsertions_yield <- function(plot, svs, assembly = NULL){
+    flankUHom   <- svx_getInsertionsProperty(assembly, plot$settings, "FLANKING_MICROHOMOLOGY", "Flanking_Microhomology", default = 2)
+    searchSpace <- svx_getInsertionsProperty(assembly, plot$settings, "INSERTION_SEARCH_SPACE", "Insertion_Search_Space", default = 500)
+    searchSpace <- searchSpace * 2 * 2 * 2 # two breakpoint junctions searched on both sides of the breakpoint on two strands 
+    yield <- svs[, .(
+        nCombinations = 4 ** (-MICROHOM_LEN + flankUHom * 2), # number of possible unique template sequences for an insertion size 
+        nSvs = .N,                                # number of trials ...
+        nFound = sum(templateType != "not_found") # number of successes ...
+    ), keyby = MICROHOM_LEN][,                    # ... by insert size
+        mu := searchSpace * (1 / nCombinations)   # Poisson mean, i.e., expected target density ...
+    ][, ":="(
+        successRate = nFound / nSvs, # fraction of SVs whose search sequence was found
+        trialSuccessProb = 1 - dpois(0, mu) # probably of finding at least one match
+    )][, 
+        pValue := 1 - pbinom(nFound - 1, nSvs, trialSuccessProb)
+    ]
+    plot$initializeFrame(
+        xlim = range(-yield$MICROHOM_LEN),            
+        ylim = c(0, min(100, max(yield$successRate, yield$trialSuccessProb) * 110)),
+        xlab = "Insertion Size (bp)",            
+        ylab = "% Found Templates",
+        title = svx_getInsertionsTitle(assembly, plot$settings, sum(yield$nSvs))
+    )  
+    plot$addLines(
+        x = -yield$MICROHOM_LEN,            
+        y = yield$trialSuccessProb * 100,
+        col = CONSTANTS$plotlyColors$blue
+    )     
+    pThreshold <- 0.05
+    plot$addPoints(
+        x = -yield$MICROHOM_LEN,            
+        y = yield$successRate * 100,
+        col = ifelse(yield$pValue < 0.05, 
+                        CONSTANTS$plotlyColors$red, 
+                        CONSTANTS$plotlyColors$black)
+    )
+    plot$addLegend(
+        x = "topright",
+        legend = c(
+            paste("p", "<",  pThreshold),
+            paste("p", ">=", pThreshold),
+            "expected"
+        ),
+        col = c(
+            CONSTANTS$plotlyColors$red, 
+            CONSTANTS$plotlyColors$black,
+            CONSTANTS$plotlyColors$blue
+        ),
+        pch = c(19, 19, NA),
+        pt.cex = c(1, 1, NA),
+        lty = c(NA, NA, 1),
+        lwd = c(NA, NA, 1)
+    )
+}
+svx_plotInsertions_map <- function(plot, svs, assembly = NULL){
+    svs <- svs[templateType != "not_found"]
+    svs[, templateType2 := templateType]
+    svs[templateBreakpointSide == "lost", templateType2 := "other"]
+
+    maxDist   <- svx_getInsertionsProperty(NULL, plot$settings, NULL, "Max_Plotted_Distance",  default = 2)
+    vSpacing  <- svx_getInsertionsProperty(NULL, plot$settings, NULL, "Distance_Grid_Spacing", default = 5)
+    flankUHom <- svx_getInsertionsProperty(assembly, plot$settings, "FLANKING_MICROHOMOLOGY", "Flanking_Microhomology", default = 2)
+    foldback <- CONSTANTS$plotlyColors$blue
+    crossJxn <- CONSTANTS$plotlyColors$green
+    other    <- CONSTANTS$plotlyColors$black
+    cols <- list(foldback = foldback, crossJxn = crossJxn, other = other)
+
+    svs[, ":="(
+        x = switch(
+            templateBreakpointN,
+            switch(templateBreakpointSide, lost =  templateDistance, retained = -templateDistance),
+            switch(templateBreakpointSide, lost = -templateDistance, retained =  templateDistance)
+        ),
+        y = switch(
+            templateBreakpointN,
+            switch(templateType, crossJxn = 4, foldback = 3),
+            switch(templateType, crossJxn = 2, foldback = 1)
+        )
+    ), by = c("PROJECT", "SV_ID")]
+
+    plot$initializeFrame(
+        xlim = c(-maxDist, maxDist),          
+        ylim = c(0.5, 6),
+        xlab = "Insertion Template Distance from Junction (bp)",            
+        ylab = "",
+        yaxt = "n",
+        bty = "n",
+        title = svx_getInsertionsTitle(assembly, plot$settings, sum(nrow(svs)))
+    )
+    lastLine <- floor(maxDist / vSpacing) * vSpacing
+    for(x in seq(-lastLine, lastLine, vSpacing)){
+        lines(c(x, x), c(0, 4.75), col = CONSTANTS$plotlyColors$grey)
+    }
+    boldLwd <- 2.5
+    for(y in 3:4){ # left side of junction, drawn on top two lines
+        lines(c(-lastLine, 0), c(y, y), col = CONSTANTS$plotlyColors$black, lwd = boldLwd)  
+        lines(c(0, lastLine),  c(y, y), col = CONSTANTS$plotlyColors$grey)   
+    }
+    for(y in 1:2){ # right side of junction, drawn on bottom two lines
+        lines(c(-lastLine, 0), c(y, y), col = CONSTANTS$plotlyColors$grey)  
+        lines(c(0, lastLine),  c(y, y), col = CONSTANTS$plotlyColors$black, lwd = boldLwd)   
+    }        
+    lines(c(0, 0), c(1, 4), col = CONSTANTS$plotlyColors$black, lwd = boldLwd)
+    text(-maxDist, 5.25, "Left Side of SV",  pos = 4)
+    text( maxDist, 5.25, "Right Side of SV", pos = 2)
+    plot$addPoints(
+        x = jitter(svs$x, amount = 0.25), # jitter to make all points visible      
+        y = jitter(svs$y, amount = 0.25),
+        col = unlist(cols[svs$templateType2])
+    )
+    plot$addLegend(
+        legend = c("cross-junction", "foldback", "other"),
+        col =    c(crossJxn,         foldback,    other),
+        x = "top",
+        horiz = TRUE,
+        x.intersp = 0,
+        pch = 19,
+        pt.cex = 1 
+    )
+}
+svx_plotInsertions_histogram <- function(plot, svs, assembly = NULL){
+    svs <- svs[templateType != "not_found"]
+    svs[templateBreakpointSide == "lost", templateType := "other"]
+
+    maxDist   <- svx_getInsertionsProperty(NULL, plot$settings, NULL, "Max_Plotted_Distance",  default = 2)
+    vSpacing  <- svx_getInsertionsProperty(NULL, plot$settings, NULL, "Distance_Grid_Spacing", default = 5)
+    flankUHom <- svx_getInsertionsProperty(assembly, plot$settings, "FLANKING_MICROHOMOLOGY", "Flanking_Microhomology", default = 2)
+    foldback <- CONSTANTS$plotlyColors$blue
+    crossJxn <- CONSTANTS$plotlyColors$green
+    other    <- CONSTANTS$plotlyColors$black
+    cols <- list(foldback = foldback, crossJxn = crossJxn, other = other)
+
+    d <- dcast(svs, templateDistance ~ templateType, fun.aggregate = length, fill = 0)
+    d <- merge(data.table(templateDistance = 1:maxDist), d, by = "templateDistance", all.x = TRUE)
+    d[is.na(d)] <- 0
+
+    plotCols <- c("crossJxn", "foldback", "other")
+    plot$initializeFrame(
+        xlim = c(0, maxDist),          
+        ylim = c(0, d[, max(.SD, na.rm = TRUE) * 1.05, .SDcols = plotCols]),
+        xlab = "Distance from Junction (bp)",            
+        ylab = "# of Templates",
+        title = svx_getInsertionsTitle(assembly, plot$settings, sum(nrow(svs)))
+    )
+    abline(v = seq(vSpacing, maxDist - 1, vSpacing), col = CONSTANTS$plotlyColors$grey)
+    lwd <- 1.5 # plot$settings$Points_and_Lines()$Line_Width$value
+    for(type in plotCols){
+        lines(d$templateDistance, d[[type]], col = cols[[type]], lwd = lwd)
+    }
+    plot$addLegend(
+        legend = c("cross-junction", "foldback", "other"),
+        col =    unlist(cols[plotCols]),
+        x = "topright",
+        lty = 1,
+        lwd = lwd
+    )
+}
+svCapture_insertionTemplatesServer <- function(
+    id, session, input, output, 
+    isProcessingData, assemblyOptions,
+    sourceId, assembly, groupedProjectSamples, groupingCols, groups
+){
+    settings <- c(assemblyPlotFrameSettings, list(
+        Insertions = list(
+            Max_Plotted_Distance = list(
+                type = "numericInput",
+                value = 25
+            ),
+            Distance_Grid_Spacing = list(
+                type = "numericInput",
+                value = 5
+            ),
+            Plot_Insertions_As = list(
+                type = "selectInput",
+                choices = c(
+                    "yield",
+                    "map",
+                    "histogram"
+                ),
+                value = "map"
+            )
+        )
+    ))
+    mars <- list(
+        yield = c(
+            CONSTANTS$assemblyPlots$stdAxisMar, 
+            CONSTANTS$assemblyPlots$stdAxisMar, 
+            CONSTANTS$assemblyPlots$titleMar, 
+            CONSTANTS$assemblyPlots$nullMar
+        ),
+        map = c(
+            CONSTANTS$assemblyPlots$stdAxisMar, 
+            CONSTANTS$assemblyPlots$nullMar, 
+            CONSTANTS$assemblyPlots$titleMar, 
+            CONSTANTS$assemblyPlots$nullMar
+        ),
+        histogram = c(
+            CONSTANTS$assemblyPlots$stdAxisMar, 
+            CONSTANTS$assemblyPlots$stdAxisMar, 
+            CONSTANTS$assemblyPlots$titleMar, 
+            CONSTANTS$assemblyPlots$nullMar
+        )
+    )
+    dims <- list(
+        yield = list(
+            width  = 1.5, 
+            height = 1.25
+        ),
+        map = list(
+            width  = 4, 
+            height = 2
+        ),
+        histogram = list(
+            width  = 1.75, 
+            height = 1.25
+        )
+    )
+    getDim <- function(plotAs, key, option){
+        dim <- trimws(assemblyPlot$plot$settings$get("Plot",option))
+        if(!isTruthy(dim) || dim == "" || dim == "auto") dims[[plotAs]][[key]]
+        else dim
+    }
+    assemblyPlot <- assemblyPlotBoxServer( 
+        id, session, input, output, 
+        isProcessingData,
+        groupingCols, groups,
+        dataFn = function(conditions, groupLabels) {
+            svCapture_matchingAssemblySvs(
+                input,
+                assemblyOptions, 
+                assembly, groupedProjectSamples, groupingCols
+            )[
+                groupLabel %in% groupLabels & 
+                !is.na(templateType) # "not_found", "foldback", or "crossJxn"
+            ]
+        },  
+        plotFrameFn = function(data) {
+            plotAs <- assemblyPlot$plot$settings$get("Insertions","Plot_Insertions_As")
+            list(
+                frame = getAssemblyPlotFrame(
+                    plot = assemblyPlot$plot, 
+                    insideWidth  = getDim(plotAs, "width",  "Width_Inches"), 
+                    insideHeight = getDim(plotAs, "height", "Height_Inches"), 
+                    mar = mars[[plotAs]]
+                ),
+                mar = mars[[plotAs]]
+            )
+        },
+        plotFn = function(plotId, dataReactive, plotFrameReactive) staticPlotBoxServer(
+            plotId,
+            settings = settings, 
+            size = "m",
+            Plot_Frame = reactive({ plotFrameReactive()$frame }),
+            create = function() {
+                d <- dataReactive()
+                plotAs <- assemblyPlot$plot$settings$get("Insertions","Plot_Insertions_As")
+                assembly <- assembly()
+                req(d, d$data, plotAs, assembly)
+                startSpinner(session, message = paste("rendering", id))
+                par(mar = plotFrameReactive()$mar)
+                get(paste("svx_plotInsertions", plotAs, sep = "_"))(assemblyPlot$plot, d$data, assembly)
+                stopSpinner(session)
+            }
+        )
+    )
+}

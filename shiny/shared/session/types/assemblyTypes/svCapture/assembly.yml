@@ -1,5 +1,5 @@
 # caching: use "once" when debugging data loads, otherwise use "asNeeded"
-cacheCreateLevel: once
+cacheCreateLevel: asNeeded
 
 # application-specific settings
 settings:
@@ -15,7 +15,7 @@ settings:
 plotTypes:
     svFrequencies:
         label: SV Frequencies # title of the box
-        collapsed: false # whether the box is collapsed by default
+        collapsed: true # whether the box is collapsed by default
     microhomology:
         label: Microhomology/Insert Distributions
         collapsed: true
@@ -24,9 +24,13 @@ plotTypes:
         collapsed: true
     endpoints:
         label: SV Endpoint Distributions
+        collapsed: false
+    insertionTemplates:
+        label: Insertion Templates
         collapsed: true
-# assemblyPlotBox("insertionTemplates", "Insertion Templates", collapsed = TRUE),
-# assemblyPlotBox("junctionBases", "Junction Base Usage", collapsed = TRUE),
+    # junctionBases:
+    #     label: Junction Base Usage
+    #     collapsed: true
 
 # columns added to the samples table by the pipeline that should be
 #   offered to users as data filters
