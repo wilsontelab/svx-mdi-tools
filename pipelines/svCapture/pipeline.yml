@@ -73,8 +73,10 @@ actions:
             - r-4.1
         optionFamilies: 
             - assembly-inputs
-            - assembly-options
+            - assembly-filters
+            - assembly-coverage
             - assembly-insertions
+            - assembly-base-usage
         resources:
             required:
                 total-ram: 16G

@@ -6,10 +6,10 @@ options:
         short: i
         type: string
         directory:
-            must-exist: true     
+            must-exist: true
         required: true
         default: null
-        description: "data directory containing all project folders identified by --samples-table project column"        
+        description: "data directory containing all project folders identified by --samples-table project column"
     samples-table: 
         order: 2
         short: s
@@ -17,10 +17,10 @@ options:
         required: true
         default: null
         description: "path to a csv or tsv data source file with at least columns project and sample"
-    warn-only:   
+    warn-only:
         order: 3
         short: w
         type: boolean 
         required: false
         default: false
-        description: "only issue a warning if input samples have different genomes, target regions, etc." 
+        description: "only issue a warning if input samples have different genomes, target regions, etc."   
