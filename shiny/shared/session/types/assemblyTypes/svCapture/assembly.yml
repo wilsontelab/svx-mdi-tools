@@ -24,13 +24,17 @@ plotTypes:
         collapsed: true
     endpoints:
         label: SV Endpoint Distributions
-        collapsed: false
+        collapsed: true
+    coverage:
+        label: Target Region Coverage
+        collapsed: true
+    junctionBases:
+        label: Junction Base Usage
+        collapsed: true
     insertionTemplates:
         label: Insertion Templates
-        collapsed: true
-    # junctionBases:
-    #     label: Junction Base Usage
-    #     collapsed: true
+        collapsed: false
+
 
 # columns added to the samples table by the pipeline that should be
 #   offered to users as data filters
