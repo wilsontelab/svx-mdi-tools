@@ -104,6 +104,44 @@ svCapture_matchingAssemblySvs <- function(
             stopSpinner(session)
             svs
         }
+    ) # return object with key and value to support assemblyCache$get cascading
+}
+svCapture_invertInsertionsByGene <- function(svs, assembly, assemblyOptions, targets){
+    assembly <- assembly()
+    req(svs, assembly, assembly$env$INSERTION_SEARCH_SPACE)
+    assemblyCache$get(
+        'invertInsertions', 
+        permanent = TRUE,
+        from = "ram",
+        create = assemblyOptions$cacheCreateLevel,
+        keyObject = list(
+            svs$key,
+            targets,
+            assembly$env$INSERTION_SEARCH_SPACE
+        ), 
+        createFn = function(...) {
+            startSpinner(session, message = "inverting insertions")
+            ss <- 2 * assembly$env$INSERTION_SEARCH_SPACE
+            targets <- copy(targets)
+            setkey(targets, name)
+            svs <- svs$value
+            svs[!is.na(templateType), ":="(
+                geneStrand = targets[TARGET_REGION, geneStrand],
+                templateIsInverted = FALSE
+            )]
+            svs[!is.na(geneStrand) & geneStrand == "-", ":="( # top strand AND any SVs where TARGET_REGION not in target$name pass as is
+                templateStartPos = ss - templateEndPos + 1, # does this need to use searchSpace? if so, need assembly()
+                templateStartFm  = templateEndFm,
+                templateStartIsRetained = templateEndIsRetained,
+                templateEndPos   = ss - templateStartPos + 1,
+                templateEndFm    = templateStartFm,
+                templateEndIsRetained = templateStartIsRetained,
+                templateBreakpointN = 3 - templateBreakpointN,
+                templateIsInverted = TRUE
+            )]
+            stopSpinner(session)
+            svs
+        }
     )$value
 }
 svCapture_regroupedSvs <- function(
@@ -116,7 +154,7 @@ svCapture_regroupedSvs <- function(
         input,
         assemblyOptions,
         assembly, groupedProjectSamples, groupingCols
-    )[
+    )$value[
         groupLabel %in% groupLabels
     ] %>% regroupToUserConditions(
         groupingCols, conditions, groupLabels
@@ -225,7 +263,7 @@ svCapture_microhomologyServer <- function(
                 input,
                 assemblyOptions, 
                 assembly, groupedProjectSamples, groupingCols
-            )[
+            )$value[
                 groupLabel %in% groupLabels &
                 N_SPLITS > 0 # omit gap-only junctions
             ] %>% regroupToUserConditions(
@@ -248,7 +286,7 @@ svCapture_svSizesServer <- function(
         isProcessingData, assemblyOptions,
         sourceId, assembly, groupedProjectSamples, groupingCols, groups,
         xlab = "SV Size (log10 bp)",
-        eventPlural = "SVs",        
+        eventPlural = "SVs",
         defaultBinSize = 0.1,
         v = 0:10,
         x0Line = FALSE,
@@ -257,7 +295,7 @@ svCapture_svSizesServer <- function(
                 input,
                 assemblyOptions, 
                 assembly, groupedProjectSamples, groupingCols
-            )[
+            )$value[
                 groupLabel %in% groupLabels
             ] %>% regroupToUserConditions(
                 groupingCols, conditions, groupLabels
@@ -424,67 +462,205 @@ svCapture_junctionBasesServer <- function(
     isProcessingData, assemblyOptions,
     sourceId, assembly, groupedProjectSamples, groupingCols, groups
 ){
-    # junctionBasesSettings <- list(
-    #     Junction_Bases = list(
-    #         Aggregate_Coverage = list(
-    #             type = "selectInput",
-    #             choices = c("by sample","all samples together"),
-    #             value = "by sample"
-    #         )
-    #     )
-    # )
-    baseValues <- list(A = 1L, C = 2L, G = 3L, T = 4L)
-    baseLookup <- names(baseValues)
-    getBaseUsageProfile <- function(conditions, groupLabels){
-        assembly_ <- assembly()
-        bases <- assembly_$baseUsageProfile # [SV_side, position], value = numeric base, rownames = paste(project, svId, side)
-        env <- assembly_$env 
+    junctionBasesSettings <- list(
+        Junction_Bases = list(
+            Max_Plotted_Distance = list(
+                type = "numericInput",
+                value = 25
+            ),
+            Distance_Grid_Spacing = list(
+                type = "numericInput",
+                value = 10
+            ),
+            Microhomology_Type = list(
+                type = "selectInput",
+                choices = c(
+                    "all",
+                    "microhomology",
+                    "insertion",
+                    "blunt",
+                    "no_insertions"
+                ),
+                value = "no_insertions"
+            ),
+            Transcription_Direction = list(
+                type = "selectInput",
+                choices = c(
+                    "all",
+                    "co_directional",
+                    "collisional"
+                ),
+                value = "all"
+            )
+        )
+    )
+    getBaseUsage <- function(plot, conditions, groupLabels){
+        startSpinner(session, message = "parsing base usage")
+
+        uHomType <- plot$settings$get("Junction_Bases", "Microhomology_Type")
+        getMicrohomologyType <- function(sv){
+            if(sv$MICROHOM_LEN > 0) "microhomology" 
+            else if(sv$MICROHOM_LEN < 0) "insertion" 
+            else "blunt"
+        }
         svs <- svCapture_regroupedSvs(
             input,
             assemblyOptions,
             assembly, groupedProjectSamples, groupingCols,
             conditions, groupLabels
-        )$dt
-        req(bases, svs)
-        svSvKeys <- svs[, paste(project, SV_ID, sep = "::")]
-        basesSvKeys <- sapply(rownames(bases), function(x) paste(strsplit(x, "::")[[1]][1:2], collapse = "::"))
-        I <- which(basesSvKeys %in% svSvKeys)
-        bases <- bases[I, ]
+        )$dt[, 
+            microhomologyType := getMicrohomologyType(.SD), by = .(PROJECT, SV_ID)
+        ][switch(
+            uHomType,
+            all = TRUE,
+            no_insertions = microhomologyType != "insertion",
+            microhomologyType == uHomType
+        )]
+
+        targets <- copy(svCapture_assemblyTargets(assembly))
+        setkey(targets, name) 
+        svs[, 
+            ":="(
+                svKey = paste(project, SV_ID, sep = "::"),
+                geneStrand = targets[TARGET_REGION, geneStrand]
+            )
+        ]
+        setkey(svs, svKey)
+
+        assembly_ <- assembly()
+        bases <- assembly_$baseUsageProfile # [SV_side, position], value = numeric base, rownames = paste(project, svId, breakpointN)
+        basesSvKeys <- substr(rownames(bases), 1, sapply(gregexpr("::", rownames(bases)), function(x) x[2] - 1)) # all SVs with a base profile
+        I <- basesSvKeys %in% svs$svKey
+
+        txnDirection <- plot$settings$get("Junction_Bases", "Transcription_Direction")
+        if(txnDirection != "all"){
+            bases <- bases[I, ]
+            basesSvKeys <- basesSvKeys[I]
+            x <- sapply(gregexpr("::", rownames(bases)), function(x) x[2] + 2)
+            baseBreakpointN <- as.integer(substr(rownames(bases), x, x)) # all SVs with a base profile
+            txnDirFn <- if(txnDirection == "co_directional"){
+                function(geneStrand) if(geneStrand == "+") 1 else 2
+            } else {
+                function(geneStrand) if(geneStrand == "+") 2 else 1
+            }   
+            svs[, txnDirN := sapply(geneStrand, txnDirFn)]
+            I <- svs[basesSvKeys, txnDirN == baseBreakpointN]
+        } else txnDirection <- ""
+
+        jxnBases <- assembly_$junctionBaseUsageProfile[, # c("PROJECT", "SV_ID", "microhomologyType", "A", "C", "G", "T")
+            jxnSvKey := paste(PROJECT, SV_ID, sep = "::")
+        ][
+            jxnSvKey %in% basesSvKeys[I] & 
+            microhomologyType == "microhomology"
+        ][,
+            geneStrand := svs[jxnSvKey, geneStrand]
+        ][,
+            .(
+                A  = ifelse(geneStrand == "+", A, T), # thus, microhomology bases are now all reported in transcription orientation
+                C  = ifelse(geneStrand == "+", C, G), 
+                G  = ifelse(geneStrand == "+", G, C), 
+                T  = ifelse(geneStrand == "+", T, A),
+                A_ = ifelse(geneStrand == "+", T, A), # while prime (_) are complemented
+                C_ = ifelse(geneStrand == "+", G, C), 
+                G_ = ifelse(geneStrand == "+", C, G), 
+                T_ = ifelse(geneStrand == "+", A, T)
+            )
+        ]
+        jxnBasesNames <- names(jxnBases)
+        jxnBases <- apply(jxnBases, 2, sum)
+        names(jxnBases) <- jxnBasesNames
+
+        counts <- apply(bases[I, ], 2, function(v) sapply(1:4, function(b) sum(v == b, na.rm = TRUE))) # [base, position], rowN = numeric base, value = nPos
         list(
-            groupLabels = baseValues,
-            groupCounds = {
-                x <- as.vector(bases)
-                x <- aggregate(x, list(x), length)
-                names(x) <- c("groupLabel", "N")
-                x
-            },
-            dt = do.call(rbind, lapply(1:ncol(bases), function(pos){
-                data.table(
-                    x = pos - env$BASE_USAGE_SPAN - 1,
-                    groupLabel = baseLookup[bases[, pos]]
-                )
-            }))
+            nSvs = length(unique(basesSvKeys[I])),
+            nBreakpoints = sum(I),
+            txnDirection = txnDirection,
+            baseUsageProfile = list(
+                counts = counts,
+                fraction = counts / colSums(counts, na.rm = TRUE)
+            ),
+            jxnBases = jxnBases
         )
-    # junctionBaseUsageProfile = junctionBaseUsageProfile,
-    # targetBaseUsageProfile = targetBaseUsageProfile,
     }
-    baseUsagePlot <- assemblyDensityPlotServer(
+    plotBaseUsage <- function(plot, d){
+        d <- d$data
+        assembly <- assembly()
+        baseColors <- c(
+            A = CONSTANTS$plotlyColors$red,
+            C = CONSTANTS$plotlyColors$blue,
+            G = CONSTANTS$plotlyColors$orange,
+            T = CONSTANTS$plotlyColors$green
+        )
+        fraction <- d$baseUsageProfile$fraction
+        BASE_USAGE_SPAN <- assembly$env$BASE_USAGE_SPAN
+        maxDist <- plot$settings$get("Junction_Bases", "Max_Plotted_Distance")
+        vSpacing <- plot$settings$get("Junction_Bases", "Distance_Grid_Spacing")
+
+        title <- plot$settings$get("Plot", "Title", NA)
+        nBreakpoints <- paste(commify(d$nBreakpoints), "breakpoints")
+        if(!isTruthy(title)) title <- assembly$env$DATA_NAME
+        title <- if(isTruthy(title)) paste0(title, " ", d$txnDirection, " (", nBreakpoints, ")")
+                 else nBreakpoints
+
+        ylim <- range(fraction)
+        ylim <- c(ylim[1], ylim[2] + diff(ylim) / 4)
+        plot$initializeFrame(
+            xlim = c(-maxDist, maxDist),
+            ylim = ylim,
+            xlab = "Distance from Junction (bp)",
+            ylab = "Base Fraction",
+            title = title
+        )  
+
+        lastLine <- floor(maxDist / vSpacing) * vSpacing
+        for(x in seq(-lastLine, lastLine, vSpacing)) lines(c(x, x), ylim, col = "grey80")
+
+        x <- 1:ncol(fraction) - BASE_USAGE_SPAN
+        lwd <- 1.5
+        for(baseI in 1:4) plot$addLines(
+            x = x,
+            y = fraction[baseI, ],
+            col = baseColors[baseI],
+            lwd = lwd
+        )
+
+        if(d$txnDirection != ""){
+            jxnBaseVals <- if(d$txnDirection == "co_directional") c("A","C","G","T") else c("A_","C_","G_","T_")
+            jxnBaseVals <- d$jxnBases[jxnBaseVals]
+            plot$addPoints(
+                x = rep(-1.5, 4),
+                y =  jxnBaseVals/ sum(jxnBaseVals),
+                col = baseColors,
+                pch = 1,
+                cex = 1.5
+            )
+        }
+
+        baseOrder <- c("A", "T", "G", "C")
+        plot$addLegend(
+            legend = baseOrder,
+            col =    baseColors[baseOrder],
+            x = "top",
+            horiz = TRUE,
+            x.intersp = 0,
+            lwd = lwd,
+            lty = 1
+        )
+    }
+    baseUsagePlot <- assemblyXYPlotServer(
         id, session, input, output, 
         isProcessingData, assemblyOptions,
         sourceId, assembly, groupedProjectSamples, groupingCols, groups,
-        xlab = "Position Relative to SV Junction (bp)",
-        eventPlural = "positions",
-        insideWidth = 2.5, 
-        insideHeightPerBlock = 1.5,
-        xlim = reactive({
-            BASE_USAGE_SPAN <- assembly()$env$BASE_USAGE_SPAN
-            c(-BASE_USAGE_SPAN, BASE_USAGE_SPAN)
-        }),
-        defaultBinSize = 1,
-        x0Line = TRUE,
-        y0Line = TRUE,
-        # extraSettings = junctionBasesSettings,
-        dataFn = getBaseUsageProfile
+        extraSettings = junctionBasesSettings,
+        dims = list(width = 1.5, height = 1.5),
+        mar = c(
+            CONSTANTS$assemblyPlots$stdAxisMar, 
+            CONSTANTS$assemblyPlots$stdAxisMar, 
+            CONSTANTS$assemblyPlots$titleMar, 
+            CONSTANTS$assemblyPlots$nullMar
+        ),
+        dataFn = getBaseUsage, 
+        plotFn = plotBaseUsage
     )
 }
 #----------------------------------------------------------------------
@@ -539,6 +715,14 @@ svx_getInsertionPlotMetadata <- function(assembly, settings){
         strandSwitch = -1, 
         other        =  1
     )
+    typePlotOrders <- list(
+        foldback     = 4L, 
+        palindrome   = 5L,
+        crossJxn     = 3L,
+        slippage     = 6L,
+        strandSwitch = 2L, 
+        other        = 1L  
+    )
     list(
         minInsertionSize = minInsertionSize,
         maxInsertionSize = maxInsertionSize,
@@ -548,6 +732,11 @@ svx_getInsertionPlotMetadata <- function(assembly, settings){
         pValueThreshold  = svx_getInsertionsProperty(NULL, settings, NULL, "P_Value_Threshold", default = 0.05),
         maxDist          = svx_getInsertionsProperty(NULL, settings, NULL, "Max_Plotted_Distance",  default = 2),
         vSpacing         = svx_getInsertionsProperty(NULL, settings, NULL, "Distance_Grid_Spacing", default = 5),
+        pileupSort       = svx_getInsertionsProperty(NULL, settings, NULL, "Pileup_Sort", default = "templateDistance"),
+        flankUHom = sapply(1:maxInsertionSize, function(insertionSize){
+            if(insertionSize >= minTemplateSize) 1L
+            else as.integer(ceiling((minTemplateSize - insertionSize) / 2))
+        }),
         nCombinations = sapply(1:maxInsertionSize, function(insertionSize){
             flankUHom <- if(insertionSize >= minTemplateSize) 1L
                         else as.integer(ceiling((minTemplateSize - insertionSize) / 2))
@@ -555,7 +744,8 @@ svx_getInsertionPlotMetadata <- function(assembly, settings){
         }),
         typeColors  = typeColors,
         typeLabels  = typeLabels,
-        typeStrands = typeStrands
+        typeStrands = typeStrands,
+        typePlotOrders = typePlotOrders
     )
 }
 svx_insertions_addTopLegend <- function(plot, md){
@@ -570,6 +760,30 @@ svx_insertions_addTopLegend <- function(plot, md){
     )
 }
 #----------------------------------------------------------------------
+
+#----------------------------------------------------------------------
+svx_plotInsertions_nTemplateInstances <- function(plot, svs, assembly = NULL){
+    md <- svx_getInsertionPlotMetadata(assembly, plot$settings)
+    # svs <- svs[templateType != "notFound"]
+    svs[is.na(templateInstances), templateInstances := 0]
+    density <- svs[, .(
+        nSvs = .N
+    ), keyby = .(templateInstances)]
+    plot$initializeFrame(
+        xlim = c(min(density$templateInstances) - 0.5, max(density$templateInstances) + 0.5),
+        ylim = c(0, max(density$nSvs) * 1.05),
+        xlab = "# of Found Templates",
+        ylab = "# of SVs",
+        title = svx_getInsertionsTitle(assembly, plot$settings, sum(density$nSvs))
+    )     
+    plot$addPoints(
+        x = density$templateInstances,
+        y = density$nSvs,
+        col = CONSTANTS$plotlyColors$blue,
+        typ = "h",
+        lwd = 6
+    )
+}
 svx_plotInsertions_yield <- function(plot, svs, assembly = NULL){
     md <- svx_getInsertionPlotMetadata(assembly, plot$settings)
     yield <- svs[, .(
@@ -595,7 +809,20 @@ svx_plotInsertions_yield <- function(plot, svs, assembly = NULL){
         x = -yield$MICROHOM_LEN,
         y = yield$trialSuccessProb * 100,
         col = CONSTANTS$plotlyColors$blue
-    )     
+    )
+    plot$addPoints(
+        x = -yield$MICROHOM_LEN,
+        y = yield$trialSuccessProb * 100,
+        pch = 19,
+        col = "white"
+    )
+    plot$addPoints(
+        x = -yield$MICROHOM_LEN,
+        y = yield$trialSuccessProb * 100,
+        pch = rev(as.character(md$flankUHom)),
+        col = CONSTANTS$plotlyColors$black,
+        cex = 0.85
+    )
     plot$addPoints(
         x = -yield$MICROHOM_LEN,
         y = yield$successRate * 100,
@@ -664,7 +891,7 @@ svx_plotInsertions_map <- function(plot, svs, assembly = NULL){
 
     lastLine <- floor(md$maxDist / md$vSpacing) * md$vSpacing
     for(x in seq(-lastLine, lastLine, md$vSpacing)){
-        lines(c(x, x), c(0, 4.75), col = CONSTANTS$plotlyColors$grey)
+        lines(c(x, x), c(0, 4.75), col = "grey80")
     }
     boldLwd <- 2.5
     for(y in 3:4){ # left side of junction, thick line drawn on top two lines
@@ -683,8 +910,92 @@ svx_plotInsertions_map <- function(plot, svs, assembly = NULL){
     plot$addPoints(
         x = jitter(svs$x, amount = 0.25), # jitter to make all points visible
         y = jitter(svs$y, amount = 0.25),
-        col = sapply(svs$templateType, function(tt) md$typeColors[[tt]])
+        col = sapply(svs$templateType, function(tt) md$typeColors[[tt]]),
+        cex = 0.75
     )
+    svx_insertions_addTopLegend(plot, md)
+}
+svx_plotInsertions_pileup <- function(plot, svs, assembly = NULL){
+    md <- svx_getInsertionPlotMetadata(assembly, plot$settings)
+    svs <- svs[templateType != "notFound"]
+    templateTypes <- names(md$typeColors)
+    svs <- svs[
+        templateType %in% templateTypes, 
+        .(
+            templateBreakpointN,
+            templateType,
+            templateStartFm,
+            templateEndFm,
+            templateDistance,
+            templateIsRc,
+            series = paste(templateBreakpointN, templateType, sep = ":"),
+            startPos = templateStartPos - md$searchSpace - if(templateBreakpointN == 1) 0L else 1L,
+            endPos   = templateEndPos   - md$searchSpace - if(templateBreakpointN == 1) 0L else 1L,
+            size     = templateEndPos - templateStartPos + 1,
+            plotOrder = md$typePlotOrders[[templateType]]
+        ), 
+        by = .(PROJECT, SV_ID)
+    ][, ":="(
+        insStartPos = startPos + templateStartFm,
+        insEndPos   = endPos   - templateEndFm
+    )][
+        abs(startPos) <= md$maxDist | 
+        abs(endPos)   <= md$maxDist
+    ]
+    svs <- if(md$pileupSort == "size") svs[order(-size)] else svs[order(templateDistance, -size)]
+    svs <- svs[,
+        plotRow := 1:.N,
+        by = .(series)
+    ]
+    maxNSvs <- svs[, .N, by = .(series)][, max(N)]
+    plot$initializeFrame(
+        xlim = c(-md$maxDist, md$maxDist),
+        ylim = c(0, maxNSvs * 4 * 1.1),
+        xlab = "Distance from Junction (bp)",
+        ylab = "", # "# of Templates",
+        yaxt = "n",
+        bty = "n",
+        title = svx_getInsertionsTitle(assembly, plot$settings, sum(nrow(svs)))
+    )
+    abline(v = seq(-1000, 1000, md$vSpacing), col = "grey80")
+    abline(v = 0, col = CONSTANTS$plotlyColors$black)
+    abline(h = c(1,3) * maxNSvs, col = CONSTANTS$plotlyColors$grey)
+    abline(h = 2 * maxNSvs, col = CONSTANTS$plotlyColors$black)
+
+    templateTypeCounts <- function(tt, bpn, isRc) {
+        svs[
+            templateType == tt & 
+            templateBreakpointN == bpn &
+            templateIsRc == isRc,
+            if(.N == 0) NULL else paste(.N, md$typeLabels[[tt]], "   ")
+        ]
+    }
+    if(md$maxDist < 50) for(bpn in 1:2) for(str in c(-1, 1)) text(
+        if(bpn == 1) md$maxDist / 4 else -md$maxDist / 4 * 3, 
+        (0.5 + (if(str == 1) 1 else 0) + (if(bpn == 1) 2 else 0)) * maxNSvs,
+        paste(
+            c(
+                if(str == -1) character() else if(bpn == 1) "Gene Proximal Breakpoint" else "Gene Distal Breakpoint",
+                sapply(templateTypes[md$typeStrands == str], templateTypeCounts, bpn, str == -1)
+            ),
+            collapse = "\n"
+        ),
+        adj = 0
+    )
+    # text( md$maxDist / 2, 3.6 * maxNSvs, "Gene Proximal\nBreakpoint")
+    # text(-md$maxDist / 2, 0.6 * maxNSvs, "Gene Distal\nBreakpoint")
+    lwd <- 0.75 # plot$settings$Points_and_Lines()$Line_Width$value
+    svs[, {
+        yStrand <- md$typeStrands[[templateType[1]]]
+        chunkScalar <- if(templateBreakpointN[1] == 1) 3 else 1
+        yOffset <- chunkScalar * maxNSvs
+        for(svI in seq_len(.N)){
+            .SD[svI, {
+                y <- plotRow * yStrand + yOffset
+                lines(c(startPos, endPos), c(y, y), col = md$typeColors[[templateType]],  lwd = lwd)
+            }]
+        }
+    }, keyby = .(plotOrder, series)]
     svx_insertions_addTopLegend(plot, md)
 }
 svx_plotInsertions_histogram <- function(plot, svs, assembly = NULL){
@@ -710,8 +1021,6 @@ svx_plotInsertions_histogram <- function(plot, svs, assembly = NULL){
     )
     d[is.na(d)] <- 0
     templateTypes <- intersect(names(md$typeColors), names(d))
-    dstr(templateTypes)
-    dstr(d)
     plot$initializeFrame(
         xlim = c(-md$maxDist, md$maxDist),
         ylim = c(0, d[, max(.SD, na.rm = TRUE) * 1.5, .SDcols = templateTypes]),
@@ -730,74 +1039,80 @@ svx_plotInsertions_histogram <- function(plot, svs, assembly = NULL){
     }
     svx_insertions_addTopLegend(plot, md)
 }
-svx_plotInsertions_pileup <- function(plot, svs, assembly = NULL){
-    md <- svx_getInsertionPlotMetadata(assembly, plot$settings)
-    svs <- svs[templateType != "notFound"]
-    templateTypes <- names(md$typeColors)
-    svs <- svs[
-        templateType %in% templateTypes, 
-        .(
-            templateBreakpointN,
-            templateType,
-            templateStartFm,
-            templateEndFm,
-            series = paste(templateBreakpointN, templateType, sep = ":"),
-            # series = if(templateType == "other") 0L else templateBreakpointN,
-            startPos = templateStartPos - md$searchSpace - if(templateBreakpointN == 1) 0L else 1L,
-            endPos   = templateEndPos   - md$searchSpace - if(templateBreakpointN == 1) 0L else 1L,
-            size     = templateEndPos - templateStartPos + 1
-        ), 
-        by = .(PROJECT, SV_ID)
-    ][, ":="(
-        insStartPos = startPos + templateStartFm,
-        insEndPos   = endPos   - templateEndFm
-    )][
-        abs(startPos) <= md$maxDist | 
-        abs(endPos)   <= md$maxDist
-    ][
-        order(series, -size)
-    ][,
-        plotRow := 1:.N,
-        by = .(series)
-    ]
-    maxNSvs <- svs[, .N, by = .(series)][, max(N)]
-    plot$initializeFrame(
-        xlim = c(-md$maxDist, md$maxDist),
-        ylim = c(0, maxNSvs * 4 * 1.1),
-        xlab = "Distance from Junction (bp)",
-        ylab = "", # "# of Templates",
-        yaxt = "n",
-        bty = "n",
-        title = svx_getInsertionsTitle(assembly, plot$settings, sum(nrow(svs)))
-    )
-    abline(v = 0, col = CONSTANTS$plotlyColors$grey)
-    abline(h = c(1,3) * maxNSvs, col = CONSTANTS$plotlyColors$grey)
-    text( md$maxDist / 2, 3.5 * maxNSvs, "Breakpoint #1")
-    text(-md$maxDist / 2, 0.5 * maxNSvs, "Breakpoint #2")
-    lwd <- 0.75 # plot$settings$Points_and_Lines()$Line_Width$value
-    svs[, {
-        yStrand <- md$typeStrands[[templateType[1]]]
-        chunkScalar <- if(templateBreakpointN[1] == 1) 3 else 1
-        yOffset <- chunkScalar * maxNSvs
-        for(svI in seq_len(.N)){
-            .SD[svI, {
-                y <- plotRow * yStrand + yOffset
-                lines(c(startPos, endPos), c(y, y), col = md$typeColors[[templateType]],  lwd = lwd)
-            }]
-        }
-    }, by = .(series)]
-    svx_insertions_addTopLegend(plot, md)
-}
 svx_plotInsertions_microhomologyLengths <- function(plot, svs, assembly = NULL){
     md <- svx_getInsertionPlotMetadata(assembly, plot$settings)
     svs <- svs[templateType != "notFound"]
-    xylim <- c(0.5, 8.5)
+    xylim <- c(0.4, 8.6)
     plot$initializeFrame(
         xlim = xylim,
         ylim = xylim,
-        xlab = "Lef microhomology length (bp)",
-        ylab = "Right microhomology length (bp)",
-        title = svx_getInsertionsTitle(assembly, plot$settings, nrow(svs))
+        xlab = "Priming Microhomology (bp)",
+        ylab = "Resolving Microhomology (bp)",
+        title = svx_getInsertionsTitle(assembly, plot$settings, nrow(svs)),
+        xaxs = "i",
+        yaxs = "i"
+    )  
+    levelPlotSettings <- list(
+        Level_Plot = list(
+            Max_Z_Value = list(
+                value = "auto"
+            ),
+            Level_Palette = list(
+                value = "seq Blues"
+            ),
+            Legend_Digits = list(
+                value = 1
+            )
+        )
+    ) 
+    d <- svs[, .(
+        x = switch(
+            templateType,
+            foldback     = if(templateBreakpointN == 1) templateEndFm else templateStartFm,
+            palindrome   = NA_integer_, # these microhomology lengths are untrustworthy
+            crossJxn     = if(templateBreakpointN == 1) templateEndFm else templateStartFm,
+            slippage     = if(templateBreakpointN == 1) templateStartFm else templateEndFm,
+            strandSwitch = if(templateBreakpointN == 1) templateEndFm else templateStartFm,
+            other        = NA_integer_
+        ),
+        y = switch(
+            templateType,
+            foldback     = if(templateBreakpointN == 2) templateEndFm else templateStartFm,
+            palindrome   = NA_integer_, # these microhomology lengths are untrustworthy
+            crossJxn     = if(templateBreakpointN == 2) templateEndFm else templateStartFm,
+            slippage     = if(templateBreakpointN == 2) templateStartFm else templateEndFm,
+            strandSwitch = if(templateBreakpointN == 2) templateEndFm else templateStartFm,
+            other        = NA_integer_
+        ),
+        templateType
+    ), by = .(templateType, templateBreakpointN)]
+    mdiLevelPlot(
+        d,
+        xlim = xylim,
+        xinc = 1,
+        ylim = xylim,
+        yinc = 1,
+        z.fn = function(d) sum(!is.na(d)),   # function applied to z.columnumn, per grid spot, to generate the output color
+        z.column = "x", # the column in dt passed to z.fn, per grid spot
+        settings = levelPlotSettings, # a settings object from the enclosing staticPlotBox, or any list compatible with mdiLevelPlotSettings
+        legendTitle = "# of SVs",
+        h = c(mode(d$y), quantile(d$y, c(0.5, 0.95), na.rm = TRUE)),
+        v = c(mode(d$x), quantile(d$x, c(0.5, 0.95), na.rm = TRUE))
+    )
+}
+svx_plotInsertions_templateSizes <- function(plot, svs, assembly = NULL){
+    md <- svx_getInsertionPlotMetadata(assembly, plot$settings)
+    svs <- svs[templateType != "notFound"]
+    xlim <- c(md$minInsertionSize - 0.6, md$maxInsertionSize + 4.6)
+    ylim <- c(md$minTemplateSize - 0.6, md$maxInsertionSize + 4.6)
+    plot$initializeFrame(
+        xlim = xlim,
+        ylim = ylim,
+        xlab = "Insertion Size (bp)",
+        ylab = "Total Template Size (bp)",
+        title = svx_getInsertionsTitle(assembly, plot$settings, nrow(svs)),
+        xaxs = "i",
+        yaxs = "i"
     )  
     levelPlotSettings <- list(
         Level_Plot = list(
@@ -812,67 +1127,25 @@ svx_plotInsertions_microhomologyLengths <- function(plot, svs, assembly = NULL){
             )
         )
     )
+    d <- svs[, .(
+        x = -MICROHOM_LEN,
+        y = -MICROHOM_LEN + templateStartFm + templateEndFm,
+        templateType
+    )]
     mdiLevelPlot(
-        svs[, .(
-            x = templateStartFm,
-            y = templateEndFm,
-            templateType
-        )],
-        xlim = xylim,
+        d,
+        xlim = xlim,
         xinc = 1,
-        ylim = xylim,
+        ylim = ylim,
         yinc = 1,
-        z.fn = length,   # function applied to z.columnumn, per grid spot, to generate the output color
-        z.column = "templateType", # the column in dt passed to z.fn, per grid spot
+        z.fn = function(d) sum(!is.na(d)),   # function applied to z.columnumn, per grid spot, to generate the output color
+        z.column = "x", # the column in dt passed to z.fn, per grid spot
         settings = levelPlotSettings, # a settings object from the enclosing staticPlotBox, or any list compatible with mdiLevelPlotSettings
-        legendTitle = "# of SVs"
+        legendTitle = "# of SVs",
+        h = c(mode(d$y), quantile(d$y, c(0.5, 0.95), na.rm = TRUE)),
+        v = c(mode(d$x), quantile(d$x, c(0.5, 0.95), na.rm = TRUE))
     )
 }
-svx_plotInsertions_nTemplateInstances <- function(plot, svs, assembly = NULL){
-    md <- svx_getInsertionPlotMetadata(assembly, plot$settings)
-    # svs <- svs[templateType != "notFound"]
-    svs[is.na(templateInstances), templateInstances := 0]
-    density <- svs[, .(
-        nSvs = .N
-    ), keyby = .(templateInstances)]
-    plot$initializeFrame(
-        xlim = c(min(density$templateInstances) - 0.5, max(density$templateInstances) + 0.5),
-        ylim = c(0, max(density$nSvs) * 1.05),
-        xlab = "# of Found Templates",
-        ylab = "# of SVs",
-        title = svx_getInsertionsTitle(assembly, plot$settings, sum(density$nSvs))
-    )     
-    plot$addPoints(
-        x = density$templateInstances,
-        y = density$nSvs,
-        col = CONSTANTS$plotlyColors$blue,
-        typ = "h",
-        lwd = 6
-    )
-}
-# svx_plotInsertions_templateDistances <- function(plot, svs, assembly = NULL){
-#     md <- svx_getInsertionPlotMetadata(assembly, plot$settings)
-#     svs <- svs[templateType != "notFound"]
-#     density <- svs[, .(
-#         nSvs = .N
-#     ), keyby = .(templateType, templateDistance)]
-#     plot$initializeFrame(
-#         xlim = c(0, md$maxDist),
-#         ylim = c(0, max(density$nSvs) * 1.1),
-#         xlab = "Template Distance from Junction",
-#         ylab = "# of SVs",
-#         title = svx_getInsertionsTitle(assembly, plot$settings, sum(density$nSvs))
-#     )     
-#     for(type in density$templateType){
-#         dd <- density[templateType == type]
-#         plot$addLines(
-#             x = dd$templateDistance,
-#             y = dd$nSvs,
-#             col = md$typeColors[[type]]
-#         )        
-#     }
-#     svx_insertions_addTopLegend(plot, md)
-# }
 svCapture_insertionTemplatesServer <- function(
     id, session, input, output, 
     isProcessingData, assemblyOptions,
@@ -880,6 +1153,23 @@ svCapture_insertionTemplatesServer <- function(
 ){
     settings <- c(assemblyPlotFrameSettings, list(
         Insertions = list(
+            Plot_Insertions_As = list(
+                type = "selectInput",
+                choices = c(
+                    "nTemplateInstances",
+                    "yield",
+                    "map",
+                    "pileup",
+                    "histogram",
+                    "microhomologyLengths",
+                    "templateSizes"
+                ),
+                value = "pileup"
+            ),
+            P_Value_Threshold = list(
+                type = "numericInput",
+                value = 0.05
+            ),
             Max_Plotted_Distance = list(
                 type = "numericInput",
                 value = 25
@@ -888,23 +1178,16 @@ svCapture_insertionTemplatesServer <- function(
                 type = "numericInput",
                 value = 5
             ),
-            Plot_Insertions_As = list(
+            Pileup_Sort = list(
                 type = "selectInput",
                 choices = c(
-                    "yield",
-                    "map",
-                    "histogram",
-                    "pileup",
-                    "microhomologyLengths",
-                    "nTemplateInstances"
-                    # ,
-                    # "templateDistances"
+                    "size",
+                    "templateDistance"
                 ),
-                value = "pileup"
+                value = "size"
             ),
-            P_Value_Threshold = list(
-                type = "numericInput",
-                value = 0.05
+            Spacer = list(
+                type = "spacer"
             ),
             Allow_Multiply_Matched_SVs = list(
                 type = "checkboxInput",
@@ -917,6 +1200,12 @@ svCapture_insertionTemplatesServer <- function(
         )
     ))
     mars <- list(
+        nTemplateInstances = c(
+            CONSTANTS$assemblyPlots$stdAxisMar, 
+            CONSTANTS$assemblyPlots$stdAxisMar, 
+            CONSTANTS$assemblyPlots$titleMar, 
+            CONSTANTS$assemblyPlots$nullMar
+        ),
         yield = c(
             CONSTANTS$assemblyPlots$stdAxisMar, 
             CONSTANTS$assemblyPlots$stdAxisMar, 
@@ -929,13 +1218,13 @@ svCapture_insertionTemplatesServer <- function(
             CONSTANTS$assemblyPlots$titleMar, 
             CONSTANTS$assemblyPlots$nullMar
         ),
-        histogram = c(
+        pileup = c(
             CONSTANTS$assemblyPlots$stdAxisMar, 
             CONSTANTS$assemblyPlots$stdAxisMar, 
             CONSTANTS$assemblyPlots$titleMar, 
             CONSTANTS$assemblyPlots$nullMar
         ),
-        pileup = c(
+        histogram = c(
             CONSTANTS$assemblyPlots$stdAxisMar, 
             CONSTANTS$assemblyPlots$stdAxisMar, 
             CONSTANTS$assemblyPlots$titleMar, 
@@ -947,20 +1236,18 @@ svCapture_insertionTemplatesServer <- function(
             CONSTANTS$assemblyPlots$stdAxisMar, 
             CONSTANTS$assemblyPlots$stdAxisMar
         ),
-        nTemplateInstances = c(
+        templateSizes = c(
             CONSTANTS$assemblyPlots$stdAxisMar, 
             CONSTANTS$assemblyPlots$stdAxisMar, 
-            CONSTANTS$assemblyPlots$titleMar, 
-            CONSTANTS$assemblyPlots$nullMar
-        ),
-        templateDistances = c(
             CONSTANTS$assemblyPlots$stdAxisMar, 
-            CONSTANTS$assemblyPlots$stdAxisMar, 
-            CONSTANTS$assemblyPlots$titleMar, 
-            CONSTANTS$assemblyPlots$nullMar
+            CONSTANTS$assemblyPlots$stdAxisMar
         )
     )
     dims <- list(
+        nTemplateInstances = list(
+            width  = 1.5, 
+            height = 1.25
+        ),
         yield = list(
             width  = 1.5, 
             height = 1.25
@@ -969,23 +1256,19 @@ svCapture_insertionTemplatesServer <- function(
             width  = 4, 
             height = 2
         ),
-        histogram = list(
-            width  = 4, 
-            height = 1.5
-        ),
         pileup = list(
             width  = 4, 
             height = 3
+        ),        
+        histogram = list(
+            width  = 4, 
+            height = 1.5
         ),
         microhomologyLengths = list(
             width  = 1.5, 
             height = 1.5
         ),
-        nTemplateInstances = list(
-            width  = 1.5, 
-            height = 1.5
-        ),
-        templateDistances = list(
+        templateSizes = list(
             width  = 1.5, 
             height = 1.5
         )
@@ -1000,11 +1283,13 @@ svCapture_insertionTemplatesServer <- function(
         isProcessingData,
         groupingCols, groups,
         dataFn = function(conditions, groupLabels) {
-            svCapture_matchingAssemblySvs(
+            targets <- svCapture_assemblyTargets(assembly)
+            svs <- svCapture_matchingAssemblySvs(
                 input,
                 assemblyOptions, 
                 assembly, groupedProjectSamples, groupingCols
-            )[
+            ) %>% svCapture_invertInsertionsByGene(assembly, assemblyOptions, targets)
+            svs[
                 groupLabel %in% groupLabels & 
                 !is.na(templateType) # thus, all insertion junctions from selected samples that were analyzed (even if template not found)
             ]
