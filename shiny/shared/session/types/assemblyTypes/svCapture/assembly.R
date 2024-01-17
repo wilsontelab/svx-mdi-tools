@@ -233,11 +233,13 @@ svCapture_vShadeByTarget <- function(assembly){
 # svCapture assembly plots
 #----------------------------------------------------------------------
 # SV frequencies
+# ----------------------------------------------------------------------
 svCapture_svFrequenciesServer <- function(...){
     assemblyBarplotServer(..., ylab = "SV Frequency", nSD = 2)
 }
 #----------------------------------------------------------------------
 # junction microhomology profiles
+# ----------------------------------------------------------------------
 svCapture_microhomologyServer <- function(
     id, session, input, output, 
     isProcessingData, assemblyOptions,
@@ -276,6 +278,7 @@ svCapture_microhomologyServer <- function(
 }
 #----------------------------------------------------------------------
 # SV size profiles
+# ----------------------------------------------------------------------
 svCapture_svSizesServer <- function(
     id, session, input, output, 
     isProcessingData, assemblyOptions,
@@ -307,6 +310,7 @@ svCapture_svSizesServer <- function(
 }
 #----------------------------------------------------------------------
 # junction endpoint profiles
+# ----------------------------------------------------------------------
 svCapture_endpointsServer <- function(
     id, session, input, output, 
     isProcessingData, assemblyOptions,
@@ -364,6 +368,7 @@ svCapture_endpointsServer <- function(
 }
 #----------------------------------------------------------------------
 # target region coverage profiles
+# ----------------------------------------------------------------------
 svCapture_coverageServer <- function(
     id, session, input, output, 
     isProcessingData, assemblyOptions,
@@ -388,9 +393,9 @@ svCapture_coverageServer <- function(
         startSpinner(session, message = "getting coverage")
         projectSamples <- gps[, paste(project, sample, sep = "::")]
         samples        <- gps[, sample]
-        dt <- do.call(rbind, lapply(targets$name, function(targetName){
-            target <- targets[name == targetName]
-            bins <- bins[[targetName]][, projectSamples]
+        dt <- do.call(rbind, lapply(targets$regionKey, function(targetRegionKey){
+            target <- targets[regionKey == targetRegionKey]
+            bins <- bins[[targetRegionKey]][, projectSamples]
             if(aggType == "by sample") {
                 colnames(bins) <- samples
             } else {
@@ -399,7 +404,7 @@ svCapture_coverageServer <- function(
             }
             do.call(rbind, lapply(1:ncol(bins), function(j){
                 data.table(
-                    TARGET_REGION = targetName,
+                    TARGET_REGION = target$name,
                     groupLabel = colnames(bins)[j],
                     POS = (target$paddedStart + (1:nrow(bins) - 1) * env$COVERAGE_BIN_SIZE) / 1e6,
                     count = bins[, j]
@@ -426,7 +431,7 @@ svCapture_coverageServer <- function(
         id, session, input, output, 
         isProcessingData, assemblyOptions,
         sourceId, assembly, groupedProjectSamples, groupingCols, groups,
-        xlab = "SV Endpoint Coordinate (Mbp)",
+        xlab = "Coordinate (Mbp)",
         eventPlural = "samples",
         insideWidth = 2.5, 
         insideHeightPerBlock = 0.75,
@@ -444,7 +449,7 @@ svCapture_coverageServer <- function(
         aggFn = sum,
         aggCol = "count", 
         dataFn = function(conditions, groupLabels) {
-            svCapture_parseDataByTarget(
+            x <- svCapture_parseDataByTarget(
                 input,
                 assemblyOptions,
                 assembly, groupedProjectSamples, groupingCols,
@@ -452,137 +457,218 @@ svCapture_coverageServer <- function(
                 xCol = "POS", 
                 dataFn = getTargetCoverage
             )
+            dstr(x)
+            x
         }
     )
 }
 #----------------------------------------------------------------------
 # junction base usage profiles
+# ----------------------------------------------------------------------
+svCapture_junctionBasesSettings <- list(
+    Junction_Bases = list(
+        Max_Plotted_Distance = list(
+            type = "numericInput",
+            value = 25
+        ),
+        Distance_Grid_Spacing = list(
+            type = "numericInput",
+            value = 10
+        ),
+        Microhomology_Type = list(
+            type = "selectInput",
+            choices = c(
+                "all",
+                "microhomology",
+                "insertion",
+                "blunt",
+                "no_insertions"
+            ),
+            value = "no_insertions"
+        ),
+        Transcription_Direction = list(
+            type = "selectInput",
+            choices = c(
+                "all",
+                "co_directional",
+                "collisional"
+            ),
+            value = "all"
+        ),
+        Normalize_Base_Groups = list(
+            type = "checkboxInput",
+            value = FALSE
+        )
+    )
+)
+svCapture_junctionBasesSVs <- function(
+    id, session, input, output, 
+    isProcessingData, assemblyOptions,
+    sourceId, assembly, groupedProjectSamples, groupingCols, groups,
+    plot, conditions, groupLabels
+){
+    
+    # filter SVs appropriate for profiling junction base usage, apply user microhomology type filter
+    uHomType <- plot$settings$get("Junction_Bases", "Microhomology_Type")
+    getMicrohomologyType <- function(sv){
+        if(sv$MICROHOM_LEN > 0) "microhomology" 
+        else if(sv$MICROHOM_LEN < 0) "insertion" 
+        else "blunt"
+    }
+    svs <- svCapture_regroupedSvs(
+        input,
+        assemblyOptions,
+        assembly, groupedProjectSamples, groupingCols,
+        conditions, groupLabels
+    )$dt[, 
+        microhomologyType := getMicrohomologyType(.SD), by = .(PROJECT, SV_ID)
+    ][switch(
+        uHomType,
+        all = TRUE,
+        no_insertions = microhomologyType != "insertion",
+        microhomologyType == uHomType
+    )]  
+
+    # determine SV gene strands
+    targets <- copy(svCapture_assemblyTargets(assembly))
+    setkey(targets, name) 
+    svs[, 
+        ":="(
+            svKey = paste(project, SV_ID, sep = "::"),
+            geneStrand = targets[TARGET_REGION, geneStrand]
+        )
+    ]
+    setkey(svs, svKey)  
+    svs
+}
+svCapture_filterFeatureMatrix <- function(featureMatrix, plot, svs){
+    featureSvKeys <- substr(rownames(featureMatrix), 1, sapply(gregexpr("::", rownames(featureMatrix)), function(x) x[2] - 1)) # all SVs with a profile
+    I <- featureSvKeys %in% svs$svKey
+
+    # if requested, restrict the plot to one gene transcription orientation
+    txnDirection <- plot$settings$get("Junction_Bases", "Transcription_Direction")
+    if(txnDirection != "all"){
+        featureMatrix <- featureMatrix[I, ]
+        featureSvKeys <- featureSvKeys[I]
+        x <- sapply(gregexpr("::", rownames(featureMatrix)), function(x) x[2] + 2)
+        breakpointN <- as.integer(substr(rownames(featureMatrix), x, x)) 
+        txnDirFn <- if(txnDirection == "co_directional"){ # fore each SV, keep the breakpoint where replication had the requested orientation relative to transcription
+            function(geneStrand) if(geneStrand == "+") 1 else 2
+        } else {
+            function(geneStrand) if(geneStrand == "+") 2 else 1
+        }   
+        svs[, txnDirN := sapply(geneStrand, txnDirFn)]
+        I <- svs[featureSvKeys, txnDirN == breakpointN]
+    } else txnDirection <- ""
+    list(
+        matrix = featureMatrix[I, ],
+        svKeys = featureSvKeys[I],
+        txnDirection = txnDirection,
+        nSvs = length(unique(featureSvKeys[I])),
+        nBreakpoints = sum(I)
+    )
+}
+svCapture_getBreakpointsTitle <- function(plot, d, env){
+    title <- plot$settings$get("Plot", "Title", NA)
+    nBreakpoints <- paste(commify(d$nBreakpoints), "breakpoints")
+    if(!isTruthy(title)) title <- env$DATA_NAME
+    title <- if(isTruthy(title)) paste0(title, " ", d$txnDirection, " (", nBreakpoints, ")")
+                else nBreakpoints
+}
+svCapture_initJunctionPositionPlot <- function(plot, d, env, ylim, ylab){
+    maxDist  <- plot$settings$get("Junction_Bases", "Max_Plotted_Distance")
+    vSpacing <- plot$settings$get("Junction_Bases", "Distance_Grid_Spacing")
+    plot$initializeFrame(
+        xlim = c(-maxDist, maxDist),
+        ylim = ylim,
+        xlab = "Distance from Junction (bp)",
+        ylab = ylab, 
+        title = svCapture_getBreakpointsTitle(plot, d, env)
+    )
+    lastLine <- floor(maxDist / vSpacing) * vSpacing
+    for(x in seq(-lastLine, lastLine, vSpacing)) lines(c(x, x), ylim, col = "grey80")
+    lines(c(0, 0), ylim, col = "grey50")
+    maxDist
+}
+svCapture_junctionBasesTopLegend <- function(plot, legend, col, lwd){
+    plot$addLegend(
+        legend = legend,
+        col =    col,
+        x = "top",
+        horiz = TRUE,
+        # x.intersp = 0,
+        lwd = lwd,
+        lty = 1
+    )
+}
+# ----------------------------------------------------------------------
 svCapture_junctionBasesServer <- function(
     id, session, input, output, 
     isProcessingData, assemblyOptions,
     sourceId, assembly, groupedProjectSamples, groupingCols, groups
 ){
-    junctionBasesSettings <- list(
-        Junction_Bases = list(
-            Max_Plotted_Distance = list(
-                type = "numericInput",
-                value = 25
-            ),
-            Distance_Grid_Spacing = list(
-                type = "numericInput",
-                value = 10
-            ),
-            Microhomology_Type = list(
-                type = "selectInput",
-                choices = c(
-                    "all",
-                    "microhomology",
-                    "insertion",
-                    "blunt",
-                    "no_insertions"
-                ),
-                value = "no_insertions"
-            ),
-            Transcription_Direction = list(
-                type = "selectInput",
-                choices = c(
-                    "all",
-                    "co_directional",
-                    "collisional"
-                ),
-                value = "all"
-            )
-        )
-    )
-    getBaseUsage <- function(plot, conditions, groupLabels){
+    getBaseUsage <- function(plot, conditions, groupLabels){ # dataFn
         startSpinner(session, message = "parsing base usage")
-
-        uHomType <- plot$settings$get("Junction_Bases", "Microhomology_Type")
-        getMicrohomologyType <- function(sv){
-            if(sv$MICROHOM_LEN > 0) "microhomology" 
-            else if(sv$MICROHOM_LEN < 0) "insertion" 
-            else "blunt"
-        }
-        svs <- svCapture_regroupedSvs(
-            input,
-            assemblyOptions,
-            assembly, groupedProjectSamples, groupingCols,
-            conditions, groupLabels
-        )$dt[, 
-            microhomologyType := getMicrohomologyType(.SD), by = .(PROJECT, SV_ID)
-        ][switch(
-            uHomType,
-            all = TRUE,
-            no_insertions = microhomologyType != "insertion",
-            microhomologyType == uHomType
-        )]
-
-        targets <- copy(svCapture_assemblyTargets(assembly))
-        setkey(targets, name) 
-        svs[, 
-            ":="(
-                svKey = paste(project, SV_ID, sep = "::"),
-                geneStrand = targets[TARGET_REGION, geneStrand]
-            )
-        ]
-        setkey(svs, svKey)
-
-        assembly_ <- assembly()
-        bases <- assembly_$baseUsageProfile # [SV_side, position], value = numeric base, rownames = paste(project, svId, breakpointN)
-        basesSvKeys <- substr(rownames(bases), 1, sapply(gregexpr("::", rownames(bases)), function(x) x[2] - 1)) # all SVs with a base profile
-        I <- basesSvKeys %in% svs$svKey
-
-        txnDirection <- plot$settings$get("Junction_Bases", "Transcription_Direction")
-        if(txnDirection != "all"){
-            bases <- bases[I, ]
-            basesSvKeys <- basesSvKeys[I]
-            x <- sapply(gregexpr("::", rownames(bases)), function(x) x[2] + 2)
-            baseBreakpointN <- as.integer(substr(rownames(bases), x, x)) # all SVs with a base profile
-            txnDirFn <- if(txnDirection == "co_directional"){
-                function(geneStrand) if(geneStrand == "+") 1 else 2
-            } else {
-                function(geneStrand) if(geneStrand == "+") 2 else 1
-            }   
-            svs[, txnDirN := sapply(geneStrand, txnDirFn)]
-            I <- svs[basesSvKeys, txnDirN == baseBreakpointN]
-        } else txnDirection <- ""
-
-        jxnBases <- assembly_$junctionBaseUsageProfile[, # c("PROJECT", "SV_ID", "microhomologyType", "A", "C", "G", "T")
-            jxnSvKey := paste(PROJECT, SV_ID, sep = "::")
-        ][
-            jxnSvKey %in% basesSvKeys[I] & 
-            microhomologyType == "microhomology"
-        ][,
-            geneStrand := svs[jxnSvKey, geneStrand]
-        ][,
-            .(
-                A  = ifelse(geneStrand == "+", A, T), # thus, microhomology bases are now all reported in transcription orientation
-                C  = ifelse(geneStrand == "+", C, G), 
-                G  = ifelse(geneStrand == "+", G, C), 
-                T  = ifelse(geneStrand == "+", T, A),
-                A_ = ifelse(geneStrand == "+", T, A), # while prime (_) are complemented
-                C_ = ifelse(geneStrand == "+", G, C), 
-                G_ = ifelse(geneStrand == "+", C, G), 
-                T_ = ifelse(geneStrand == "+", A, T)
-            )
-        ]
-        jxnBasesNames <- names(jxnBases)
-        jxnBases <- apply(jxnBases, 2, sum)
-        names(jxnBases) <- jxnBasesNames
-
-        counts <- apply(bases[I, ], 2, function(v) sapply(1:4, function(b) sum(v == b, na.rm = TRUE))) # [base, position], rowN = numeric base, value = nPos
-        list(
-            nSvs = length(unique(basesSvKeys[I])),
-            nBreakpoints = sum(I),
-            txnDirection = txnDirection,
-            baseUsageProfile = list(
-                counts = counts,
-                fraction = counts / colSums(counts, na.rm = TRUE)
-            ),
-            jxnBases = jxnBases
+        svs <- svCapture_junctionBasesSVs(
+            id, session, input, output, 
+            isProcessingData, assemblyOptions,
+            sourceId, assembly, groupedProjectSamples, groupingCols, groups,
+            plot, conditions, groupLabels
         )
+
+        # collect the base usage profile of the matching SVs
+        d <- svCapture_filterFeatureMatrix(assembly()$baseUsageProfile, plot, svs) # [SV_side, position], value = numeric base, rownames = paste(project, svId, breakpointN)
+
+        # aggregate all SV breakpoints along the span from retained to lost
+        # bases = int [1:14298, 1:500] 1 2 2 3 4 3 2 3 4 1 ..., rowNames =  chr [1:14298] "HCT_ART558_052422::1496:1::1" "HCT_ART558_052422::1496:1::2" "HCT_ART558_052422::1503:1::1" "HCT_ART558_052422::1503:1::2" ...
+        # counts = int [1:4, 1:500] 4296 2860 2870 4272 4339 2880 2901 4178 4350 2905 ... # [numeric base, position], value = number of SVs matching the row's base at position
+        # fractions = num [1:4, 1:500] 0.3 0.2 0.201 0.299 0.303 ... # [numeric base, position], value = fraction of SVs matching the row's base at position
+        # medians = num [1:4] 0.299 0.202 0.203 0.296 # [numeric base], value = median fraction by base
+        counts <- apply(d$matrix, 2, function(svBasesAtPosition) sapply(1:4, function(base) sum(svBasesAtPosition == base, na.rm = TRUE))) 
+        fractions <- t(t(counts) / colSums(counts, na.rm = TRUE))
+        medians <- apply(fractions, 1, median, na.rm = TRUE)
+        c(
+            d[c("txnDirection","nSvs","nBreakpoints")], 
+            list(
+                baseUsageProfile = list(
+                    counts = counts,
+                    fractions = fractions,
+                    medians = medians,
+                    normalizedFractions = fractions / medians
+                )
+            )
+        )
+
+        # # summarize the base content in junction microhomologies
+        # # these bases ARE already plotted as they are part of the retained sequence span
+        # jxnBaseUsage <- assembly_$junctionBaseUsageProfile[, # c("PROJECT", "SV_ID", "microhomologyType", "A", "C", "G", "T")
+        #     jxnSvKey := paste(PROJECT, SV_ID, sep = "::")
+        # ][
+        #     jxnSvKey %in% basesSvKeys[I] & 
+        #     microhomologyType == "microhomology"
+        # ][,
+        #     geneStrand := svs[jxnSvKey, geneStrand]
+        # ]
+        # jxnBases <- jxnBaseUsage[,
+        #     .(
+        #         A  = ifelse(geneStrand == "+", A, T), # thus, microhomology bases are now all reported in transcription orientation
+        #         C  = ifelse(geneStrand == "+", C, G), 
+        #         G  = ifelse(geneStrand == "+", G, C), 
+        #         T  = ifelse(geneStrand == "+", T, A),
+        #         A_ = ifelse(geneStrand == "+", T, A), # while prime (_) are complemented
+        #         C_ = ifelse(geneStrand == "+", G, C), 
+        #         G_ = ifelse(geneStrand == "+", C, G), 
+        #         T_ = ifelse(geneStrand == "+", A, T)
+        #     )
+        # ]
+        # jxnBasesNames <- names(jxnBases)
+        # jxnBases <- apply(jxnBases, 2, sum)
+        # names(jxnBases) <- jxnBasesNames
+
+        # # determine the position at the center of the microhomology base weighting
+        # microhomologyPos <- svs[unique(jxnBaseUsage$jxnSvKey), .(mPos = 1:MICROHOM_LEN), by = .(svKey)][, mean(mPos)]
     }
-    plotBaseUsage <- function(plot, d){
+    plotBaseUsage <- function(plot, d){ # plotFn
         d <- d$data
         assembly <- assembly()
         baseColors <- c(
@@ -591,67 +677,64 @@ svCapture_junctionBasesServer <- function(
             G = CONSTANTS$plotlyColors$orange,
             T = CONSTANTS$plotlyColors$green
         )
-        fraction <- d$baseUsageProfile$fraction
-        BASE_USAGE_SPAN <- assembly$env$BASE_USAGE_SPAN
-        maxDist <- plot$settings$get("Junction_Bases", "Max_Plotted_Distance")
-        vSpacing <- plot$settings$get("Junction_Bases", "Distance_Grid_Spacing")
+        normalize <- plot$settings$get("Junction_Bases", "Normalize_Base_Groups")
 
-        title <- plot$settings$get("Plot", "Title", NA)
-        nBreakpoints <- paste(commify(d$nBreakpoints), "breakpoints")
-        if(!isTruthy(title)) title <- assembly$env$DATA_NAME
-        title <- if(isTruthy(title)) paste0(title, " ", d$txnDirection, " (", nBreakpoints, ")")
-                 else nBreakpoints
-
-        ylim <- range(fraction)
+        valueKey <- if(normalize) "normalizedFractions" else "fractions"
+        values <- d$baseUsageProfile[[valueKey]]
+        ylim <- range(values)
         ylim <- c(ylim[1], ylim[2] + diff(ylim) / 4)
-        plot$initializeFrame(
-            xlim = c(-maxDist, maxDist),
-            ylim = ylim,
-            xlab = "Distance from Junction (bp)",
-            ylab = "Base Fraction",
-            title = title
-        )  
+        maxDist <- svCapture_initJunctionPositionPlot(
+            plot, d, assembly$env, ylim, 
+            if(normalize) "Normalized Base Fraction" else "Base Fraction"
+        )
 
-        lastLine <- floor(maxDist / vSpacing) * vSpacing
-        for(x in seq(-lastLine, lastLine, vSpacing)) lines(c(x, x), ylim, col = "grey80")
+        lwd = 1
+        if(!normalize) for(baseI in 1:4) plot$addLines(
+            x = c(-maxDist, maxDist),
+            y = rep(d$baseUsageProfile$medians[baseI], 2),
+            col = baseColors[baseI],
+            lwd = lwd
+        ) else abline(h = 1, , col = "grey50")
 
-        x <- 1:ncol(fraction) - BASE_USAGE_SPAN
+        x <- 1:ncol(values) - assembly$env$BASE_USAGE_SPAN
         lwd <- 1.5
         for(baseI in 1:4) plot$addLines(
             x = x,
-            y = fraction[baseI, ],
+            y = values[baseI, ],
             col = baseColors[baseI],
             lwd = lwd
         )
+        baseOrder <- c("A", "T", "G", "C")        
+        svCapture_junctionBasesTopLegend(plot, baseOrder, baseColors[baseOrder], lwd)
 
-        if(d$txnDirection != ""){
-            jxnBaseVals <- if(d$txnDirection == "co_directional") c("A","C","G","T") else c("A_","C_","G_","T_")
-            jxnBaseVals <- d$jxnBases[jxnBaseVals]
-            plot$addPoints(
-                x = rep(-1.5, 4),
-                y =  jxnBaseVals/ sum(jxnBaseVals),
-                col = baseColors,
-                pch = 1,
-                cex = 1.5
-            )
-        }
+        # if(!normalize && d$txnDirection != ""){
+        #     jxnBaseVals <- if(d$txnDirection == "co_directional") c("A","C","G","T") else c("A_","C_","G_","T_")
+        #     jxnBaseVals <- d$jxnBases[jxnBaseVals]
+        #     plot$addPoints(
+        #         x = rep(-d$microhomologyPos, 4),
+        #         y =  jxnBaseVals/ sum(jxnBaseVals),
+        #         col = baseColors,
+        #         pch = 1,
+        #         cex = 1.5
+        #     )
+        # }
 
-        baseOrder <- c("A", "T", "G", "C")
-        plot$addLegend(
-            legend = baseOrder,
-            col =    baseColors[baseOrder],
-            x = "top",
-            horiz = TRUE,
-            x.intersp = 0,
-            lwd = lwd,
-            lty = 1
-        )
+
+        # plot$addLegend(
+        #     legend = baseOrder,
+        #     col =    baseColors[baseOrder],
+        #     x = "top",
+        #     horiz = TRUE,
+        #     x.intersp = 0,
+        #     lwd = lwd,
+        #     lty = 1
+        # )
     }
     baseUsagePlot <- assemblyXYPlotServer(
         id, session, input, output, 
         isProcessingData, assemblyOptions,
         sourceId, assembly, groupedProjectSamples, groupingCols, groups,
-        extraSettings = junctionBasesSettings,
+        extraSettings = svCapture_junctionBasesSettings,
         dims = list(width = 1.5, height = 1.5),
         mar = c(
             CONSTANTS$assemblyPlots$stdAxisMar, 
@@ -664,6 +747,125 @@ svCapture_junctionBasesServer <- function(
     )
 }
 #----------------------------------------------------------------------
+# junction genome feature profiles
+# ----------------------------------------------------------------------
+svCapture_genomeFeaturesServer <- function(
+    id, session, input, output, 
+    isProcessingData, assemblyOptions,
+    sourceId, assembly, groupedProjectSamples, groupingCols, groups
+){
+    genomeFeatureSettings <- svCapture_junctionBasesSettings
+    genomeFeatureSettings$Junction_Bases$Normalize_Base_Groups <- NULL
+    genomeFeatureSettings <- c(genomeFeatureSettings, list(
+        Genome_Features = list(
+            Feature_Type = list(
+                type = "selectInput",
+                choices = c(
+                    "flexibility",
+                    "user_features"
+                ),
+                value = "flexibility"
+            ),
+            User_Feature = list(
+                type = "textInput",
+                value = ""
+            )
+        )
+    ))
+    getGenomeFeatures <- function(plot, conditions, groupLabels){ # dataFn
+        startSpinner(session, message = "parsing genome features")
+        svs <- svCapture_junctionBasesSVs(
+            id, session, input, output, 
+            isProcessingData, assemblyOptions,
+            sourceId, assembly, groupedProjectSamples, groupingCols, groups,
+            plot, conditions, groupLabels
+        )
+
+        # pick the dataset(s) to profile
+        assembly_ <- assembly()
+        featureType <- plot$settings$get("Genome_Features", "Feature_Type")
+        featureMatrices <- if(featureType == "flexibility") list(
+            flexibility = assembly_$flexibilityProfile
+        ) else {
+             # G-quadraplex, low-complexity 
+            userFeature <- trimws(plot$settings$get("Genome_Features", "User_Feature"))
+            if(!isTruthy(userFeature) || userFeature == "" || userFeature == "auto" || userFeature == "all"){
+                userFeature <- names(assembly_$genomeFeatures)
+            } else {
+                req(userFeature %in% names(assembly_$genomeFeatures))
+            }
+            assembly_$genomeFeatures[userFeature]
+        }
+
+        # collect the feature profile(s) of the matching SVs
+        d <- sapply(featureMatrices, svCapture_filterFeatureMatrix, plot, svs, simplify = FALSE, USE.NAMES = TRUE)
+        sapply(d, function(dd){
+            y <- apply(dd$matrix, 2, mean, na.rm = TRUE)
+            c(
+                dd[c("txnDirection","nSvs","nBreakpoints")], 
+                list(
+                    y = y,
+                    minY = min(y),
+                    maxY = max(y),
+                    median = median(y)
+                )
+            )
+        }, simplify = FALSE, USE.NAMES = TRUE)
+    }
+    plotGenomeFeatures <- function(plot, d){ # plotFn
+        d <- d$data
+        assembly <- assembly()
+        maxDist  <- plot$settings$get("Junction_Bases", "Max_Plotted_Distance")
+        vSpacing <- plot$settings$get("Junction_Bases", "Distance_Grid_Spacing")
+
+        ylim <- range(sapply(d, function(dd) c(dd$minY, dd$maxY)))
+        ylim <- c(ylim[1], ylim[2] + diff(ylim) / 4)
+        featureType <- plot$settings$get("Genome_Features", "Feature_Type")
+        maxDist <- svCapture_initJunctionPositionPlot(
+            plot, d[[1]], assembly$env, ylim, 
+            if(featureType == "flexibility") "Mean Flexibility Score" else "Fraction of SVs"
+        )
+
+        traceColors <- unlist(CONSTANTS$plotlyColors[c("blue","green","orange","red","black")])
+        lwd = 1
+        sapply(1:length(d), function(i){
+            plot$addLines(
+                x = c(-maxDist, maxDist),
+                y = rep(d[[i]]$median, 2),
+                col = traceColors[i],
+                lwd = lwd
+            )
+        })
+        lwd <- 1.5
+        sapply(1:length(d), function(i){
+            plot$addLines(
+                x = 1:length(d[[i]]$y) - assembly$env$FEATURES_SPAN,
+                y = d[[i]]$y,
+                col = traceColors[i],
+                lwd = lwd
+            )
+        })
+        svCapture_junctionBasesTopLegend(plot, names(d), traceColors[1:length(d)], lwd)
+    }
+    genomeFeaturesPlot <- assemblyXYPlotServer(
+        id, session, input, output, 
+        isProcessingData, assemblyOptions,
+        sourceId, assembly, groupedProjectSamples, groupingCols, groups,
+        extraSettings = genomeFeatureSettings,
+        dims = list(width = 1.5, height = 1.5),
+        mar = c(
+            CONSTANTS$assemblyPlots$stdAxisMar, 
+            CONSTANTS$assemblyPlots$stdAxisMar, 
+            CONSTANTS$assemblyPlots$titleMar, 
+            CONSTANTS$assemblyPlots$nullMar
+        ),
+        dataFn = getGenomeFeatures, 
+        plotFn = plotGenomeFeatures
+    )
+}
+#----------------------------------------------------------------------
+# insertion template locations and properties
+# ----------------------------------------------------------------------
 svx_getInsertionsTitle <- function(assembly, settings, nSvs, family = "Plot"){
     title <- settings$get("Plot", "Title", NA)
     nSvs <- paste(commify(nSvs), "SVs")
@@ -759,8 +961,6 @@ svx_insertions_addTopLegend <- function(plot, md){
         pt.cex = 1 
     )
 }
-#----------------------------------------------------------------------
-
 #----------------------------------------------------------------------
 svx_plotInsertions_nTemplateInstances <- function(plot, svs, assembly = NULL){
     md <- svx_getInsertionPlotMetadata(assembly, plot$settings)

@@ -19,6 +19,9 @@ plotTypes:
     microhomology:
         label: Microhomology/Insert Distributions
         collapsed: true
+    insertionTemplates:
+        label: Insertion Templates
+        collapsed: true        
     svSizes:
         label: SV Size Distributions
         collapsed: true
@@ -27,12 +30,12 @@ plotTypes:
         collapsed: true
     coverage:
         label: Target Region Coverage
-        collapsed: true
+        collapsed: false
     junctionBases:
         label: Junction Base Usage
-        collapsed: false
-    insertionTemplates:
-        label: Insertion Templates
+        collapsed: true
+    genomeFeatures:
+        label: Junction Genome Features
         collapsed: true
 
 
