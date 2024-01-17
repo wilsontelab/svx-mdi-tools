@@ -77,6 +77,8 @@ actions:
             - assembly-coverage
             - assembly-insertions
             - assembly-base-usage
+            - assembly-flexibility
+            - assembly-features
         resources:
             required:
                 total-ram: 16G

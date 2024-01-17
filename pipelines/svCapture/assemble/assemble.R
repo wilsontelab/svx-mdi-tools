@@ -24,7 +24,9 @@ myEnvVars <- list(
         'OUTPUT_DIR',
         'DATA_NAME',
         'DATA_FILE_PREFIX',
-        'ASSEMBLE_PREFIX'
+        'ASSEMBLE_PREFIX',
+        'FEATURE_FILES',
+        'FEATURE_TYPES'
     ),
     integer = c(
         'N_CPU',
@@ -41,7 +43,9 @@ myEnvVars <- list(
         'MAX_INSERTION_SIZE',
         'MIN_TEMPLATE_SIZE',
         'INSERTION_SEARCH_SPACE',
-        'BASE_USAGE_SPAN'
+        'BASE_USAGE_SPAN',
+        'FLEXIBILITY_SPAN',
+        'FEATURES_SPAN'
     ),
     double = c(
         'MAX_SHARED_PROPER'
@@ -51,7 +55,9 @@ myEnvVars <- list(
         'INCLUDE_CLIPS',
         'FORCE_COVERAGE',
         'FIND_INSERTION_TEMPLATES',
-        'PROFILE_BASE_USAGE'
+        'PROFILE_BASE_USAGE',
+        'PROFILE_FLEXIBILITY',
+        'PROFILE_FEATURES'
     )
 )
 checkEnvVars(myEnvVars)
@@ -659,6 +665,206 @@ targetBaseUsageProfile <- {
 #=====================================================================================
 
 #=====================================================================================
+if(env$PROFILE_FLEXIBILITY) message("calculating base flexibility profiles")
+getBreakpointPositions <- function(sv, target, ss){
+    pos1 <- sv$POS_1 - target$paddedStart
+    pos2 <- sv$POS_2 - target$paddedStart
+    if(sv$SIDE_1 == "L"){
+        genRefRetained1 <-    (pos1 - ss + 1):pos1
+        genRefLost1     <-    (pos1 + 1):(pos1 + ss)
+    } else {
+        genRefLost1     <- rev((pos1 - ss):(pos1 - 1))
+        genRefRetained1 <- rev(pos1:(pos1 + ss - 1)) # flip one reference strand for inversions to match jxnSeq assembly
+    }
+    if(sv$SIDE_2 == "R"){
+        genRefLost2     <-    (pos2 - ss):(pos2 - 1)
+        genRefRetained2 <-    pos2:(pos2 + ss - 1)
+    } else {
+        genRefRetained2 <- rev((pos2 - ss + 1):pos2)
+        genRefLost2     <- rev((pos2 + 1):(pos2 + ss))
+    } 
+    list(
+        genRef1 = c(genRefRetained1, genRefLost1),
+        genRef2 = c(genRefLost2, genRefRetained2)
+    )
+}
+analyzeFlexibility <- function(svI){
+    sv <- svs[svI]
+    ss <- env$FLEXIBILITY_SPAN
+
+    # parse the genome reference target
+    target <- getSvTarget(sv$PROJECT, sv)
+    if(!isUsablePosition(sv$POS_1, target, ss) || 
+       !isUsablePosition(sv$POS_2, target, ss)) return(NULL)
+    flexibility <- uniqueTargets[regionKey == target$regionKey, unlist(flexibility)]
+
+    # get the genome regions to search as the retained and lost (to this junction) segments on each side of each breakpoint
+    positions <- getBreakpointPositions(sv, target, ss)
+    
+    # profile the base usage around each breakpoint
+    # orient each breakpoint in order retained -> lost, tabulating the bases on the "top" strand when approaching jxnPos from the left
+    matrix(
+        c(
+                flexibility[positions$genRef1],
+            rev(flexibility[positions$genRef2])
+        ), 
+        byrow = TRUE, # one row per junction breakpoint, one col for each position in the profile span; jxnPos at env$BASE_USAGE_SPAN
+        nrow = 2,
+        dimnames = list(paste(sv$PROJECT, sv$SV_ID, 1:2, sep = "::"), NULL)
+    )
+}
+dinucleotideAngles <- list( # after http://margalit.huji.ac.il/TwistFlex/
+    A = list(
+        A = 7.6,
+        C = 14.6, # A to C dinucleotide, etc.
+        G = 8.2,
+        T = 25, # A to T dinucleotide has the highest flexibility
+        N = NA_real_
+    ),
+    C = list(
+        A = 10.9,
+        C = 7.2,
+        G = 8.9,
+        T = 8.2,
+        N = NA_real_
+    ),
+    G = list(
+        A = 8.8,
+        C = 11.1,
+        G = 7.2,
+        T = 14.6,
+        N = NA_real_
+    ),
+    T = list(
+        A = 12.5,
+        C = 8.8,
+        G = 10.9,
+        T = 7.6,
+        N = NA_real_
+    ),
+    N = list(
+        A = NA_real_,
+        C = NA_real_,
+        G = NA_real_,
+        T = NA_real_,
+        N = NA_real_
+    )
+)
+flexibilityProfile <- if(!env$PROFILE_FLEXIBILITY) NULL else {
+    message(paste("", "by target", sep = "\t"))
+    uniqueTargets[, flexibility := {
+        bases <- strsplit(paddedSequence, "")[[1]]
+        nBases <- length(bases)
+        angles <- sapply(1:(nBases - 1), function(i) dinucleotideAngles[[bases[i]]][[bases[i + 1]]])
+        dt <- data.table(
+            enteringAngles = c(NA_real_, angles),
+            exitingAngles  = c(angles, NA_real_)
+        )
+        angles <- apply(dt, 1, mean, na.rm = TRUE)
+        angles[is.nan(angles)] <- NA_real_
+        list(list(angles)) # report a base's flexibility as the average of the bonds entering and leaving it
+    }, by = .(regionKey)]
+    message(paste("", "by SV", sep = "\t"))
+    do.call(rbind, mclapply(
+        which(svs$N_SPLITS > 0), # sequenced junctions with known junction positions
+        analyzeFlexibility,
+        mc.cores = env$N_CPU
+    ))
+}
+#=====================================================================================
+
+#=====================================================================================
+if(env$PROFILE_FEATURES) message("calculating base matches to genome features")
+getBreakpointFeatures <- function(targetPositions, target, features){
+    coord1 <- targetPositions + target$paddedStart
+    ends1 <- range(coord1)
+    matchingFeatures <- features[
+        chrom_ == target$chrom &
+        ends1[1] <= end_ &
+        (start_ + 1) <= ends1[2],  # STRAND?
+        .(
+            (start_ + 1) - target$paddedStart,
+            end_ - target$paddedStart
+        )
+    ]
+    if(nrow(matchingFeatures) == 0) return(rep(0, length(targetPositions)))
+    featurePosInTarget <- unlist( apply(matchingFeatures, 1, function(v) v[1]:v[2], simplify = FALSE) )
+    x <- merge(
+        data.table(
+            targetPosition = targetPositions
+        ),
+        data.table(
+            targetPosition = unique(featurePosInTarget),
+            hit = TRUE
+        ),
+        by = "targetPosition",
+        all.x = TRUE
+    )
+    x[is.na(x)] <- FALSE
+    if(targetPositions[1] < targetPositions[2]) x[, hit] # return a logical set to TRUE for the positions in breakpoint that match any feature
+    else x[, rev(hit)] # since merge forced asending order, we must reverse back when positions were descending
+}
+analyzeFeatures <- function(svI, features){
+    sv <- svs[svI]
+    ss <- env$FEATURES_SPAN
+
+    # parse the genome reference target
+    target <- getSvTarget(sv$PROJECT, sv)
+    if(!isUsablePosition(sv$POS_1, target, ss) || 
+       !isUsablePosition(sv$POS_2, target, ss)) return(NULL)
+
+    # get the genome regions to search as the retained and lost (to this junction) segments on each side of each breakpoint
+    targetPositions <- getBreakpointPositions(sv, target, ss) # i.e., 1 is the first position in the target region
+
+    # profile the base usage around each breakpoint
+    # orient each breakpoint in order retained -> lost, tabulating the bases on the "top" strand when approaching jxnPos from the left
+    matrix(
+        c(
+                getBreakpointFeatures(targetPositions$genRef1, target, features),
+            rev(getBreakpointFeatures(targetPositions$genRef2, target, features))
+        ), 
+        byrow = TRUE, # one row per junction breakpoint, one col for each position in the profile span; jxnPos at env$BASE_USAGE_SPAN
+        nrow = 2,
+        dimnames = list(paste(sv$PROJECT, sv$SV_ID, 1:2, sep = "::"), NULL)
+    )
+}
+genomeFeatures <- if(!env$PROFILE_FEATURES) NULL else {
+    featureFiles <- strsplit(env$FEATURE_FILES, ",")[[1]]
+    featureTypes <- strsplit(env$FEATURE_TYPES, ",")[[1]]
+    if(length(featureFiles) != length(featureTypes)) stop("malformed request at --feature-files or --feature-types")
+    x <- sapply(
+        featureFiles,
+        function(featureFile){
+            message(paste("", basename(featureFile), sep = "\t"))
+            if(!file.exists(featureFile)) stop(paste("feature file not found:", featureFile))
+            features <- fread(featureFile, sep = "\t")[, ":="(
+                chrom_ = .SD[[1]],
+                start_ = .SD[[2]],
+                end_   = .SD[[3]]
+            )]
+            features <- uniqueTargets[, {
+                features[
+                    chrom_ == chrom &
+                    (start_ + 1) <= paddedEnd &
+                    (paddedStart + 1) <= end_
+                ]
+            }, by = .(regionKey)]
+            do.call(rbind, mclapply(
+                which(svs$N_SPLITS > 0), # sequenced junctions with known junction positions
+                analyzeFeatures,
+                features,
+                mc.cores = env$N_CPU
+            ))
+        },
+        simplify = FALSE,
+        USE.NAMES = TRUE
+    )
+    names(x) <- featureTypes
+    x
+}
+#=====================================================================================
+
+#=====================================================================================
 message("printing output")
 samples[, i := NULL]
 results <- list(
@@ -670,6 +876,8 @@ results <- list(
     baseUsageProfile = baseUsageProfile,
     junctionBaseUsageProfile = junctionBaseUsageProfile,
     targetBaseUsageProfile = targetBaseUsageProfile,
+    flexibilityProfile = flexibilityProfile,
+    genomeFeatures = genomeFeatures,
     env = env[unlist(myEnvVars)]
 )
 saveRDS(results, paste(env$ASSEMBLE_PREFIX, "rds", sep = "."))

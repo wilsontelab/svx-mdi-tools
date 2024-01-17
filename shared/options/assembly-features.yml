@@ -1,0 +1,30 @@
+---
+options:
+    profile-features: 
+        order: 1
+        short: null
+        type: boolean
+        required: false
+        default: false
+        description: "if set, create a table of base matches to genome features around SV junctions" 
+    features-span:
+        order: 2
+        short: null
+        type: integer
+        required: false
+        default: 250
+        description: "profile genome features over this many bp on each side of each SV breakpoint"  
+    feature-files:
+        order: 3
+        short: null
+        type: string
+        required: false
+        default: NA
+        description: "comma-delimited list of paths to BED-format genome feature files to match"  
+    feature-types:
+        order: 4
+        short: null
+        type: string
+        required: false
+        default: NA
+        description: "comma-delimited list names used to label --feature-files"  
