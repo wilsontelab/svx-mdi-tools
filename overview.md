@@ -12,8 +12,6 @@ from the
 [Thomas Wilson laboratory](https://wilsonte-umich.github.io)
 at the University of Michigan.
 
-{% include figure.html file="SV_logic.png" %}
-
 ### Available tools
 
 Pipelines and apps in stable release are:
