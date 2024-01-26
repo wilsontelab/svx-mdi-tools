@@ -248,8 +248,8 @@ binnedCoverage <- sapply(uniqueTargets$regionKey, function(regionKey_) {
     target <- uniqueTargets[regionKey == regionKey_]
     targetSampleKeys <- unlist(target$sampleKeys)
     matrix( # a named list of sample bin coverage matrices by unique target region
-        NA_integer_, 
-        nrow = target[, 1 + floor( (paddedEnd - paddedStart) / env$COVERAGE_BIN_SIZE )], # rows = bins for this target region
+        NA_real_, 
+        nrow = target[, 1 + floor( (paddedEnd - (paddedStart + 1)) / env$COVERAGE_BIN_SIZE )], # rows = bins for this target region
         ncol = length(targetSampleKeys), # one named matrix column per sample that used this target
         dimnames = list(NULL, targetSampleKeys)
     )
@@ -261,11 +261,11 @@ for(regionKey_ in uniqueTargets$regionKey){
         sample <- samples[sampleKey == targetSampleKey]
         targetI <- targets[targetsBed == sample$targetsBed, which(regionKey == regionKey_)]
         binnedCoverage[[regionKey_]][, targetSampleKey] <- sample[, {
-            as.integer(strsplit(strsplit(bin_counts, "::")[[1]][targetI], ",")[[1]])
+            as.double(strsplit(strsplit(bin_coverages, "::")[[1]][targetI], ",")[[1]])
         }]
     }
 }
-samples[, bin_counts := NULL]
+samples[, bin_coverages := NULL]
 #=====================================================================================
 
 #=====================================================================================

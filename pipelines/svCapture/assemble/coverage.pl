@@ -50,6 +50,16 @@ use constant {
 my $regions = getTargetRegions();
 loadTargetRegions(1);
 use vars qw($sumTargetLens %targetRegions);
+my @maxBinIs = map {
+    int(($$regions[$_]{paddedEnd} - $$regions[$_]{paddedStart1}) / $COVERAGE_BIN_SIZE);
+} 0..$#{$regions};
+my @binStarts = map { # half-open
+    my $region = $$regions[$_];
+    [ map { $_ * $COVERAGE_BIN_SIZE + $$region{paddedStart} } 0..$maxBinIs[$_] ]
+} 0..$#{$regions};
+my @binEnds = map {
+    [ map { $_ + $COVERAGE_BIN_SIZE } @{$binStarts[$_]} ]
+} 0..$#{$regions};
 
 # working variables
 my ($prevName, $maxMapQ, @alns, @mol, %sums, @insertSizes, @coverage) = ("", 0);
@@ -77,7 +87,7 @@ close $inH;
 # return sample aggregates
 my @countColumns    = qw(n_source_molecules n_on_target n_on_target_filtered);
 my @coverageColumns = qw(kbp_on_target kbp_on_target_effective kbp_on_target_filtered kbp_on_target_filtered_effective);
-my @binColumns      = qw(bin_counts);
+my @binColumns      = qw(bin_coverages);
 my $header = join("\t", 
     "sumTargetLens", 
     "N50",
@@ -94,11 +104,11 @@ my $data = join("\t",
         int($bp / 1000 + 0.5); # return kbp to prevent int32 overruns
     } @coverageColumns),
     join("::", map {
-        my $maxBinI = int(($$regions[$_]{paddedEnd} - $$regions[$_]{paddedStart}) / $COVERAGE_BIN_SIZE);
         my $regId = $_ + 1;
         join(",", map {
-            $coverage[$regId][$_] || 0;
-        } 0..$maxBinI)
+            my $cov = ($coverage[$regId][$_] || 0) / $COVERAGE_BIN_SIZE;
+            int($cov * 10 + 0.5) / 10;
+        } 0..$maxBinIs[$_])
     } 0..$#{$regions})
 );
 print "$header\n$data\n";
@@ -139,7 +149,7 @@ sub isOnTarget {
 }
 sub getTargetBinI {
     my ($regId, $pos) = @_;
-    int(($pos - $$regions[$regId - 1]{paddedStart}) / $COVERAGE_BIN_SIZE);
+    max(0, int(($pos - $$regions[$regId - 1]{paddedStart1}) / $COVERAGE_BIN_SIZE));
 }
 sub addProperMolecule {
     my ($end) = @_;
@@ -148,8 +158,14 @@ sub addProperMolecule {
     # add reads mapped to padded target regions to binned coverage profiles
     $$target{padded} or return;
     my $regId = $$target{regionId};
-    for(my $binI = getTargetBinI($regId, $alns[0][POS]); $binI <= getTargetBinI($regId, $end); $binI++){
-        $binI >= 0 and $coverage[$regId][$binI]++;
+    my $startBinI = getTargetBinI($regId, $alns[0][POS]);
+    my $endBinI   = getTargetBinI($regId, $end);
+    $coverage[$regId][$startBinI] += ($binEnds[$regId - 1][$startBinI] - $alns[0][POS] + 1);
+    $coverage[$regId][$endBinI]   += ($end - $binStarts[$regId - 1][$endBinI]);
+    if($endBinI - $startBinI > 1){
+        for(my $binI = $startBinI + 1; $binI <= $endBinI - 1; $binI++){
+            $coverage[$regId][$binI] += $COVERAGE_BIN_SIZE;
+        }
     }
 
     # count and sum reads within the unpadded capture targets as overall estimates of library depth for inter-sample comparison

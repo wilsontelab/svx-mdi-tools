@@ -47,20 +47,24 @@ svCapture_getGroups <- function(assemblyOptions, groupedProjectSamples, grouping
             gps <- groupedProjectSamples
             gps$nSvs <- 0
             gps$svFrequency <- 0
+            valueColumn <- "svFrequency"
             for(svType in input$Data_Types) {
                 nSvs <- as.integer(gps[[svType]])
                 gps$nSvs <- gps$nSvs + nSvs
                 gps$svFrequency <- gps$svFrequency + nSvs / gps$coverage
+                dtvc <- paste(valueColumn, svType, sep = "__")
+                gps[[dtvc]] <- nSvs / gps$coverage
             }
             startSpinner(session, message = "getGroups..")
-            groups <- merge(
-                aggegrateGroupSampleValues(gps, groupingCols, "svFrequency"),
-                gps[, .(
-                    coverage = sum(coverage),
-                    nSvs = sum(nSvs)
-                ), by = groupingCols]
-            )
-            setorderv(groups, groupingCols, order = -1L)
+            isSingleGroup <- length(groupingCols) == 0
+            bBy <- if(isSingleGroup) NULL else groupingCols
+            a <- aggegrateGroupSampleValues(gps, groupingCols, valueColumn, input)
+            b <- gps[, .(
+                coverage = sum(coverage),
+                nSvs = sum(nSvs)
+            ), by = bBy]
+            groups <- if(isSingleGroup) cbind(a, b) else merge(a, b)
+            if(!isSingleGroup) setorderv(groups, groupingCols, order = -1L)
             startSpinner(session, message = "getGroups...")
             setAssemblyGroupLabels(groups, groupingCols)
         }
@@ -76,9 +80,9 @@ svCapture_matchingAssemblySvs <- function(
     assembly, groupedProjectSamples, groupingCols
 ){
     assembly <- assembly()
-    gps <- groupedProjectSamples() 
-    groupingCols <- groupingCols()   
-    req(assembly, gps, groupingCols, input$Data_Types)
+    gps <- groupedProjectSamples()
+    groupingCols <- groupingCols()
+    req(assembly, gps, input$Data_Types)
     assemblyCache$get(
         'matchingSvs', 
         permanent = TRUE,
@@ -197,17 +201,26 @@ svCapture_parseDataByTarget <- function(
     x$trackCounts <- x$dt[, .N, by = .(trackLabel)]
     x 
 }
-svCapture_xlimByTarget <- function(assembly, type){
+svCapture_xlimByTarget <- function(assembly, type, assemblyPlot){
     reactive({
         targets <- svCapture_assemblyTargets(assembly)
-        x <- lapply(1:nrow(targets), function(i) switch(
-            type,
-            endpoints = targets[i, c(paddedStart + 1, paddedEnd)],
-            coverage  = targets[i, {
+        x <- lapply(1:nrow(targets), function(i) {
+            paddedRegion <- targets[i, c(paddedStart + 1, paddedEnd)]
+            targetRegion <- targets[i, {
                 pad <- (regionEnd - regionStart) / 5
                 c(regionStart + 1 - pad, regionEnd + pad)
             }]
-        ) / 1e6)
+            x <- switch(
+                type,
+                endpoints = {
+                    normalize <- assemblyPlot$plot$settings$get("Endpoints","Normalize_to_Coverage")
+                    if(normalize) targetRegion else paddedRegion
+                },
+                coverage  = targetRegion
+            ) / 1e6
+            if(targets[i, geneStrand == "-"]) x <- rev(x) # thus, all target-track plots are drawn in transcribed order, left to right
+            x
+        })
         names(x) <- targets$trackLabel
         x
     })
@@ -279,19 +292,42 @@ svCapture_microhomologyServer <- function(
 #----------------------------------------------------------------------
 # SV size profiles
 # ----------------------------------------------------------------------
+splitSvsByJxnType <- function(svs, plot, family, groupingCols){
+    if(!isTruthy(plot$settings$get(family,"Split_by_SV_Type"))) return(svs)
+    groupingCols <- groupingCols()
+    svTypes <- svs$dt[, paste("SV_type =", tolower(svx_jxnType_altCodeToX(JXN_TYPE, "longName")))]
+    svs$dt[, groupLabel := if(length(groupingCols) == 0) svTypes else paste(groupLabel, svTypes, sep = " | ")]
+    svs$groupLabels <- unique(svs$dt$groupLabel)
+    svs$groupCounts <- svs$dt[, .N, by = .(groupLabel)]
+    svs
+}
 svCapture_svSizesServer <- function(
     id, session, input, output, 
     isProcessingData, assemblyOptions,
     sourceId, assembly, groupedProjectSamples, groupingCols, groups
 ){
-    plot <- assemblyDensityPlotServer(
+    sizeSettings <- list(
+        SV_Sizes = list(
+            Split_by_SV_Type = list(
+                type = "checkboxInput",
+                value = FALSE
+            )
+        )
+    )
+    sizesPlot <- assemblyDensityPlotServer(
         id, session, input, output, 
         isProcessingData, assemblyOptions,
         sourceId, assembly, groupedProjectSamples, groupingCols, groups,
         xlab = "SV Size (log10 bp)",
         eventPlural = "SVs",
+        extraSettings = sizeSettings,
         defaultBinSize = 0.1,
-        v = 0:10,
+        v = 1:10,
+        vColor = "grey80",
+        insideHeightPerBlock = 0.75,
+        groupV = function(data) sapply(data$groupLabels, function(groupLabel_){
+            data$dt[groupLabel == groupLabel_, median(x, na.rm = TRUE)]
+        }, simplify = FALSE, USE.NAMES = TRUE),
         x0Line = FALSE,
         dataFn = function(conditions, groupLabels) {
             svs <- svCapture_matchingAssemblySvs(
@@ -302,7 +338,7 @@ svCapture_svSizesServer <- function(
                 groupLabel %in% groupLabels
             ] %>% regroupToUserConditions(
                 groupingCols, conditions, groupLabels
-            )
+            ) %>% splitSvsByJxnType(sizesPlot$plot, "SV_Sizes", groupingCols)
             svs$dt[, x := log10(SV_SIZE)]
             svs
         }
@@ -311,26 +347,114 @@ svCapture_svSizesServer <- function(
 #----------------------------------------------------------------------
 # junction endpoint profiles
 # ----------------------------------------------------------------------
+svCapture_getTargetCoverages <- function(
+    assembly, groupedProjectSamples, groupingCols, aggType, plot, 
+    conditions, groupLabels
+){
+    targets <- svCapture_assemblyTargets(assembly)
+    assembly <- assembly()
+    binCov <- assembly$binnedCoverage # named list, key = regionKey, value = int[bin, sample], colnames = project::sample
+    binSize <- assembly$env$COVERAGE_BIN_SIZE
+    req(binCov)
+    startSpinner(session, message = "binning coverage")
+    groupedProjectSamples <- groupedProjectSamples()
+    groupingCols <- groupingCols()
+    gps <- setAssemblyGroupLabels(groupedProjectSamples, groupingCols) 
+    req(gps)
+    gps[, projectSample := paste(project, sample, sep = "::")]
+    projectSamples <- gps[groupLabel %in% groupLabels, projectSample]
+    if(is.null(aggType)) aggType <- plot$settings$get("Coverage","Aggregate_Coverage")
+    mergeGroups <- aggType == "all samples together"
+    dt <- do.call(rbind, lapply(targets$regionKey, function(regionKey_){
+        target <- targets[regionKey == regionKey_]
+        binCov <- binCov[[regionKey_]][, projectSamples, drop = FALSE]
+        if(mergeGroups) {
+            binCov <- matrix(apply(binCov, 1, sum, na.rm = TRUE), ncol = 1) 
+            colnames(binCov) <- "all samples"
+        }
+        x <- as.integer(target$paddedStart + (1:nrow(binCov) - 1) * binSize) / 1e6
+        do.call(rbind, lapply(colnames(binCov), function(col){
+            data.table(
+                regionKey = target$regionKey,
+                track = target$trackLabel,
+                group = if(mergeGroups) col else gps[projectSample == col, groupLabel],
+                x = x,
+                y = binCov[, col] / 1e3
+            )
+        }))
+    }))[, .(y = sum(y, na.rm = TRUE)), .(track, group, x)]
+    if(aggType == "by group") {
+        groupLabels <- groupLabels
+        groupNs     <- sapply(groupLabels, function(x) gps[groupLabel == x, .N])
+    } else {
+        groupLabels <- "all samples"
+        groupNs     <- length(projectSamples)
+    }
+    list( 
+        titleSuffix = NULL,
+        groupLabels = groupLabels,
+        groupCounts = data.table(groupLabel = groupLabels, N = groupNs), 
+        countGroups = FALSE,
+        dt = list( # this dt level "tricks" assemblyDensityPlotServer
+            X_Bin_Size = binSize / 1e6, 
+            totalN = length(projectSamples),
+            trackLabels = targets$trackLabel,
+            dt = dt
+        ),
+        trackLabels = targets$trackLabel
+    )
+}
 svCapture_endpointsServer <- function(
     id, session, input, output, 
     isProcessingData, assemblyOptions,
     sourceId, assembly, groupedProjectSamples, groupingCols, groups
 ){
+    endpointSettings <- list(
+        Endpoints = list(
+            Normalize_to_Coverage = list(
+                type = "checkboxInput",
+                value = TRUE
+            ),
+            Min_Normalization_Coverage = list(
+                type = "numericInput",
+                value = 100
+            )
+        )
+    )
     getSvEndpoints <- function(conditions, groupLabels, targets){
-        x <- svCapture_regroupedSvs(
+        svs <- svCapture_regroupedSvs(
             input,
             assemblyOptions,
             assembly, groupedProjectSamples, groupingCols,
             conditions, groupLabels
         )
-        x$countGroups <- TRUE
-        x$dt <- x$dt[, 
+        svs$countGroups <- TRUE
+        svs$dt <- svs$dt[, 
             .(
                 POS = c(POS_1, POS_2) / 1e6,
-                count = 1
+                coverage = 1
             ), 
             by = .(TARGET_REGION, groupLabel)
         ]
+        svs
+    }
+    normalizeSvEndpoints <- function(x, conditions, groupLabels){
+        normalize <- endpointsPlot$plot$settings$get("Endpoints","Normalize_to_Coverage")
+        if(!normalize) return(x)
+        minCoverage <- endpointsPlot$plot$settings$get("Endpoints","Min_Normalization_Coverage")
+        targets <- svCapture_assemblyTargets(assembly)
+        coverage <- svCapture_getTargetCoverages(
+            assembly, groupedProjectSamples, groupingCols, "all samples together", NULL, 
+            conditions, groupLabels
+        )
+        for(trackLabel_ in targets$trackLabel){
+            cov <- coverage$dt$dt[track == trackLabel_]
+            cov[, y := y * 1e3]
+            setkey(cov, x)
+            x$dt[trackLabel == trackLabel_, coverage := sapply(x, function(ex) {
+                cov[x >= ex][1, if(y >= minCoverage) 1 / y else NA_real_]
+            })]
+        }
         x
     }
     endpointsPlot <- assemblyDensityPlotServer(
@@ -339,21 +463,24 @@ svCapture_endpointsServer <- function(
         sourceId, assembly, groupedProjectSamples, groupingCols, groups,
         xlab = "SV Endpoint Coordinate (Mbp)",
         eventPlural = "ends",
-        insideWidth = 2.5, 
-        insideHeightPerBlock = 0.75,
+        insideWidth = 1.25, 
+        insideHeightPerBlock = 0.625,
         trackCols = "trackLabel",
         trackSameXLim = FALSE,
         trackSameYLim = TRUE,
-        xlim = svCapture_xlimByTarget(assembly, "endpoints"),
+        xlim = svCapture_xlimByTarget(assembly, "endpoints", endpointsPlot),
+        extraSettings = endpointSettings,
         defaultBinSize = 10000 / 1e6,
         v = svCapture_vLinesByTarget(assembly),
         vShade = svCapture_vShadeByTarget(assembly),
         vColor = "grey40",
         x0Line = FALSE,
         y0Line = TRUE,
-        # extraSettings = endpointSettings,
-        # aggFn = sum,
-        # aggCol = "count", 
+        aggFn = sum,
+        aggCol = "coverage",
+        # ylab = "SV Frequency",
+        fontSize = 6.5,
+        trackLabelPosition = "center",
         dataFn = function(conditions, groupLabels) {
             svCapture_parseDataByTarget(
                 input,
@@ -362,7 +489,7 @@ svCapture_endpointsServer <- function(
                 conditions, groupLabels,
                 xCol = "POS", 
                 dataFn = getSvEndpoints
-            )
+            ) %>% normalizeSvEndpoints(conditions, groupLabels)
         }
     )
 }
@@ -378,88 +505,36 @@ svCapture_coverageServer <- function(
         Coverage = list(
             Aggregate_Coverage = list(
                 type = "selectInput",
-                choices = c("by sample","all samples together"),
-                value = "by sample"
+                choices = c("by group","all samples together"),
+                value = "all samples together"
             )
         )
     )
-    getTargetCoverage <- function(conditions, groupLabels, targets){
-        assembly <- assembly()
-        bins <- assembly$binnedCoverage
-        env <- assembly$env 
-        gps <- groupedProjectSamples()
-        aggType <- coveragePlot$plot$settings$get("Coverage","Aggregate_Coverage")
-        req(bins, gps)
-        startSpinner(session, message = "getting coverage")
-        projectSamples <- gps[, paste(project, sample, sep = "::")]
-        samples        <- gps[, sample]
-        dt <- do.call(rbind, lapply(targets$regionKey, function(targetRegionKey){
-            target <- targets[regionKey == targetRegionKey]
-            bins <- bins[[targetRegionKey]][, projectSamples]
-            if(aggType == "by sample") {
-                colnames(bins) <- samples
-            } else {
-                bins <- matrix(apply(bins, 1, sum, na.rm = TRUE), ncol = 1) 
-                colnames(bins) <- "all samples"
-            }
-            do.call(rbind, lapply(1:ncol(bins), function(j){
-                data.table(
-                    TARGET_REGION = target$name,
-                    groupLabel = colnames(bins)[j],
-                    POS = (target$paddedStart + (1:nrow(bins) - 1) * env$COVERAGE_BIN_SIZE) / 1e6,
-                    count = bins[, j]
-                )
-            }))
-        }))
-        if(aggType == "by sample") {
-            groupLabels <- samples
-            groupNs     <- 1
-        } else {
-            groupLabels <- "all samples"
-            groupNs     <- length(samples)
-        }
-        stopSpinner(session)
-        list(
-            titleSuffix = NULL,
-            groupLabels = groupLabels,
-            groupCounts = data.table(groupLabel = groupLabels, N = groupNs),
-            dt = dt,
-            countGroups = FALSE
-        )
-    }
     coveragePlot <- assemblyDensityPlotServer(
         id, session, input, output, 
         isProcessingData, assemblyOptions,
         sourceId, assembly, groupedProjectSamples, groupingCols, groups,
-        xlab = "Coordinate (Mbp)",
+        xlab = "Coordinate (Mbp)", 
         eventPlural = "samples",
-        insideWidth = 2.5, 
-        insideHeightPerBlock = 0.75,
-        trackCols = "trackLabel",
-        trackSameXLim = FALSE,
+        insideWidth = 1.25, 
+        insideHeightPerBlock = 0.625,
+        trackSameXLim = FALSE, 
         trackSameYLim = TRUE,
         xlim = svCapture_xlimByTarget(assembly, "coverage"),
-        defaultBinSize = 1000 / 1e6,
+        extraSettings = coverageSettings,
+        defaultBinSize = 100 / 1e6,
         v = svCapture_vLinesByTarget(assembly),
         vShade = svCapture_vShadeByTarget(assembly),
         vColor = "grey40",
         x0Line = FALSE,
         y0Line = TRUE,
-        extraSettings = coverageSettings,
-        aggFn = sum,
-        aggCol = "count", 
-        dataFn = function(conditions, groupLabels) {
-            x <- svCapture_parseDataByTarget(
-                input,
-                assemblyOptions,
-                assembly, groupedProjectSamples, groupingCols,
-                conditions, groupLabels,
-                xCol = "POS", 
-                dataFn = getTargetCoverage
-            )
-            dstr(x)
-            x
-        }
+        pregrouped = TRUE,
+        ylab = "Coverage (K)",
+        fontSize = 6.5,
+        trackLabelPosition = "center",
+        dataFn = function(...) svCapture_getTargetCoverages(
+            assembly, groupedProjectSamples, groupingCols, NULL, coveragePlot$plot, ...
+        )
     )
 }
 #----------------------------------------------------------------------
@@ -694,7 +769,7 @@ svCapture_junctionBasesServer <- function(
             y = rep(d$baseUsageProfile$medians[baseI], 2),
             col = baseColors[baseI],
             lwd = lwd
-        ) else abline(h = 1, , col = "grey50")
+        ) else abline(h = 1, col = "grey50")
 
         x <- 1:ncol(values) - assembly$env$BASE_USAGE_SPAN
         lwd <- 1.5
@@ -1001,7 +1076,7 @@ svx_plotInsertions_yield <- function(plot, svs, assembly = NULL){
     plot$initializeFrame(
         xlim = range(-yield$MICROHOM_LEN),
         ylim = c(0, min(100, max(yield$successRate, yield$trialSuccessProb) * 110)),
-        xlab = "Insertion Size (bp)",
+        xlab = "Insert Size (bp)",
         ylab = "% Found Templates",
         title = svx_getInsertionsTitle(assembly, plot$settings, sum(yield$nSvs))
     )  
@@ -1225,13 +1300,13 @@ svx_plotInsertions_histogram <- function(plot, svs, assembly = NULL){
         xlim = c(-md$maxDist, md$maxDist),
         ylim = c(0, d[, max(.SD, na.rm = TRUE) * 1.5, .SDcols = templateTypes]),
         xlab = "Distance from Junction (bp)",
-        ylab = "# of Templates",
+        ylab = "# Templates",
         # yaxt = "n",
         bty = "n",
         title = svx_getInsertionsTitle(assembly, plot$settings, sum(nrow(svs)))
     )
     # abline(v = seq(vSpacing, maxDist - 1, vSpacing), col = CONSTANTS$plotlyColors$grey)
-    abline(v = 0, col = CONSTANTS$plotlyColors$grey)
+    abline(v = 0, col = CONSTANTS$plotlyColors$black)
     lwd <- 1.5 # plot$settings$Points_and_Lines()$Line_Width$value
     for(bpn in 1:2) for(type in templateTypes){
         dd <- d[templateBreakpointN == bpn]
@@ -1303,8 +1378,8 @@ svx_plotInsertions_microhomologyLengths <- function(plot, svs, assembly = NULL){
 svx_plotInsertions_templateSizes <- function(plot, svs, assembly = NULL){
     md <- svx_getInsertionPlotMetadata(assembly, plot$settings)
     svs <- svs[templateType != "notFound"]
-    xlim <- c(md$minInsertionSize - 0.6, md$maxInsertionSize + 4.6)
-    ylim <- c(md$minTemplateSize - 0.6, md$maxInsertionSize + 4.6)
+    xlim <- c(1 - 0.6, md$maxInsertionSize + 4.6) #m d$minInsertionSize - 
+    ylim <- c(1 - 0.6, md$maxInsertionSize + 4.6)  # md$minTemplateSize - 
     plot$initializeFrame(
         xlim = xlim,
         ylim = ylim,
@@ -1465,12 +1540,12 @@ svCapture_insertionTemplatesServer <- function(
             height = 1.5
         ),
         microhomologyLengths = list(
-            width  = 1.5, 
-            height = 1.5
+            width  = 1, 
+            height = 1
         ),
         templateSizes = list(
-            width  = 1.5, 
-            height = 1.5
+            width  = 1, 
+            height = 1
         )
     )
     getDim <- function(plotAs, key, option){

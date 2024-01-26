@@ -21,7 +21,7 @@ plotTypes:
         collapsed: true
     insertionTemplates:
         label: Insertion Templates
-        collapsed: true        
+        collapsed: true
     svSizes:
         label: SV Size Distributions
         collapsed: true
@@ -30,14 +30,13 @@ plotTypes:
         collapsed: true
     coverage:
         label: Target Region Coverage
-        collapsed: false
+        collapsed: true
     junctionBases:
         label: Junction Base Usage
         collapsed: true
     genomeFeatures:
         label: Junction Genome Features
         collapsed: true
-
 
 # columns added to the samples table by the pipeline that should be
 #   offered to users as data filters
