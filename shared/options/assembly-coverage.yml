@@ -1,0 +1,17 @@
+---
+# options used during read grouping to identify source molecules  
+options:
+    coverage-bin-size: 
+        order: 1
+        short: null
+        type: integer   
+        required: false
+        default: 100
+        description: "bin size in bp for making target region coverage profiles"
+    force-coverage:
+        order: 2
+        short: null
+        type: boolean 
+        required: false
+        default: false
+        description: "if set, always re-calculate coverage profiles, ignoring previously cached values"

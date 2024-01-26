@@ -1,0 +1,94 @@
+# caching: use "once" when debugging data loads, otherwise use "asNeeded"
+cacheCreateLevel: asNeeded
+
+# application-specific settings
+settings:
+    SV_Capture:
+        Adjust_Read_Lengths:
+            type: checkboxInput
+            value: true 
+        Enforce_Min_Family_Size:
+            type: checkboxInput
+            value: true 
+
+# plot types supported by the application and included on the page
+plotTypes:
+    svFrequencies:
+        label: SV Frequencies # title of the box
+        collapsed: true # whether the box is collapsed by default
+    microhomology:
+        label: Microhomology/Insert Distributions
+        collapsed: true
+    insertionTemplates:
+        label: Insertion Templates
+        collapsed: true
+    svSizes:
+        label: SV Size Distributions
+        collapsed: true
+    endpoints:
+        label: SV Endpoint Distributions
+        collapsed: true
+    coverage:
+        label: Target Region Coverage
+        collapsed: true
+    junctionBases:
+        label: Junction Base Usage
+        collapsed: true
+    genomeFeatures:
+        label: Junction Genome Features
+        collapsed: true
+
+# columns added to the samples table by the pipeline that should be
+#   offered to users as data filters
+#   tabulated in the all samples table
+dataTypeColumns:
+    deletion: true # key = column name, value = whether the filter is checked by default
+    duplication: false
+    inversion: false
+    translocation: false
+
+# additional columns added to the samples table by the pipeline that should be
+#   tabulated in the samples tables
+showSampleColumns:
+    - coverage
+
+# columns added to the samples table by the pipeline that are
+#   used internally for plotting
+#   not offered for data grouping
+#   masked from output tables, unless otherwise specified above
+denominatorColumns:
+    - "kbp_on_target"
+    - "kbp_on_target_effective"
+    - "kbp_on_target_filtered"
+    - "kbp_on_target_filtered_effective"
+internalUseSampleColumns:
+    - "genomesDir"
+    - "genome"
+    - "cram"
+    - "minMapq"
+    - "targetsBed"
+    - "regionPadding"
+    - "sumTargetLens"
+    - "N50"
+    - "n_source_molecules"
+    - "n_on_target"
+    - "n_on_target_filtered"
+    - "kbp_on_target"
+    - "kbp_on_target_effective"
+    - "kbp_on_target_filtered"
+    - "kbp_on_target_filtered_effective"
+    - "coverage"
+
+# all input user sample tables must have columns
+#   project
+#   sample
+#   sample_id
+# which are automatically pre-pended to internalUseSampleColumns
+
+# additional columns added to the groups table by getGroups() that should be
+#   tabulated in the groups table
+showGroupColumns:
+    - coverage
+    - nSvs
+    - meanSampleValue
+    - sdSampleValue

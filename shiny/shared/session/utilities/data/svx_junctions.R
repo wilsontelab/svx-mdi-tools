@@ -84,6 +84,50 @@ svx_setCnvJxnCN <- function(jxns, targetId, samples_, cnData){
 }
 
 # filter junction clusters based on track or other settings
+svx_applyJunctionFilters <- function(jxns, settings){
+
+    startSpinner(session, message = paste("filtering junctions"))
+
+    filters <- if(is.null(settings$Filters)) list() else settings$Filters()
+    filters <- lapply(names(svx_filterDefaults), function(filter){
+        if(is.null(filters[[filter]])) svx_filterDefaults[[filter]]
+        else if(!is.null(filters[[filter]]$selected)) filters[[filter]]$selected else filters[[filter]]$value
+    })
+    names(filters) <- names(svx_filterDefaults)
+
+    if(filters$Min_SV_Size > 1) jxns <- jxns[size >= filters$Min_SV_Size]
+    if(filters$Max_SV_Size > 0) jxns <- jxns[size <= filters$Max_SV_Size] #  & edgeType != svx_edgeTypes$TRANSLOCATION
+
+    jxns <- jxns[insertSize >= filters$Min_Insert_Size] # can be negative
+    jxns <- jxns[insertSize <= filters$Max_Insert_Size]
+
+    if(filters$Min_Source_Molecules > 1) jxns <- jxns[nInstances >= filters$Min_Source_Molecules]
+    if(filters$Max_Source_Molecules > 0) jxns <- jxns[nInstances <= filters$Max_Source_Molecules]
+
+    if(filters$Min_Sequenced_Molecules > 0) jxns <- jxns[nSequenced >= filters$Min_Sequenced_Molecules]
+    if(filters$Max_Linked_Junctions > 0) jxns <- jxns[nLinkedJunctions <= filters$Max_Linked_Junctions]
+
+    if(filters$Min_Samples_With_SV > 1) jxns <- jxns[nSamples >= filters$Min_Samples_With_SV]
+    if(filters$Max_Samples_With_SV > 0) jxns <- jxns[nSamples <= filters$Max_Samples_With_SV]
+    if(filters$Unique_To_Sample != "show all SVs") jxns <- jxns[samples == paste0(",", filters$Unique_To_Sample, ",")]
+
+    if(filters$Show_ChrM != "always"){
+        hasChrM <- jxns[, cChrom1 == "chrM" | cChrom2 == "chrM"]
+        if(filters$Show_ChrM == "translocations_only") jxns <- jxns[hasChrM == FALSE | xor(cChrom1 == "chrM", cChrom2 == "chrM")]
+        else if(filters$Show_ChrM == "never")          jxns <- jxns[hasChrM == FALSE]
+    }
+
+    if(filters$Min_Map_Quality > 0)jxns <- jxns[mapQ >= filters$Min_Map_Quality] 
+    if(filters$Min_Flank_Length > 0) jxns <- jxns[flankLength >= filters$Min_Flank_Length] 
+    if(filters$Min_Flank_CNC > 0 && "flankCNC" %in% names(jxns)) jxns <- jxns[!is.na(flankCNC) & abs(flankCNC) >= filters$Min_Flank_CNC] 
+
+    if(length(filters$SV_Type) > 0) {
+        edgeTypes <- svx_jxnType_nameToX(filters$SV_Type, "code")
+        jxns <- jxns[edgeType %in% edgeTypes]
+    }
+
+    jxns
+}
 svx_filterJunctionsBySettings <- function(track, targetId, samples, loadFn, family, cnData = NULL){
     jxns <- sessionCache$get(
         'svx_filterJunctionsBySettings', 
@@ -93,47 +137,8 @@ svx_filterJunctionsBySettings <- function(track, targetId, samples, loadFn, fami
         create = svxLoadCreate, 
         createFn = function(...) {
             jxns <- svx_filterJunctionsBySample(targetId, samples, loadFn) %>% 
-                    svx_setCnvJxnCN(targetId, samples, cnData)
-            startSpinner(session, message = paste("getting junctions"))
-            filters <- if(is.null(track$settings$Filters)) list()
-                       else track$settings$Filters()
-            filters <- lapply(names(svx_filterDefaults), function(filter){
-                if(is.null(filters[[filter]])) svx_filterDefaults[[filter]]
-                else if(!is.null(filters[[filter]]$selected)) filters[[filter]]$selected else filters[[filter]]$value
-            })
-            names(filters) <- names(svx_filterDefaults)
-
-            if(filters$Min_SV_Size > 1) jxns <- jxns[size >= filters$Min_SV_Size]
-            if(filters$Max_SV_Size > 0) jxns <- jxns[size <= filters$Max_SV_Size] #  & edgeType != svx_edgeTypes$TRANSLOCATION
-
-            jxns <- jxns[insertSize >= filters$Min_Insert_Size] # can be negative
-            jxns <- jxns[insertSize <= filters$Max_Insert_Size]
-
-            if(filters$Min_Source_Molecules > 1) jxns <- jxns[nInstances >= filters$Min_Source_Molecules]
-            if(filters$Max_Source_Molecules > 0) jxns <- jxns[nInstances <= filters$Max_Source_Molecules]
-
-            if(filters$Min_Sequenced_Molecules > 0) jxns <- jxns[nSequenced >= filters$Min_Sequenced_Molecules]
-            if(filters$Max_Linked_Junctions > 0) jxns <- jxns[nLinkedJunctions <= filters$Max_Linked_Junctions]
-
-            if(filters$Min_Samples_With_SV > 1) jxns <- jxns[nSamples >= filters$Min_Samples_With_SV]
-            if(filters$Max_Samples_With_SV > 0) jxns <- jxns[nSamples <= filters$Max_Samples_With_SV]
-            if(filters$Unique_To_Sample != "show all SVs") jxns <- jxns[samples == paste0(",", filters$Unique_To_Sample, ",")]
-
-            if(filters$Show_ChrM != "always"){
-                hasChrM <- jxns[, cChrom1 == "chrM" | cChrom2 == "chrM"]
-                if(filters$Show_ChrM == "translocations_only") jxns <- jxns[hasChrM == FALSE | xor(cChrom1 == "chrM", cChrom2 == "chrM")]
-                else if(filters$Show_ChrM == "never")          jxns <- jxns[hasChrM == FALSE]
-            }
-
-            if(filters$Min_Map_Quality > 0)jxns <- jxns[mapQ >= filters$Min_Map_Quality] 
-            if(filters$Min_Flank_Length > 0) jxns <- jxns[flankLength >= filters$Min_Flank_Length] 
-            if(filters$Min_Flank_CNC > 0 && "flankCNC" %in% names(jxns)) jxns <- jxns[!is.na(flankCNC) & abs(flankCNC) >= filters$Min_Flank_CNC] 
-
-            if(length(filters$SV_Type) > 0) {
-                edgeTypes <- svx_jxnType_nameToX(filters$SV_Type, "code")
-                jxns <- jxns[edgeType %in% edgeTypes]
-            }
-
+                    svx_setCnvJxnCN(targetId, samples, cnData) %>%
+                    svx_applyJunctionFilters(track$settings)
             stopSpinner(session)
             jxns %>% svx_setJunctionPointColors(track, family) %>% svx_setJunctionPointSizes(track)
         }

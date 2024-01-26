@@ -1,6 +1,8 @@
 use strict;
 use warnings;
 
+# profile the coverage of padded target regions by proper molecules
+
 # load dependencies
 my $perlUtilDir = "$ENV{GENOMEX_MODULES_DIR}/utilities/perl";
 map { require "$perlUtilDir/$_.pl" } qw(workflow numeric);
@@ -9,9 +11,10 @@ map { require "$perlUtilDir/sequence/$_.pl" } qw(general);
 
 # environment variables and arguments passed by assemble.R
 our($GENOME, $TARGETS_BED, $REGION_PADDING, $MIN_MAPQ, $NAME_BAM_FILE) = @ARGV;
-fillEnvVar(\our $TARGET_SCALAR,   'TARGET_SCALAR', 1, 10); # use 10 bp target resolution for svCapture targets
-fillEnvVar(\our $MIN_FLANK_SIZE,  'MIN_FLANK_SIZE');
-fillEnvVar(\our $MIN_FAMILY_SIZE, 'MIN_FAMILY_SIZE');
+fillEnvVar(\our $MIN_FLANK_SIZE,    'MIN_FLANK_SIZE');
+fillEnvVar(\our $MIN_FAMILY_SIZE,   'MIN_FAMILY_SIZE');
+fillEnvVar(\our $TARGET_SCALAR,     'TARGET_SCALAR', 1, 10); # use 10 bp target resolution for matching svCapture targets ...
+fillEnvVar(\our $COVERAGE_BIN_SIZE, 'COVERAGE_BIN_SIZE');    # ... but create coverage profiles at the requested bin size
 
 # constants
 use constant {
@@ -44,13 +47,24 @@ use constant {
 };
 
 # load the target regions
+my $regions = getTargetRegions();
 loadTargetRegions(1);
 use vars qw($sumTargetLens %targetRegions);
+my @maxBinIs = map {
+    int(($$regions[$_]{paddedEnd} - $$regions[$_]{paddedStart1}) / $COVERAGE_BIN_SIZE);
+} 0..$#{$regions};
+my @binStarts = map { # half-open
+    my $region = $$regions[$_];
+    [ map { $_ * $COVERAGE_BIN_SIZE + $$region{paddedStart} } 0..$maxBinIs[$_] ]
+} 0..$#{$regions};
+my @binEnds = map {
+    [ map { $_ + $COVERAGE_BIN_SIZE } @{$binStarts[$_]} ]
+} 0..$#{$regions};
 
 # working variables
-my ($prevName, $maxMapQ, @alns, @mol, %sums, @insertSizes) = ("", 0);
+my ($prevName, $maxMapQ, @alns, @mol, %sums, @insertSizes, @coverage) = ("", 0);
 
-# get TLEN from proper molecules
+# read bam stream
 open my $inH, "-|", "samtools view $NAME_BAM_FILE | cut -f 1-6" or die "could not open alignment stream: $!\n";
 while(my $line = <$inH>){
 
@@ -73,11 +87,13 @@ close $inH;
 # return sample aggregates
 my @countColumns    = qw(n_source_molecules n_on_target n_on_target_filtered);
 my @coverageColumns = qw(kbp_on_target kbp_on_target_effective kbp_on_target_filtered kbp_on_target_filtered_effective);
+my @binColumns      = qw(bin_coverages);
 my $header = join("\t", 
     "sumTargetLens", 
-    "N50", 
-    @countColumns,  
-    @coverageColumns
+    "N50",
+    @countColumns,
+    @coverageColumns,
+    @binColumns
 );
 my $data = join("\t", 
     $sumTargetLens, 
@@ -86,11 +102,19 @@ my $data = join("\t",
     (map { 
         my $bp = $sums{$_} || 0;
         int($bp / 1000 + 0.5); # return kbp to prevent int32 overruns
-    } @coverageColumns)
+    } @coverageColumns),
+    join("::", map {
+        my $regId = $_ + 1;
+        join(",", map {
+            my $cov = ($coverage[$regId][$_] || 0) / $COVERAGE_BIN_SIZE;
+            int($cov * 10 + 0.5) / 10;
+        } 0..$maxBinIs[$_])
+    } 0..$#{$regions})
 );
 print "$header\n$data\n";
 
 # process a source molecule if ANY alignment segment was of high enough MAPQ
+# only continue with proper molecules for coverage profiling
 sub processSourceMolecule {
     $sums{n_source_molecules}++;
     $maxMapQ >= $MIN_MAPQ or return;  
@@ -108,9 +132,44 @@ sub processSourceMolecule {
 }
 
 # add information about a proper molecule within a target region
+sub isOnTarget {
+    my ($pos1, $pos2) = @_;
+    my $ct  = $targetRegions{$alns[0][RNAME]} or return {};
+    my $ct1 = $$ct{int($pos1 / $TARGET_SCALAR)};
+    my $ct2 = $$ct{int($pos2 / $TARGET_SCALAR)};
+    my $regionId = $ct1 ? $$ct1[0] : undef; # 1-referenced index of row of targets bed
+    $regionId or return {};
+    my $type1    = $ct1 ? $$ct1[1] : '';
+    my $type2    = $ct2 ? $$ct2[1] : '';
+    {
+        regionId => $regionId,
+        padded   => ($type1 eq ON_TARGET or $type2 eq ON_TARGET or $type1 eq NEAR_TARGET or $type2 eq NEAR_TARGET),
+        unpadded => ($type1 eq ON_TARGET or $type2 eq ON_TARGET) # will include TT and TA proper molecules crossing region edges but not AA or -- proper
+    };
+}
+sub getTargetBinI {
+    my ($regId, $pos) = @_;
+    max(0, int(($pos - $$regions[$regId - 1]{paddedStart1}) / $COVERAGE_BIN_SIZE));
+}
 sub addProperMolecule {
     my ($end) = @_;
-    isOnTarget($alns[0][POS], $end) or return;
+    my $target = isOnTarget($alns[0][POS], $end);
+
+    # add reads mapped to padded target regions to binned coverage profiles
+    $$target{padded} or return;
+    my $regId = $$target{regionId};
+    my $startBinI = getTargetBinI($regId, $alns[0][POS]);
+    my $endBinI   = getTargetBinI($regId, $end);
+    $coverage[$regId][$startBinI] += ($binEnds[$regId - 1][$startBinI] - $alns[0][POS] + 1);
+    $coverage[$regId][$endBinI]   += ($end - $binStarts[$regId - 1][$endBinI]);
+    if($endBinI - $startBinI > 1){
+        for(my $binI = $startBinI + 1; $binI <= $endBinI - 1; $binI++){
+            $coverage[$regId][$binI] += $COVERAGE_BIN_SIZE;
+        }
+    }
+
+    # count and sum reads within the unpadded capture targets as overall estimates of library depth for inter-sample comparison
+    $$target{unpadded} or return;
     my $insertSize = $end - $alns[0][POS] + 1;
     my $effectiveSize = max(0, $insertSize - 2 * $MIN_FLANK_SIZE);
     push @insertSizes, $insertSize;
@@ -125,14 +184,4 @@ sub addProperMolecule {
     $sums{n_on_target_filtered}++; # here, don't include reads the couldn't pass the SV filter family size threshold
     $sums{kbp_on_target_filtered} += $insertSize;
     $sums{kbp_on_target_filtered_effective} += $effectiveSize;
-
-    sub isOnTarget {
-        my ($pos1, $pos2) = @_;
-        my $ct  = $targetRegions{$alns[0][RNAME]} or return 0;
-        my $ct1 = $$ct{int($pos1 / $TARGET_SCALAR)};
-        my $ct2 = $$ct{int($pos2 / $TARGET_SCALAR)};
-        my $type1 = $ct1 ? $$ct1[1] : '';
-        my $type2 = $ct2 ? $$ct2[1] : ''; 
-        $type1 eq ON_TARGET or $type2 eq ON_TARGET; # will include TA proper molecules crossing region edges but not AA or -- proper
-    }    
 }

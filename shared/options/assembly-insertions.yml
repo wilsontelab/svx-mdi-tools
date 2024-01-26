@@ -12,7 +12,7 @@ options:
         short: null
         type: integer
         required: false
-        default: 3
+        default: 1
         description: "smallest insertion sequence to analyze" 
     max-insertion-size: 
         order: 3
@@ -21,13 +21,13 @@ options:
         required: false
         default: 20
         description: "largest insertion sequence to analyze" 
-    flanking-microhomology: 
+    min-template-size: 
         order: 4
         short: null
         type: integer
         required: false
-        default: 2
-        description: "require insertion templates to have --flanking-microhomology on each side" 
+        default: 7
+        description: "require insertion templates plus flanking microhomologies to be at least this many bp" 
     insertion-search-space:
         order: 5
         short: null

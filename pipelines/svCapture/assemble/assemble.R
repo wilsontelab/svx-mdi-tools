@@ -8,6 +8,7 @@ suppressPackageStartupMessages(suppressWarnings({
     library(data.table)
     library(parallel)
     library(yaml)
+    library(stringi)
 }))
 #-------------------------------------------------------------------------------------
 # load, parse and save environment variables
@@ -23,7 +24,9 @@ myEnvVars <- list(
         'OUTPUT_DIR',
         'DATA_NAME',
         'DATA_FILE_PREFIX',
-        'ASSEMBLE_PREFIX'
+        'ASSEMBLE_PREFIX',
+        'FEATURE_FILES',
+        'FEATURE_TYPES'
     ),
     integer = c(
         'N_CPU',
@@ -35,10 +38,14 @@ myEnvVars <- list(
         'MIN_MOLECULES',
         'MAX_MOLECULES',
         'MIN_SPLIT_READS',
+        'COVERAGE_BIN_SIZE',
         'MIN_INSERTION_SIZE',
         'MAX_INSERTION_SIZE',
-        'FLANKING_MICROHOMOLOGY',
-        'INSERTION_SEARCH_SPACE'
+        'MIN_TEMPLATE_SIZE',
+        'INSERTION_SEARCH_SPACE',
+        'BASE_USAGE_SPAN',
+        'FLEXIBILITY_SPAN',
+        'FEATURES_SPAN'
     ),
     double = c(
         'MAX_SHARED_PROPER'
@@ -46,7 +53,11 @@ myEnvVars <- list(
     logical = c(
         'WARN_ONLY',
         'INCLUDE_CLIPS',
-        'FIND_INSERTION_TEMPLATES'
+        'FORCE_COVERAGE',
+        'FIND_INSERTION_TEMPLATES',
+        'PROFILE_BASE_USAGE',
+        'PROFILE_FLEXIBILITY',
+        'PROFILE_FEATURES'
     )
 )
 checkEnvVars(myEnvVars)
@@ -84,6 +95,9 @@ getSampleBamFile <- function(sample){
     if(!file.exists(bamFile)) stop("file not found:", bamFile)
     bamFile
 }
+getSampleCoverageFile <- function(sample){
+    paste(getSampleBamFile(sample), "coverage", "rds", sep = ".")
+}
 getProjectFindFile <- function(project_, sample_){
     genome <- getSampleMetadata("genome", project_, sample_)
     rdsFile <- paste(project_, genome, "find.structural_variants.rds", sep = ".")
@@ -103,12 +117,13 @@ samples <- merge(
     samples[, {
         task <- getSampleExtractTask(project, sample)$extract
         .(
-            genomesDir      = task$genome[["genomes-dir"]],
-            genome          = task$genome$genome,
-            cram            = as.logical(task[["bam-format"]][["use-cram"]]),
-            minMapq         = as.integer(task[["read-filtering"]][["min-mapq"]]),
-            targetsBed      = task[["target-region"]][["targets-bed"]],
-            regionPadding   = as.integer(task[["target-region"]][["region-padding"]])
+            sampleKey     = paste(project, sample, sep = "::"),
+            genomesDir    = task$genome[["genomes-dir"]],
+            genome        = task$genome$genome,
+            cram          = as.logical(task[["bam-format"]][["use-cram"]]),
+            minMapq       = as.integer(task[["read-filtering"]][["min-mapq"]]),
+            targetsBed    = task[["target-region"]][["targets-bed"]],
+            regionPadding = as.integer(task[["target-region"]][["region-padding"]])
         )
     }, by = .(i, project, sample)],
     by = c("i", "project", "sample"),
@@ -127,32 +142,130 @@ for(column in c("genome","targetsBed","regionPadding","minMapq")){
         passedCrosscheck <- FALSE
     }
 }
-if(!passedCrosscheck && !env$WARN_ONLY) stop("crosscheck failed, aborting since --warn-only not set")
+if(!passedCrosscheck) if(env$WARN_ONLY) message() else stop("crosscheck failed, aborting since --warn-only not set")
+#=====================================================================================
+
+#=====================================================================================
+message("assembling target region sequences")
+refFlats <- list()
+getGeneCoordinate <- function(genome, geneNames, column, aggFn){
+    if(is.null(refFlats[[genome]])) NA else sapply(geneNames, function(geneName_){
+        x <- refFlats[[genome]][geneName == geneName_, unlist(.SD), .SDcols = column]
+        if(length(x) > 0) aggFn(x) else NA
+    })
+}
+targets <- samples[, { # one row per target per BED file, can technically have the same target in two rows if duplicated in BED
+    targets <- fread(targetsBed)[, 1:4]
+    names(targets) <- c("chrom","regionStart","regionEnd","name")
+    regionPadding <- max(regionPadding)
+    genomeDir   <- Sys.glob(file.path(genomesDir[1], "iGenomes/*/UCSC", genome))
+    refFlat     <- file.path(genomeDir, "Annotation/Genes/refFlat.txt.gz")
+    genomeFasta <- file.path(genomeDir, "Sequence/WholeGenomeFasta/genome.fa")
+    if(is.null(refFlats[[genome]])) refFlats[[genome]] <<- tryCatch({
+        x <- fread(refFlat, sep = "\t")
+        names(x) <- c("geneName","name","chrom","strand","txStart","txEnd","cdsStart","cdsEnd","exonCount","exonStarts","exonEnds")
+        x
+    }, error = function(e) NULL)
+    targets[, ":="(
+        regionKey     = paste0(genome, "::", chrom, ":", regionStart, "-", regionEnd),
+        regionPadding = regionPadding,
+        paddedStart   = regionStart - regionPadding, # all still half-open like the source BED
+        paddedEnd     = regionEnd   + regionPadding,
+        geneStart     = getGeneCoordinate(genome, name, "txStart", min),
+        geneEnd       = getGeneCoordinate(genome, name, "txEnd",   max),
+        geneStrand    = getGeneCoordinate(genome, name, "strand",  function(x) x[1])
+    )]
+    targets[, ":="(
+        paddedSequence = {
+            x <- system2(
+                "samtools",
+                args = c(
+                    "faidx",
+                    genomeFasta,
+                    paste0(chrom, ":", paddedStart + 1, "-", paddedEnd)
+                ),
+                stdout = TRUE
+            )
+            paste(toupper(x[2:length(x)]), collapse = "")
+        }
+    ), by = .(chrom, regionStart, regionEnd, name)]
+    targets
+}, by = .(genome, targetsBed)]
+uniqueTargets <- targets[, # one row per unique target region, defined by regionKey, even if repeated between targets BED files
+    {
+        targetsBeds <- targetsBed
+        .(
+            genome = genome[1], 
+            chrom = chrom[1], 
+            regionStart = regionStart[1], 
+            regionEnd = regionEnd[1], 
+            name = paste(sort(unique(name)), sep = ","),
+            regionPadding = max(regionPadding),
+            paddedStart   = min(paddedStart), # all still half-open like the source BED
+            paddedEnd     = max(paddedEnd),
+            geneStart = geneStart[1], 
+            geneEnd = geneEnd[1], 
+            geneStrand = geneStrand[1],
+            paddedSequence = paddedSequence[which.max(regionPadding)],
+            targetsBeds = list(targetsBed),
+            sampleKeys = list(samples[targetsBed %in% targetsBeds, sort(sampleKey)])
+        )
+    },
+    by = .(regionKey)
+]
 #=====================================================================================
 
 #=====================================================================================
 message("getting N50 and adjusted target coverage by sample")
-nSamples <- nrow(samples)
 samples <- merge(
     samples,
-    do.call(rbind, mclapply(1:nSamples, function(i){
+    do.call(rbind, mclapply(1:nrow(samples), function(i){
         sample <- samples[i]
         message(paste("", sample$project, sample$sample, sep = "\t"))
-        x <- system2(
-            "perl", 
-            args = c(
-                file.path(env$ACTION_DIR, "coverage.pl"),
-                sapply(c("genome", "targetsBed", "regionPadding", "minMapq"), getSampleMetadata2, sample),
-                getSampleBamFile(sample)
-            ),
-            stdout = TRUE, 
-            stderr = FALSE
-        )
-        cbind(sample[, .(i, project, sample)], fread(text = x))
+        covFile <- getSampleCoverageFile(sample)
+        sampleCoverage <- if(file.exists(covFile) && !env$FORCE_COVERAGE) readRDS(file = covFile) else {
+            dt <- fread(text = system2(
+                "perl", 
+                args = c(
+                    file.path(env$ACTION_DIR, "coverage.pl"),
+                    sapply(c("genome", "targetsBed", "regionPadding", "minMapq"), getSampleMetadata2, sample),
+                    getSampleBamFile(sample)
+                ),
+                stdout = TRUE, 
+                stderr = FALSE
+            ))
+            saveRDS(dt, file = covFile) # cache slow-step coverage determinations to speed future incremental assemblies
+            dt
+        }
+        cbind(sample[, .(i, sampleKey)], sampleCoverage)
     }, mc.cores = env$N_CPU)),
-    by = c("i","project","sample"),
+    by = c("i","sampleKey"),
     all.x = TRUE
 ) 
+
+message("parsing bin coverage matrices")
+binnedCoverage <- sapply(uniqueTargets$regionKey, function(regionKey_) {
+    target <- uniqueTargets[regionKey == regionKey_]
+    targetSampleKeys <- unlist(target$sampleKeys)
+    matrix( # a named list of sample bin coverage matrices by unique target region
+        NA_real_, 
+        nrow = target[, 1 + floor( (paddedEnd - (paddedStart + 1)) / env$COVERAGE_BIN_SIZE )], # rows = bins for this target region
+        ncol = length(targetSampleKeys), # one named matrix column per sample that used this target
+        dimnames = list(NULL, targetSampleKeys)
+    )
+}, simplify = FALSE, USE.NAMES = TRUE)
+for(regionKey_ in uniqueTargets$regionKey){
+    target <- uniqueTargets[regionKey == regionKey_]
+    message(paste("", target$name, regionKey_, sep = "\t"))
+    for(targetSampleKey in unlist(target$sampleKeys)){
+        sample <- samples[sampleKey == targetSampleKey]
+        targetI <- targets[targetsBed == sample$targetsBed, which(regionKey == regionKey_)]
+        binnedCoverage[[regionKey_]][, targetSampleKey] <- sample[, {
+            as.double(strsplit(strsplit(bin_coverages, "::")[[1]][targetI], ",")[[1]])
+        }]
+    }
+}
+samples[, bin_coverages := NULL]
 #=====================================================================================
 
 #=====================================================================================
@@ -202,6 +315,8 @@ svs <- samples[, {
         SAMPLES = paste0(",", SAMPLES, ","),
         MICROHOM_LEN,
         JXN_BASES
+        # ,
+        # JXN_SEQ ######################
     )]
 }, by = .(project)]
 names(svs)[1] <- "PROJECT"
@@ -217,163 +332,536 @@ samples <- merge(
             inversion     = sum(jxnTypes == "I"),
             translocation = sum(jxnTypes == "T")
         )
-    }, by = .(i, project, sample)],
-    by = c("i", "project", "sample"),
+    }, by = .(i, sampleKey)],
+    by = c("i", "sampleKey"),
     all.x = TRUE
 )
-#=====================================================================================
-
-#=====================================================================================
-message("assembling target region sequences")
-refFlats <- list()
-getGeneCoordinate <- function(genome, geneNames, column, aggFn){
-    if(is.null(refFlats[[genome]])) NA else sapply(geneNames, function(geneName_){
-        x <- refFlats[[genome]][geneName == geneName_, unlist(.SD), .SDcols = column]
-        if(length(x) > 0) aggFn(x) else NA
-    })
-}
-targets <- samples[, {
-    targets <- fread(targetsBed)[, 1:4]
-    names(targets) <- c("chrom","regionStart","regionEnd","name")
-    regionPadding <- max(regionPadding)
-    genomeDir   <- Sys.glob(file.path(genomesDir[1], "iGenomes/*/UCSC", genome))
-    refFlat     <- file.path(genomeDir, "Annotation/Genes/refFlat.txt.gz")    
-    genomeFasta <- file.path(genomeDir, "Sequence/WholeGenomeFasta/genome.fa")
-    if(is.null(refFlats[[genome]])) refFlats[[genome]] <<- tryCatch({
-        x <- fread(refFlat, sep = "\t")
-        names(x) <- c("geneName","name","chrom","strand","txStart","txEnd","cdsStart","cdsEnd","exonCount","exonStarts","exonEnds")
-        x
-    }, error = function(e) NULL)
-    targets[, ":="(
-        regionPadding = regionPadding,
-        paddedStart   = regionStart - regionPadding, # all still half-open like the source BED
-        paddedEnd     = regionEnd   + regionPadding,
-        geneStart     = getGeneCoordinate(genome, name, "txStart", min),
-        geneEnd       = getGeneCoordinate(genome, name, "txEnd",   max),
-        geneStrand    = getGeneCoordinate(genome, name, "strand",  function(x) x[1])
-    )]
-    targets[, ":="(
-        paddedSequence = {
-            x <- system2(
-                "samtools",
-                args = c(
-                    "faidx",
-                    genomeFasta,
-                    paste0(chrom, ":", paddedStart + 1, "-", paddedEnd)
-                ),
-                stdout = TRUE
-            )
-            paste(toupper(x[2:length(x)]), collapse = "")
-        }
-    ), by = .(chrom, regionStart, regionEnd, name)]
-    targets
-}, by = .(genome, targetsBed)]
 #=====================================================================================
 
 #=====================================================================================
 if(env$FIND_INSERTION_TEMPLATES) message("attempting to find insertion templates near junctions")
-nullInsertion <- data.table(
-    templateBreakpointN = NA_integer_,
-    templateBreakpointSide = NA_character_,
-    templateType = NA_character_, # "not_found", "foldback", or "cross_junction"
-    templateDistance = NA_integer_
+nullInsertion <- data.table( # NA values for junctions where template searching was not performed
+    PROJECT = NA_character_,
+    SV_ID   = NA_character_,
+    templateStartPos = NA_integer_,     # template match start pos, between 1 and 2 * INSERTION_SEARCH_SPACE
+    templateStartFm = NA_integer_,      # microhomology length on the left side, i.e., at templateStartPos
+    templateStartIsRetained = NA,       # whether templateStartPos is found in the final junction sequence
+    templateEndPos = NA_integer_,       # template match end pos, between 1 and 2 * INSERTION_SEARCH_SPACE
+    templateEndFm = NA_integer_,        # microhomology length on the right side, i.e., at templateEndPos
+    templateEndIsRetained = NA,         # whether templateEndPos is found in the final junction sequence
+    templateBreakpointN = NA_integer_,  # the breakpoint side of the final junction sequence, either 1 or 2
+    templateIsRc = NA,                  # TRUE if template was the reverse complement of insertion sequence
+    templateType = NA_character_,       # the inferred template mechanism: notFound, foldback, strandSwitch, crossJxn, slippage, palindrome, or other
+    templateDistance = NA_integer_,     # no. of bp from junction position to innermost microhomology position
+    templateInstances = NA_integer_     # no. of distinct instances of found templates, including the one that is reported
 )
-notFoundInsertion <- data.table(
-    templateBreakpointN = NA_integer_,
-    templateBreakpointSide = NA_character_,
-    templateType = "not_found", 
-    templateDistance = NA_integer_
-)
-isUsablePosition <- function(pos, target) pos - target$paddedStart > env$INSERTION_SEARCH_SPACE && 
-                                           target$paddedEnd - pos >= env$INSERTION_SEARCH_SPACE
-analyzeInsertion <- function(project_, sv){
-
-    # parse the genome reference target
+getSvTarget <- function(project_, sv){
     targetsBed_ <- samples[project == project_ & sample == strsplit(sv$SAMPLES, ",")[[1]][2], targetsBed] # all samples in a project were analyzed with the same targets
-    target <- targets[targetsBed == targetsBed_ & name == sv$TARGET_REGION]
-    if(!isUsablePosition(sv$POS_1, target) || 
-       !isUsablePosition(sv$POS_2, target)) return(nullInsertion)
-
-    # get the four regions to search as the retained and lost (to this junction) segments on each side of each breakpoint
-    # matches must land wholly within one of these four regions
-    ss <- env$INSERTION_SEARCH_SPACE
-    fm <- env$FLANKING_MICROHOMOLOGY
-    tps <- target$paddedStart
+    targets[targetsBed == targetsBed_ & name == sv$TARGET_REGION] 
+}
+isUsablePosition <- function(pos, target, ss) pos - target$paddedStart >  ss && 
+                                              target$paddedEnd - pos   >= ss
+getBreakpointSequences <- function(sv, target, ss){
+    pos1 <- sv$POS_1 - target$paddedStart
+    pos2 <- sv$POS_2 - target$paddedStart
     if(sv$SIDE_1 == "L"){
-        genRefRetained1 <-    substr(target$paddedSequence, sv$POS_1 - ss + 1 - tps, sv$POS_1 - tps)
-        genRefLost1     <-    substr(target$paddedSequence, sv$POS_1 + 1 - tps, sv$POS_1 + ss - tps)
+        genRefRetained1 <-    substr(target$paddedSequence, pos1 - ss + 1, pos1)
+        genRefLost1     <-    substr(target$paddedSequence, pos1 + 1,      pos1 + ss)
     } else {
-        genRefRetained1 <- rc(substr(target$paddedSequence, sv$POS_1 - tps, sv$POS_1 + ss - 1 - tps)) # flip one reference strand for inversions to match jxnSeq assembly
-        genRefLost1     <- rc(substr(target$paddedSequence, sv$POS_1 - ss - tps, sv$POS_1 - 1 - tps))
+        genRefLost1     <- rc(substr(target$paddedSequence, pos1 - ss, pos1 - 1))
+        genRefRetained1 <- rc(substr(target$paddedSequence, pos1,      pos1 + ss - 1)) # flip one reference strand for inversions to match jxnSeq assembly
     }
     if(sv$SIDE_2 == "R"){
-        genRefRetained2 <-    substr(target$paddedSequence, sv$POS_2 - tps, sv$POS_2 + ss - 1 - tps)
-        genRefLost2     <-    substr(target$paddedSequence, sv$POS_2 - ss - tps, sv$POS_2 - 1 - tps)
+        genRefLost2     <-    substr(target$paddedSequence, pos2 - ss, pos2 - 1)
+        genRefRetained2 <-    substr(target$paddedSequence, pos2,      pos2 + ss - 1)
     } else {
-        genRefRetained2 <- rc(substr(target$paddedSequence, sv$POS_2 - ss + 1 - tps, sv$POS_2 - tps))
-        genRefLost2     <- rc(substr(target$paddedSequence, sv$POS_2 + 1 - tps, sv$POS_2 + ss - tps))
-    }
+        genRefRetained2 <- rc(substr(target$paddedSequence, pos2 - ss + 1, pos2))
+        genRefLost2     <- rc(substr(target$paddedSequence, pos2 + 1,      pos2 + ss))
+    } 
+    list(
+        genRef1         = paste0(genRefRetained1, genRefLost1),
+        genRef2         = paste0(genRefLost2, genRefRetained2),
+        genRefRetained1 = genRefRetained1,
+        genRefLost1     = genRefLost1,
+        genRefRetained2 = genRefRetained2,
+        genRefLost2     = genRefLost2
+    )
+}
+posIsRetained <- function(breakpointN, pos, ss) switch( # retained positions are found in the final assembled junction sequence
+    breakpointN,
+    pos <= ss,
+    pos >= ss + 1
+)
+# debug <- data.table( # this code helps debug and explore mechanisms by writing a tmp file of junction sequences
+#     templateBreakpointN = integer(),
+#     templateStartPos = integer(),
+#     templateEndPos = integer(),
+#     templateStartFm = integer(),
+#     templateEndFm = integer(),
+#     templateDistance = integer(),
+#     JXN_BASES = character(),
+#     JXN_SEQ = character(),
+#     genRef1 = character(),
+#     genRef2 = character()
+# )
+analyzeInsertion <- function(svI){
+    sv <- svs[svI]
+    ss <- env$INSERTION_SEARCH_SPACE
+
+    # parse the genome reference target
+    target <- getSvTarget(sv$PROJECT, sv)
+    if(!isUsablePosition(sv$POS_1, target, ss) || 
+       !isUsablePosition(sv$POS_2, target, ss)) return(nullInsertion)
+
+    # get the genome regions to search as the retained and lost (to this junction) segments on each side of each breakpoint
+    seqs <- getBreakpointSequences(sv, target, ss)
 
     # parse the insertion search sequence as (microhomology)(insertion)(microhomology)
-    microhomology1 <- substr(genRefRetained1, ss - fm + 1, ss)
-    microhomology2 <- substr(genRefRetained2, 1, fm)
+    # dynamically adjust required microhomology spans to ensure search sequences are long enough to be meaningful
+    fm <- {
+        insertionSize <- -sv$MICROHOM_LEN
+        if(insertionSize >= env$MIN_TEMPLATE_SIZE) 1L # demand at least 1 bp flanking microhomology regardless of insertion size
+        else as.integer(ceiling((env$MIN_TEMPLATE_SIZE - insertionSize) / 2)) # equally distribute required microhomology to achieve MIN_TEMPLATE_SIZE     
+    }
+    microhomology1 <- substr(seqs$genRefRetained1, ss - fm + 1, ss) # junction sequences defined by top strand of assembled junction
+    microhomology2 <- substr(seqs$genRefRetained2, 1, fm)
     searchSeq <- paste0(microhomology1, sv$JXN_BASES, microhomology2)
-    rcSearchSeq <- rc(searchSeq)
+    rcSearchSeq <- rc(searchSeq) # accomplish rc search by searchng for rc(template) in top strand of breakpoint sequences
+    searchSeqLength <- nchar(searchSeq)
 
     # find all matches
     matches <- list(
-        match1R   = gregexpr(  searchSeq, genRefRetained1)[[1]],
-        match1Rrc = gregexpr(rcSearchSeq, genRefRetained1)[[1]],
-        match1L   = gregexpr(  searchSeq, genRefLost1)[[1]],
-        match1Lrc = gregexpr(rcSearchSeq, genRefLost1)[[1]],
-        match2R   = gregexpr(  searchSeq, genRefRetained2)[[1]],
-        match2Rrc = gregexpr(rcSearchSeq, genRefRetained2)[[1]],
-        match2L   = gregexpr(  searchSeq, genRefLost2)[[1]],
-        match2Lrc = gregexpr(rcSearchSeq, genRefLost2)[[1]]
+        match1   = gregexpr(  searchSeq, seqs$genRef1)[[1]],
+        match1rc = gregexpr(rcSearchSeq, seqs$genRef1)[[1]],
+        match2   = gregexpr(  searchSeq, seqs$genRef2)[[1]],
+        match2rc = gregexpr(rcSearchSeq, seqs$genRef2)[[1]]
     )
-    if(all(unlist(matches) == -1)) return(notFoundInsertion)
+    if(all(unlist(matches) == -1)) return({
+        x <- copy(nullInsertion)
+        x[, ":="(
+            PROJECT = sv$PROJECT,
+            SV_ID   = sv$SV_ID,
+            templateType = "notFound" # notFound insertions NA except for this templateType
+        )]
+    })
 
     # characterize all template matches
-    searchSeqLength <- nchar(searchSeq)
-    parseMatches <- function(matchStartPositions, breakpointN, templateType, breakpointSide, orientation){
+    parseMatches <- function(matchStartPositions, seq, breakpointN, isRc){
         if(all(matchStartPositions == -1)) return(NULL) 
-        matchEndPositions <- matchStartPositions + searchSeqLength - 1
-        data.table(
+        jxnPos <- if(breakpointN == 1) ss else ss + 1
+        seqLen <- nchar(seq)
+
+        # if possible, widen microhomology spans to include all matching bases beyond the minimal requirement
+        # from here forward, microhomologies can be different lengths on the two sides of the insertion
+        cbind(
+            do.call(rbind, lapply(matchStartPositions, function(pos){ # adjust start positions
+                for(inc in 1:1000){ # far longer than any microhomology can ever be, loop will always break
+                    pos_ <- pos - inc
+                    fm_  <- fm  + inc
+                    if(pos_ < 1) break
+                    candidate <- substr(seq, pos_, pos_ + fm_ - 1)
+                    microhomology <- if(isRc){
+                        rc(substr(seqs$genRefRetained2, 1, fm_))
+                    } else {
+                        substr(seqs$genRefRetained1, ss - fm_ + 1, ss)
+                    }
+                    if(candidate != microhomology) break
+                }
+                data.table(
+                    templateStartPos = pos_ + 1L,
+                    templateStartFm  = fm_  - 1L,
+                    templateStartIsRetained = posIsRetained(breakpointN, pos_ + 1L, ss)
+                )
+            })),
+            do.call(rbind, lapply(matchStartPositions + searchSeqLength - 1L, function(pos){ # adjust end positions
+                for(inc in 1:1000){
+                    pos_ <- pos + inc
+                    fm_  <- fm  + inc
+                    if(pos_ > seqLen) break
+                    candidate <- substr(seq, pos_ - fm_ + 1, pos_)
+                    microhomology <- if(isRc){
+                        rc(substr(seqs$genRefRetained1, ss - fm_ + 1, ss))
+                    } else {
+                        substr(seqs$genRefRetained2, 1, fm_)
+                    }
+                    if(candidate != microhomology) break
+                }
+                data.table(
+                    templateEndPos = pos_ - 1L,
+                    templateEndFm  = fm_  - 1L,
+                    templateEndIsRetained = posIsRetained(breakpointN, pos_ - 1L, ss)
+                )
+            }))
+        )[, ":="( 
+            PROJECT = sv$PROJECT,
+            SV_ID   = sv$SV_ID,
             templateBreakpointN = breakpointN,
-            templateBreakpointSide = breakpointSide,           
-            templateType = templateType,
-            templateDistance = as.integer(switch(
-                orientation,
-                left  = ss - matchEndPositions,
-                right = matchStartPositions - 1
-            ))
-        )
+            templateIsRc = isRc,
+            templateType = mapply(function(startIsRetained, endIsRetained) {
+                if(isRc){
+                    if(startIsRetained & endIsRetained) {
+                        "foldback"
+                    } else {
+                        "strandSwitch"
+                    }
+                } else {
+                    if(startIsRetained & endIsRetained) {
+                        "crossJxn"
+                    } else if(startIsRetained != endIsRetained) {
+                        "slippage"
+                    } else {
+                        "other"
+                    }
+                }
+            }, templateStartIsRetained, templateEndIsRetained)
+        )][,
+            templateDistance := mapply(function(startIsRetained, endIsRetained, startPos, endPos) as.integer(
+                if(startIsRetained & endIsRetained){ # crossJxn or foldback
+                    if(breakpointN == 1) jxnPos - endPos # can be zero if all the way to the retained end
+                    else startPos - jxnPos
+                } else if(!startIsRetained & !endIsRetained){ # some strandSwitch, all other
+                    if(breakpointN == 1) startPos - (jxnPos + 1) # can be a negative number
+                    else (jxnPos - 1) - endPos
+                } else { # some strandSwitch, all slippage
+                    if(breakpointN == 1) endPos - (jxnPos + 1)
+                    else (jxnPos - 1) - startPos
+                }
+            ), templateStartIsRetained, templateEndIsRetained, templateStartPos, templateEndPos)
+        ]
     }
     d <- do.call(rbind, list(
-        parseMatches(matches$match1R,   1L, "crossJxn", "retained", "left"),
-        parseMatches(matches$match1Rrc, 1L, "foldback", "retained", "left"),
-        parseMatches(matches$match1L,   1L, "crossJxn", "lost",     "right"),
-        parseMatches(matches$match1Lrc, 1L, "foldback", "lost",     "right"),
-        parseMatches(matches$match2R,   2L, "crossJxn", "retained", "right"),
-        parseMatches(matches$match2Rrc, 2L, "foldback", "retained", "right"),
-        parseMatches(matches$match2L,   2L, "crossJxn", "lost",     "left"),
-        parseMatches(matches$match2Lrc, 2L, "foldback", "lost",     "left")
+        parseMatches(matches$match1,   seqs$genRef1, 1L, FALSE),
+        parseMatches(matches$match1rc, seqs$genRef1, 1L, TRUE),
+        parseMatches(matches$match2,   seqs$genRef2, 2L, FALSE),
+        parseMatches(matches$match2rc, seqs$genRef2, 2L, TRUE)
     ))
-    
-    # for SVs with multiple possible templates, prefer the one closest to the junction
-    d[order(templateDistance)][1]
+
+    # for SVs with multiple possible templates, report only one, preferring ...
+    d <- d[, 
+        templateInstances := .N
+    ][order(
+        -(templateEndPos - templateStartPos + 1), # ... the longest template span, including microhomologies and the insertion template
+        templateDistance                          # ... the one closest to the junction
+    )][1]
+    d[
+        templateType == "foldback" && templateDistance == 0,
+        templateType := "palindrome" # create a distinct type for this special case of apparent foldbacks
+    ]
+    # if(sv$JXN_TYPE == "L" && 
+    #    d$templateType == "foldback" && 
+    #      d$templateDistance == 0) debug <<- rbind(debug, d[, .(
+    #     templateBreakpointN,
+    #     templateStartPos,
+    #     templateEndPos,
+    #     templateStartFm,
+    #     templateEndFm,
+    #     templateDistance,
+    #     JXN_BASES = sv$JXN_BASES,
+    #     JXN_SEQ = sv$JXN_SEQ,
+    #     genRef1 = seqs$genRef1,
+    #     genRef2 = seqs$genRef2
+    # )])
+    d
 }
 svs <- merge(
     svs, 
-    if(env$FIND_INSERTION_TEMPLATES) svs[, {
-        insertionSize <- -MICROHOM_LEN
-        if(insertionSize >= env$MIN_INSERTION_SIZE && insertionSize <= env$MAX_INSERTION_SIZE) analyzeInsertion(PROJECT, .SD)
-        else nullInsertion
-    }, by = .(PROJECT, SV_ID)] 
-    else nullInsertion,
+    if(!env$FIND_INSERTION_TEMPLATES) nullInsertion else {
+        do.call(rbind, mclapply(
+        # do.call(rbind, lapply( # for debug
+            which(svs$N_SPLITS > 0 & 
+                 -svs$MICROHOM_LEN >= env$MIN_INSERTION_SIZE & 
+                 -svs$MICROHOM_LEN <= env$MAX_INSERTION_SIZE), 
+            analyzeInsertion,
+            mc.cores = env$N_CPU
+        ))
+    },
     by = c("PROJECT", "SV_ID"),
     all.x = TRUE
 )
+# write.table(
+#     debug, 
+#     file = "/nfs/turbo/path-wilsonte-turbo/mdi/wilsontelab/greatlakes/data-scripts/wilsontelab/publications/CFS-M_phase-PolQ-2023/assemble_all_projects/DEBUG.csv", 
+#     sep = ",",
+#     row.names = FALSE,
+#     col.names = TRUE
+# )
+# stop("XXXXXXXXXXXXXXXXXXXXX")
+#=====================================================================================
+
+#=====================================================================================
+if(env$PROFILE_BASE_USAGE) message("profiling base usage")
+bases <- list(A = 1L, C = 2L, G = 3L, T = 4L, N = NA_integer_)
+getMicrohomologyType <- function(sv){
+    if(sv$MICROHOM_LEN > 0) "microhomology" 
+    else if(sv$MICROHOM_LEN < 0) "insertion" 
+    else "blunt"
+}
+analyzeBaseUsage <- function(svI){
+    sv <- svs[svI]
+    ss <- env$BASE_USAGE_SPAN
+
+    # parse the genome reference target
+    target <- getSvTarget(sv$PROJECT, sv)
+    if(!isUsablePosition(sv$POS_1, target, ss) || 
+       !isUsablePosition(sv$POS_2, target, ss)) return(NULL)
+
+    # get the genome regions to search as the retained and lost (to this junction) segments on each side of each breakpoint
+    seqs <- getBreakpointSequences(sv, target, ss)
+    
+    # profile the base usage around each breakpoint
+    # orient each breakpoint in order retained -> lost, tabulating the bases on the "top" strand when approaching jxnPos from the left
+    matrix(
+        c(
+            unlist(bases[strsplit(   seqs$genRef1,  "")[[1]]]),
+            unlist(bases[strsplit(rc(seqs$genRef2), "")[[1]]])
+        ), 
+        byrow = TRUE, # one row per junction breakpoint, one col for each position in the profile span; jxnPos at env$BASE_USAGE_SPAN
+        nrow = 2,
+        dimnames = list(paste(sv$PROJECT, sv$SV_ID, 1:2, sep = "::"), NULL)
+    )
+}
+baseUsageProfile <- if(!env$PROFILE_BASE_USAGE) NULL else {
+    do.call(rbind, mclapply(
+        which(svs$N_SPLITS > 0), # sequenced junctions with known junction positions
+        analyzeBaseUsage,
+        mc.cores = env$N_CPU
+    ))
+}
+junctionBaseUsageProfile <- {
+    x <- svs[
+        abs(MICROHOM_LEN) > 0, 
+        .(
+            microhomologyType = getMicrohomologyType(.SD),
+            base = strsplit(JXN_BASES, "")[[1]]
+        ), 
+        by = .(PROJECT, SV_ID)
+    ]
+    dcast(
+        x,
+        "PROJECT + SV_ID + microhomologyType ~ base", 
+        value.var = "base",
+        fun.aggregate = length, 
+        fill = 0
+    )[, .SD, 
+        .SDcols = c("PROJECT", "SV_ID", "microhomologyType", "A", "C", "G", "T")
+    ][
+        A + C + G + T > 0 # in case junctions bases were exclusively N
+    ]
+}
+targetBaseUsageProfile <- {
+    x <- uniqueTargets[, .(
+        base = strsplit(paddedSequence, "")[[1]] # TODO: also profile just the capture target bases?
+    ), by = .(regionKey)]
+    dcast(
+        x,
+        "regionKey ~ base", 
+        value.var = "base",
+        fun.aggregate = length, 
+        fill = 0
+    )[, .SD, 
+        .SDcols = c("regionKey", "A", "C", "G", "T")
+    ]
+}
+#=====================================================================================
+
+#=====================================================================================
+if(env$PROFILE_FLEXIBILITY) message("calculating base flexibility profiles")
+getBreakpointPositions <- function(sv, target, ss){
+    pos1 <- sv$POS_1 - target$paddedStart
+    pos2 <- sv$POS_2 - target$paddedStart
+    if(sv$SIDE_1 == "L"){
+        genRefRetained1 <-    (pos1 - ss + 1):pos1
+        genRefLost1     <-    (pos1 + 1):(pos1 + ss)
+    } else {
+        genRefLost1     <- rev((pos1 - ss):(pos1 - 1))
+        genRefRetained1 <- rev(pos1:(pos1 + ss - 1)) # flip one reference strand for inversions to match jxnSeq assembly
+    }
+    if(sv$SIDE_2 == "R"){
+        genRefLost2     <-    (pos2 - ss):(pos2 - 1)
+        genRefRetained2 <-    pos2:(pos2 + ss - 1)
+    } else {
+        genRefRetained2 <- rev((pos2 - ss + 1):pos2)
+        genRefLost2     <- rev((pos2 + 1):(pos2 + ss))
+    } 
+    list(
+        genRef1 = c(genRefRetained1, genRefLost1),
+        genRef2 = c(genRefLost2, genRefRetained2)
+    )
+}
+analyzeFlexibility <- function(svI){
+    sv <- svs[svI]
+    ss <- env$FLEXIBILITY_SPAN
+
+    # parse the genome reference target
+    target <- getSvTarget(sv$PROJECT, sv)
+    if(!isUsablePosition(sv$POS_1, target, ss) || 
+       !isUsablePosition(sv$POS_2, target, ss)) return(NULL)
+    flexibility <- uniqueTargets[regionKey == target$regionKey, unlist(flexibility)]
+
+    # get the genome regions to search as the retained and lost (to this junction) segments on each side of each breakpoint
+    positions <- getBreakpointPositions(sv, target, ss)
+    
+    # profile the base usage around each breakpoint
+    # orient each breakpoint in order retained -> lost, tabulating the bases on the "top" strand when approaching jxnPos from the left
+    matrix(
+        c(
+                flexibility[positions$genRef1],
+            rev(flexibility[positions$genRef2])
+        ), 
+        byrow = TRUE, # one row per junction breakpoint, one col for each position in the profile span; jxnPos at env$BASE_USAGE_SPAN
+        nrow = 2,
+        dimnames = list(paste(sv$PROJECT, sv$SV_ID, 1:2, sep = "::"), NULL)
+    )
+}
+dinucleotideAngles <- list( # after http://margalit.huji.ac.il/TwistFlex/
+    A = list(
+        A = 7.6,
+        C = 14.6, # A to C dinucleotide, etc.
+        G = 8.2,
+        T = 25, # A to T dinucleotide has the highest flexibility
+        N = NA_real_
+    ),
+    C = list(
+        A = 10.9,
+        C = 7.2,
+        G = 8.9,
+        T = 8.2,
+        N = NA_real_
+    ),
+    G = list(
+        A = 8.8,
+        C = 11.1,
+        G = 7.2,
+        T = 14.6,
+        N = NA_real_
+    ),
+    T = list(
+        A = 12.5,
+        C = 8.8,
+        G = 10.9,
+        T = 7.6,
+        N = NA_real_
+    ),
+    N = list(
+        A = NA_real_,
+        C = NA_real_,
+        G = NA_real_,
+        T = NA_real_,
+        N = NA_real_
+    )
+)
+flexibilityProfile <- if(!env$PROFILE_FLEXIBILITY) NULL else {
+    message(paste("", "by target", sep = "\t"))
+    uniqueTargets[, flexibility := {
+        bases <- strsplit(paddedSequence, "")[[1]]
+        nBases <- length(bases)
+        angles <- sapply(1:(nBases - 1), function(i) dinucleotideAngles[[bases[i]]][[bases[i + 1]]])
+        dt <- data.table(
+            enteringAngles = c(NA_real_, angles),
+            exitingAngles  = c(angles, NA_real_)
+        )
+        angles <- apply(dt, 1, mean, na.rm = TRUE)
+        angles[is.nan(angles)] <- NA_real_
+        list(list(angles)) # report a base's flexibility as the average of the bonds entering and leaving it
+    }, by = .(regionKey)]
+    message(paste("", "by SV", sep = "\t"))
+    do.call(rbind, mclapply(
+        which(svs$N_SPLITS > 0), # sequenced junctions with known junction positions
+        analyzeFlexibility,
+        mc.cores = env$N_CPU
+    ))
+}
+#=====================================================================================
+
+#=====================================================================================
+if(env$PROFILE_FEATURES) message("calculating base matches to genome features")
+getBreakpointFeatures <- function(targetPositions, target, features){
+    coord1 <- targetPositions + target$paddedStart
+    ends1 <- range(coord1)
+    matchingFeatures <- features[
+        chrom_ == target$chrom &
+        ends1[1] <= end_ &
+        (start_ + 1) <= ends1[2],  # STRAND?
+        .(
+            (start_ + 1) - target$paddedStart,
+            end_ - target$paddedStart
+        )
+    ]
+    if(nrow(matchingFeatures) == 0) return(rep(0, length(targetPositions)))
+    featurePosInTarget <- unlist( apply(matchingFeatures, 1, function(v) v[1]:v[2], simplify = FALSE) )
+    x <- merge(
+        data.table(
+            targetPosition = targetPositions
+        ),
+        data.table(
+            targetPosition = unique(featurePosInTarget),
+            hit = TRUE
+        ),
+        by = "targetPosition",
+        all.x = TRUE
+    )
+    x[is.na(x)] <- FALSE
+    if(targetPositions[1] < targetPositions[2]) x[, hit] # return a logical set to TRUE for the positions in breakpoint that match any feature
+    else x[, rev(hit)] # since merge forced asending order, we must reverse back when positions were descending
+}
+analyzeFeatures <- function(svI, features){
+    sv <- svs[svI]
+    ss <- env$FEATURES_SPAN
+
+    # parse the genome reference target
+    target <- getSvTarget(sv$PROJECT, sv)
+    if(!isUsablePosition(sv$POS_1, target, ss) || 
+       !isUsablePosition(sv$POS_2, target, ss)) return(NULL)
+
+    # get the genome regions to search as the retained and lost (to this junction) segments on each side of each breakpoint
+    targetPositions <- getBreakpointPositions(sv, target, ss) # i.e., 1 is the first position in the target region
+
+    # profile the base usage around each breakpoint
+    # orient each breakpoint in order retained -> lost, tabulating the bases on the "top" strand when approaching jxnPos from the left
+    matrix(
+        c(
+                getBreakpointFeatures(targetPositions$genRef1, target, features),
+            rev(getBreakpointFeatures(targetPositions$genRef2, target, features))
+        ), 
+        byrow = TRUE, # one row per junction breakpoint, one col for each position in the profile span; jxnPos at env$BASE_USAGE_SPAN
+        nrow = 2,
+        dimnames = list(paste(sv$PROJECT, sv$SV_ID, 1:2, sep = "::"), NULL)
+    )
+}
+genomeFeatures <- if(!env$PROFILE_FEATURES) NULL else {
+    featureFiles <- strsplit(env$FEATURE_FILES, ",")[[1]]
+    featureTypes <- strsplit(env$FEATURE_TYPES, ",")[[1]]
+    if(length(featureFiles) != length(featureTypes)) stop("malformed request at --feature-files or --feature-types")
+    x <- sapply(
+        featureFiles,
+        function(featureFile){
+            message(paste("", basename(featureFile), sep = "\t"))
+            if(!file.exists(featureFile)) stop(paste("feature file not found:", featureFile))
+            features <- fread(featureFile, sep = "\t")[, ":="(
+                chrom_ = .SD[[1]],
+                start_ = .SD[[2]],
+                end_   = .SD[[3]]
+            )]
+            features <- uniqueTargets[, {
+                features[
+                    chrom_ == chrom &
+                    (start_ + 1) <= paddedEnd &
+                    (paddedStart + 1) <= end_
+                ]
+            }, by = .(regionKey)]
+            do.call(rbind, mclapply(
+                which(svs$N_SPLITS > 0), # sequenced junctions with known junction positions
+                analyzeFeatures,
+                features,
+                mc.cores = env$N_CPU
+            ))
+        },
+        simplify = FALSE,
+        USE.NAMES = TRUE
+    )
+    names(x) <- featureTypes
+    x
+}
 #=====================================================================================
 
 #=====================================================================================
@@ -382,7 +870,14 @@ samples[, i := NULL]
 results <- list(
     samples = samples,
     targets = targets,
+    uniqueTargets = uniqueTargets,
+    binnedCoverage = binnedCoverage,
     svs = svs, 
+    baseUsageProfile = baseUsageProfile,
+    junctionBaseUsageProfile = junctionBaseUsageProfile,
+    targetBaseUsageProfile = targetBaseUsageProfile,
+    flexibilityProfile = flexibilityProfile,
+    genomeFeatures = genomeFeatures,
     env = env[unlist(myEnvVars)]
 )
 saveRDS(results, paste(env$ASSEMBLE_PREFIX, "rds", sep = "."))

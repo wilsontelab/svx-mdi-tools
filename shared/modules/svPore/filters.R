@@ -9,7 +9,26 @@
 
 # all alignment or junction edges
 getAlignmentEdges <- function(edges) edges[, edgeType == edgeTypes$ALIGNMENT]
-getJunctionEdges  <- function(edges) edges[, edgeType != edgeTypes$ALIGNMENT]  
+getJunctionEdges  <- function(edges) edges[, edgeType != edgeTypes$ALIGNMENT]
+
+# high-quality junctions are subjected to bandwith and adapter analysis
+# low-quality junctions are not, so passedBandwidth is always TRUE and hasAdapter5/3 is always FALSE
+# low-quality junctions will never be matchable or fusable based on filters below
+getHighQualityJunctions <- function(edges){
+    isJunction <- getJunctionEdges(edges)
+    edges[, 
+        isJunction & 
+        mapQ >= env$MIN_MAPQ & # require confident flanking alignments...
+        alnSize >= env$MIN_ALIGNMENT_SIZE & # ... of sufficiently large size
+        gapCompressedIdentity >= env$MIN_ALIGNMENT_IDENTITY # ... and quality, as judged by match to the reference genome
+    ]
+}
+setHighQualityFlag <- function(edges){ 
+    isJunction    <- getJunctionEdges(edges)
+    isHighQuality <- getHighQualityJunctions(edges)
+    edges[isJunction, highQuality := isHighQuality[isJunction]]
+    edges
+}
 
 # matchable junctions are compared across reads to accumulate SV evidence
 # unmatchable junctions failed one or more quality checks (flanks, bandwidth, adapters, ...) and are ignored
@@ -19,9 +38,7 @@ getMatchableJunctions <- function(edges){
     isJunction <- getJunctionEdges(edges)
     edges[, 
         isJunction & 
-        mapQ >= env$MIN_MAPQ & # require confident flanking alignments...
-        alnSize >= env$MIN_ALIGNMENT_SIZE & # ... of sufficiently large size
-        gapCompressedIdentity >= env$MIN_ALIGNMENT_IDENTITY & # ... and quality, as judged by match to the reference genome
+        highQuality == TRUE & 
         passedBandwidth == TRUE &
         hasAdapter5 == FALSE &
         hasAdapter3 == FALSE
@@ -46,9 +63,7 @@ getFusableJunctions <- function(edges){
         (
             passedBandwidth == FALSE |  # we don't consider these to be true junctions, they don't break segments and are ignored during segment matching
             (
-                mapQ >= env$MIN_MAPQ & # low-quality alignments can't be trusted to assemble paths
-                alnSize >= env$MIN_ALIGNMENT_SIZE & 
-                gapCompressedIdentity >= env$MIN_ALIGNMENT_IDENTITY & 
+                highQuality == TRUE &  # low-quality alignments can't be trusted to assemble paths
                 (
                     nCanonical    > 1 |  # junctions not validated by at least 2 reads on the same strand are likely to be ligation artifacts
                     nNonCanonical > 1    # the required two reads might have been in the same channel (but usually aren't)

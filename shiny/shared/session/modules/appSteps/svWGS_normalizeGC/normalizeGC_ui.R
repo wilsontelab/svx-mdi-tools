@@ -3,13 +3,13 @@
 #----------------------------------------------------------------------
 
 # module ui function
-normalizeGCUI <- function(id, options) {
+svWGS_normalizeGCUI <- function(id, options) {
 
     # initialize namespace
     ns <- NS(id)
     
     # override missing options to module defaults
-    options <- setDefaultOptions(options, stepModuleInfo$normalizeGC)
+    options <- setDefaultOptions(options, stepModuleInfo$svWGS_normalizeGC)
 
     # UI functions
     plotBox_ <- function(title, column1UI, column2UI, column3UI = NULL){

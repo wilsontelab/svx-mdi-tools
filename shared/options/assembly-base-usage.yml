@@ -1,0 +1,16 @@
+---
+options:
+    profile-base-usage: 
+        order: 1
+        short: null
+        type: boolean
+        required: false
+        default: false
+        description: "if set, create a table of ACGT base usage around SV junctions" 
+    base-usage-span:
+        order: 2
+        short: null
+        type: integer
+        required: false
+        default: 250
+        description: "profile base usage over this many bp on each side of each SV breakpoint" 

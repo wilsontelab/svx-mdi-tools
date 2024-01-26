@@ -166,7 +166,13 @@ sub runAdapterSW {
         return;
     }
     my $qry = substr($qSeq, $$x{startPos}, $$x{length});
-    my ($qryOnRef, $score, $startQry, $endQry) = smith_waterman($qry, $ref, undef, undef, 1);
+    my ($qryOnRef, $score, $startQry, $endQry);
+    if($qry){
+        ($qryOnRef, $score, $startQry, $endQry) = smith_waterman($qry, $ref, undef, undef, 1);
+    } else {
+        $score = 0;
+        # print STDERR join(" ", "runAdapterSW missing query:", length($qSeq), $$x{startPos} || "NA", $$x{length} || "NA"), "\n";
+    }
     $$x{sw} = {
         bestScore => $score,
         nBases    => $score ? scalar(@$qryOnRef) : 0,
