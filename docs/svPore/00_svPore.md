@@ -1,8 +1,8 @@
 ---
 title: svPore
 has_children: false
-nav_order: 30
-published: false
+nav_order: 50
+published: true
 ---
 
 ## {{page.title}}
@@ -18,3 +18,5 @@ Later actions support alignment to a reference genome and SV junction
 discovery, collation, and inter-molecule comparison. These actions
 might reasonably be applied to any long read data, but at present 
 have only been applied to nanopore data.
+
+Further documentation is pending.
