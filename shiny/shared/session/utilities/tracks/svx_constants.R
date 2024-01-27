@@ -95,12 +95,12 @@ svx_jxnTypes <- data.table( # junctions are the subset of edges that cross SVs, 
     )
 )
 svx_jxnType_codeToX <- function(codes, col){ # use these helper functions for converting between jxnType columns
-    jt <- svx_jxnTypes
+    jt <- copy(svx_jxnTypes)
     setkey(jt, code)
     jt[codes][[col]]
 }
 svx_jxnType_altCodeToX <- function(altCodes, col){
-    jt <- svx_jxnTypes
+    jt <- copy(svx_jxnTypes)
     setkey(jt, altCode)
     jt[altCodes][[col]]
 }

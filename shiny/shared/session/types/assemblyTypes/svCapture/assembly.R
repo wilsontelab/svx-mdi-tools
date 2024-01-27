@@ -148,6 +148,92 @@ svCapture_invertInsertionsByGene <- function(svs, assembly, assemblyOptions, tar
         }
     )$value
 }
+svCapture_invertArcsByGene <- function(svs, assembly, assemblyOptions, targets){
+    assembly <- assembly()
+    req(svs, assembly)
+    assemblyCache$get(
+        'invertArcs', 
+        permanent = TRUE,
+        from = "ram",
+
+        #######################
+        # create = "once",  #assemblyOptions$cacheCreateLevel,
+        create = assemblyOptions$cacheCreateLevel,
+
+        keyObject = list(
+            svs$key,
+            targets
+        ), 
+        createFn = function(...) {
+            startSpinner(session, message = "inverting arcs")
+            svs <- svs$value
+            targets <- copy(targets)
+            setkey(targets, name)
+            startSpinner(session, message = "inverting intraTarget")
+            intraTargetSvs <- svs[TARGET_CLASS %in% c("TT","TA") & TARGET_REGION %in% targets$name]
+            intraTarget <- if(nrow(intraTargetSvs) == 0) NULL else intraTargetSvs[, # always Del, Dup or Inv
+                {
+                    geneCenter <- targets[TARGET_REGION, geneStart + (geneEnd - geneStart) / 2]
+                    invert     <- targets[TARGET_REGION, geneStrand == "-"]
+                    pos <- sort(c(POS_1, POS_2))
+                    offsets <- pos - geneCenter
+                    sides <- c(SIDE_1, SIDE_2)[order(c(POS_1, POS_2))]
+                    .(
+                        TARGET_CLASS  = TARGET_CLASS,
+                        TARGET_REGION = TARGET_REGION,
+                        JXN_TYPE      = JXN_TYPE,
+                        OFFSET_1 = if(invert) -offsets[2] else offsets[1], # for intraTarget, OFFSET_1 is gene-proximal
+                        OFFSET_2 = if(invert) -offsets[1] else offsets[2],
+                        SIDE_1   = if(invert) { if(sides[2] == "L") "R" else "L" } else sides[1],
+                        SIDE_2   = if(invert) { if(sides[1] == "L") "R" else "L" } else sides[2],
+                        groupLabel = groupLabel
+                    )
+                }, 
+                by = .(PROJECT, SV_ID)
+            ]
+            startSpinner(session, message = "inverting interTarget")
+            interTargetSvs <- svs[TARGET_CLASS %in% c("tt","ta") & grepl(",", TARGET_REGION)]
+            interTarget <- if(nrow(interTargetSvs) == 0) NULL else interTargetSvs[, # often Trans, but could be Del, Dup, Inv if two targets are on the same chromosome
+                {
+                    targets_ <- rbind(
+                        targets[
+                            CHROM_1 == chrom & 
+                            POS_1 >= paddedStart & 
+                            POS_1 <= paddedEnd
+                        ][1],
+                        targets[
+                            CHROM_2 == chrom & 
+                            POS_2 >= paddedStart & 
+                            POS_2 <= paddedEnd
+                        ][1]
+                    )[ , i := 1:2]
+                    i <- targets_[order(chromI, geneStart), i]
+                    geneCenters <- targets_[i, geneStart + (geneEnd - geneStart) / 2]
+                    inverts     <- targets_[i, geneStrand == "-"]
+                    offsets <- c(POS_1, POS_2)[i] - geneCenters
+                    sides <- c(SIDE_1, SIDE_2)[i]
+                    .(
+                        TARGET_CLASS  = TARGET_CLASS,
+                        TARGET_REGION = TARGET_REGION,
+                        JXN_TYPE      = JXN_TYPE,
+                        OFFSET_1 = if(inverts[1]) -offsets[1] else offsets[1], # for translocation, OFFSET_1 is for the lower sorting gene
+                        OFFSET_2 = if(inverts[2]) -offsets[2] else offsets[2],
+                        SIDE_1   = if(inverts[1]) { if(sides[1] == "L") "R" else "L" } else sides[1],
+                        SIDE_2   = if(inverts[2]) { if(sides[2] == "L") "R" else "L" } else sides[2],
+                        groupLabel = groupLabel
+                    )
+                }, 
+                by = .(PROJECT, SV_ID)
+            ]
+            stopSpinner(session)
+            list(
+                intraTarget = intraTarget,
+                interTarget = interTarget,
+                maxOffset = targets[, max(paddedEnd - paddedStart) / 2]
+            )
+        }
+    )$value
+}
 svCapture_regroupedSvs <- function(
     input,
     assemblyOptions,
@@ -367,7 +453,8 @@ svCapture_getTargetCoverages <- function(
     mergeGroups <- aggType == "all samples together"
     dt <- do.call(rbind, lapply(targets$regionKey, function(regionKey_){
         target <- targets[regionKey == regionKey_]
-        binCov <- binCov[[regionKey_]][, projectSamples, drop = FALSE]
+        ps <- projectSamples[projectSamples %in% colnames(binCov[[regionKey_]])]
+        binCov <- binCov[[regionKey_]][, ps, drop = FALSE]
         if(mergeGroups) {
             binCov <- matrix(apply(binCov, 1, sum, na.rm = TRUE), ncol = 1) 
             colnames(binCov) <- "all samples"
@@ -534,6 +621,231 @@ svCapture_coverageServer <- function(
         trackLabelPosition = "center",
         dataFn = function(...) svCapture_getTargetCoverages(
             assembly, groupedProjectSamples, groupingCols, NULL, coveragePlot$plot, ...
+        )
+    )
+}
+#----------------------------------------------------------------------
+# SV arc plots
+# ----------------------------------------------------------------------
+svx_getArcsPlotMetadata <- function(svs, settings){
+    maxOffset <- trimws(settings$get("Arcs","Max_Offset"))
+    maxOffset <- as.integer(if(maxOffset == "auto" || maxOffset == "") svs$maxOffset else maxOffset)
+    interTargetColors <- CONSTANTS$plotlyColors[1:4]
+    names(interTargetColors) <- c("LL","RR","LR","RL")
+    list(
+        maxOffset   = maxOffset,
+        lwd         = settings$get("Arcs","Arc_Line_Width"),
+        alpha       = settings$get("Arcs","Arc_Color_Alpha"),
+        maxLines    = settings$get("Arcs","Max_Lines_Per_Type"),
+        minAlphaLines = 50, # need at least this many lines to add transparency,
+        interTargetColors = interTargetColors
+    )
+}
+svx_arcs_addTopLegend <- function(plot, jxnTypes){
+    altCodes <- svx_jxnTypes$altCode[svx_jxnTypes$altCode %in% jxnTypes]
+    plot$addLegend(
+        legend = svx_jxnType_altCodeToX(altCodes, "longName"),
+        col =    svx_jxnType_altCodeToX(altCodes, "color"),
+        x = "top",
+        horiz = TRUE,
+        x.intersp = 0,
+        lwd = 1.5,
+        lty = 1
+    )
+}
+svx_getArcsTitle <- function(assembly, settings, family = "Plot"){
+    title <- settings$get(family, "Title", NA)
+    if(!isTruthy(title) && !is.null(assembly)) title <- assembly$env$DATA_NAME
+    if(isTruthy(title)) title else ""
+}
+# ----------------------------------------------------------------------
+svx_plotArcs_intraTarget <- function(plot, svs, input, assembly = NULL){
+    md <- svx_getArcsPlotMetadata(svs, plot$settings)
+    if(is.null(svs$intraTarget)) return()
+    x <- seq(0, pi, length.out = 25)
+    arc <- 0
+    arcs <- do.call(rbind, lapply(svx_jxnType_longNameToX(input$Data_Types, "altCode"), function(jxnType){
+        upsideDown <- jxnType != "L" # all but deletions plotted below
+        svs_ <- svs$intraTarget[JXN_TYPE == jxnType]
+        nSvs <- nrow(svs_)
+        if(nSvs == 0) return(NULL)
+        nLines <- min(md$maxLines, nSvs)
+        alpha <- if(nLines <= md$minAlphaLines) 1 
+                 else if(nLines == md$maxLines) md$alpha
+                 else md$alpha + (1 - md$alpha) * (nLines - md$minAlphaLines) / (md$maxLines - md$minAlphaLines)
+        color <- addAlphaToColor(svx_jxnType_altCodeToX(jxnType, "color"), alpha)
+        svs_[sample(nSvs, nLines), {
+            halfsize <- (OFFSET_2 - OFFSET_1) / 2
+            center <- OFFSET_1 + halfsize
+            y <- sin(x) * halfsize
+            if(upsideDown) y <- -y
+            arc <<- arc + 1
+            .(
+                x = cos(x) * halfsize + center, 
+                y = y,
+                col = color,
+                arc = arc,
+                jxnType = jxnType
+            ) 
+        }, by = .(PROJECT, SV_ID)]
+    }))
+    maxY <- max(abs(arcs$y))
+    ylim <- c(-maxY * 1.05, maxY * 1.15)
+    plot$initializeFrame(
+        xlim = c(-md$maxOffset, md$maxOffset),
+        ylim = ylim,
+        xlab = "Distance from Gene Center (bp)",
+        ylab = "",
+        title = svx_getArcsTitle(assembly, plot$settings),
+        xaxs = "i",
+        yaxs = "i",
+        yaxt = "n"
+    )  
+    for(arc_ in sample(arc)) {
+        arc <- arcs[arc == arc_]
+        lines(
+            x = arc$x, 
+            y = arc$y,
+            col = arc$col[1],
+            lwd = md$lwd
+        )
+    }
+    abline(h = 0)
+    svx_arcs_addTopLegend(plot, unique(arcs$jxnType))
+}
+svx_plotArcs_interTarget <- function(plot, svs, input, assembly = NULL){
+    md <- svx_getArcsPlotMetadata(svs, plot$settings)
+    if(is.null(svs$interTarget)) return()
+    svs_ <- svs$interTarget
+    nSvs <- nrow(svs_)
+    if(nSvs == 0) return()
+    nLines <- min(md$maxLines, nSvs)
+    alpha <- if(nLines <= md$minAlphaLines) 1 
+             else if(nLines == md$maxLines) md$alpha
+             else md$alpha + (1 - md$alpha) * (nLines - md$minAlphaLines) / (md$maxLines - md$minAlphaLines)
+    plot$initializeFrame(
+        xlim = c(-md$maxOffset, md$maxOffset),
+        ylim = c(-md$maxOffset, md$maxOffset),
+        xlab = "Distance from Gene Center (bp)",
+        ylab = "Distance from Gene Center (bp)",
+        title = svx_getArcsTitle(assembly, plot$settings),
+        xaxs = "i",
+        yaxs = "i"
+    ) 
+    svs_ <- svs_[sample(nSvs, nLines)]
+    colors <- svs_[, mapply(function(s1, s2){
+        addAlphaToColor(md$interTargetColors[[paste0(s1, s2)]], alpha)
+    }, SIDE_1, SIDE_2)]
+    points(svs_$OFFSET_1, svs_$OFFSET_2, pch = 19, cex = 1, col = colors)
+}
+#----------------------------------------------------------------------
+svCapture_arcsServer <- function(
+    id, session, input, output, 
+    isProcessingData, assemblyOptions,
+    sourceId, assembly, groupedProjectSamples, groupingCols, groups
+){
+    settings <- c(assemblyPlotFrameSettings, list(
+        Arcs = list(
+            Arc_Plot_Type = list(
+                type = "selectInput",
+                choices = c(
+                    "intraTarget",
+                    "interTarget"
+                ),
+                value = "intraTarget"
+            ),
+            Max_Offset = list(
+                type = "textInput",
+                value = "auto"
+            ), 
+            Arc_Line_Width = list(
+                type = "numericInput",
+                value = 1
+            ),
+            Arc_Color_Alpha = list(
+                type = "numericInput",
+                value = 0.35
+            ),
+            Max_Lines_Per_Type = list(
+                type = "numericInput",
+                value = 500
+            )
+        )
+    ))
+    mars <- list(
+        intraTarget = c(
+            CONSTANTS$assemblyPlots$stdAxisMar, 
+            CONSTANTS$assemblyPlots$nullMar, 
+            CONSTANTS$assemblyPlots$titleMar, 
+            CONSTANTS$assemblyPlots$nullMar
+        ),
+        interTarget = c(
+            CONSTANTS$assemblyPlots$stdAxisMar, 
+            CONSTANTS$assemblyPlots$stdAxisMar, 
+            CONSTANTS$assemblyPlots$nullMar, 
+            CONSTANTS$assemblyPlots$nullMar
+        )
+    )
+    dims <- list(
+        intraTarget = list(
+            width  = 3, 
+            height = 1.5
+        ),
+        interTarget = list(
+            width  = 2, 
+            height = 2
+        )
+    )
+    getDim <- function(plotAs, key, option){
+        dim <- trimws(assemblyPlot$plot$settings$get("Plot",option))
+        if(!isTruthy(dim) || dim == "" || dim == "auto") dims[[plotAs]][[key]]
+        else dim
+    }
+    assemblyPlot <- assemblyPlotBoxServer( 
+        id, session, input, output, 
+        isProcessingData,
+        groupingCols, groups,
+        dataFn = function(conditions, groupLabels) {
+            targets <- svCapture_assemblyTargets(assembly)
+            svs <- svCapture_matchingAssemblySvs(
+                input,
+                assemblyOptions, 
+                assembly, groupedProjectSamples, groupingCols
+            ) %>% svCapture_invertArcsByGene(assembly, assemblyOptions, targets)
+            list(
+                intraTarget = if(is.null(svs$intraTarget)) NULL else svs$intraTarget[groupLabel %in% groupLabels],
+                interTarget = if(is.null(svs$interTarget)) NULL else svs$interTarget[groupLabel %in% groupLabels],
+                maxOffset = svs$maxOffset
+            )
+        },  
+        plotFrameFn = function(data) {
+            plotAs <- assemblyPlot$plot$settings$get("Arcs","Arc_Plot_Type")
+            list(
+                frame = getAssemblyPlotFrame(
+                    plot = assemblyPlot$plot, 
+                    insideWidth  = getDim(plotAs, "width",  "Width_Inches"), 
+                    insideHeight = getDim(plotAs, "height", "Height_Inches"), 
+                    mar = mars[[plotAs]]
+                ),
+                mar = mars[[plotAs]]
+            )
+        },
+        plotFn = function(plotId, dataReactive, plotFrameReactive) staticPlotBoxServer(
+            plotId,
+            settings = settings, 
+            size = "m",
+            Plot_Frame = reactive({ plotFrameReactive()$frame }),
+            create = function() {
+                d <- dataReactive()
+                plotAs <- assemblyPlot$plot$settings$get("Arcs","Arc_Plot_Type")
+                assembly <- assembly()
+                req(d, d$data, plotAs, assembly)
+                startSpinner(session, message = paste("rendering", id))
+                par(mar = plotFrameReactive()$mar)
+                svs <- d$data
+                get(paste("svx_plotArcs", plotAs, sep = "_"))(assemblyPlot$plot, svs, input, assembly)
+                stopSpinner(session)
+            }
         )
     )
 }

@@ -31,6 +31,9 @@ plotTypes:
     coverage:
         label: Target Region Coverage
         collapsed: true
+    arcs:
+        label: SV Arc Plots
+        collapsed: true
     junctionBases:
         label: Junction Base Usage
         collapsed: true
