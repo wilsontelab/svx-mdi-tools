@@ -265,40 +265,10 @@ observeEvent(gatedSvsSelected(), {
         targetId = sourceId(),
         objectTableFn    = NULL, 
         expansionTableFn = expansionTableData, 
-        expansionUIFn    = expansionUIContents   
+        expansionUIFn    = expansionUIContents,
+        session = session
     )
     stopSpinner(session)
-
-    # jxn <- 
-
-    # # TODO: used the new svWGS_expandJunction_
-
-    # molecules <- svWGS_loadMolecules(sourceId(), jxn$SV_ID)
-    # molecules %>% 
-    # svWGS_expansionTable(jxn) %>% 
-    # expansionTableData()
-
-    # # if the junction was sequenced, create the expansion2 elements
-    # # a map and an alignment at base-level detail
-    # junctionMap <- tryCatch({
-    #     getJunctionMap(list(sv = jxn, mols = molecules[sample.int(.N)]))
-    # }, error = function(e) {
-    #     stopSpinner(session)
-    #     NULL
-    # })
-    # if(is.null(junctionMap)){
-    #     expansionUIContents("")
-    # } else {
-    #     startSpinner(session, message = "analyzing junction")
-    #     expansionUIContents(tagList(
-    #         tryCatch({
-    #             junctionMapTrackExpansionUI(NULL, junctionMap, Pixels_Per_Base = 2) 
-    #         }, error = function(e) ""),
-    #         tryCatch({ 
-    #             junctionAlignmentTrackExpansionUI(NULL, junctionMap, Bases_Per_Line = 100, Alignment_Mode = "Reference Molecule") 
-    #         }, error = function(e) { print(e); "" })
-    #     ))     
-    # }
 })
 expansionTable <- bufferedTableServer(
     "expansionTable",
@@ -311,6 +281,12 @@ expansionTable <- bufferedTableServer(
 )
 output$expansionUI <- renderUI({
     expansionUIContents()
+})
+observeEvent(input$saveJunction, {
+    sourceId <- sourceId()
+    selectedSv <- gatedSvsSelected()
+    req(sourceId, selectedSv, nrow(selectedSv) == 1)
+    svx_saveJunction(sourceId, selectedSv$SV_ID)
 })
 
 #----------------------------------------------------------------------

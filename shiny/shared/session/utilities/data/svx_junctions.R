@@ -220,3 +220,16 @@ svx_colorCompositeGenomes <- function(x, reference){
     }
     x
 }
+
+# support for saving a selected junction into an appStep of type 'savedJunctions' with method saveJunction(sourceId, svId)
+svx_hasSavedJunctions <- function(){
+    appStep <- getAppStepByType("savedJunctions")
+    isTruthy(appStep) && isTruthy(appStep$saveJunction)
+}
+svx_saveJunction <- function(sourceId, svId){
+    appStep <- getAppStepByType("savedJunctions")
+    req(appStep, appStep$saveJunction)
+    if(is.reactive(sourceId)) sourceId <- sourceId()
+    req(sourceId, svId)
+    appStep$saveJunction(sourceId, svId)
+}

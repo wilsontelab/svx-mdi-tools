@@ -187,7 +187,7 @@ svWGS_junctionSetsUI <- function(id, options) {
                 solidHeader = TRUE,
                 status = "primary",
                 collapsible = TRUE,
-                collapsed = FALSE
+                collapsed = TRUE
             )  
         ),
 
