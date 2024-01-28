@@ -279,7 +279,7 @@ applySVFilters <- function(svs){
         N_SAMPLES >= env$MIN_SAMPLES &
         N_SAMPLES <= env$MAX_SAMPLES &
         N_SPLITS >= env$MIN_SPLIT_READS & 
-        TARGET_CLASS %in% c("TT", "TA") & # assemble only ever returns on-target SVs
+        toupper(TARGET_CLASS) %in% c("TT", "TA") & # assemble only ever returns on-target SVs, including inter-target translocations
         STRAND_COUNT >= env$MIN_FAMILY_SIZE & 
         SHARED_PROPER / 2 <= env$MAX_SHARED_PROPER
     ]   
@@ -570,7 +570,8 @@ svs <- merge(
         # do.call(rbind, lapply( # for debug
             which(svs$N_SPLITS > 0 & 
                  -svs$MICROHOM_LEN >= env$MIN_INSERTION_SIZE & 
-                 -svs$MICROHOM_LEN <= env$MAX_INSERTION_SIZE), 
+                 -svs$MICROHOM_LEN <= env$MAX_INSERTION_SIZE & 
+                 svs$JXN_TYPE != "T"), 
             analyzeInsertion,
             mc.cores = env$N_CPU
         ))
@@ -622,14 +623,14 @@ analyzeBaseUsage <- function(svI){
 }
 baseUsageProfile <- if(!env$PROFILE_BASE_USAGE) NULL else {
     do.call(rbind, mclapply(
-        which(svs$N_SPLITS > 0), # sequenced junctions with known junction positions
+        which(svs$N_SPLITS > 0 & svs$JXN_TYPE != "T"), # sequenced junctions with known/usable junction positions
         analyzeBaseUsage,
         mc.cores = env$N_CPU
     ))
 }
 junctionBaseUsageProfile <- {
     x <- svs[
-        abs(MICROHOM_LEN) > 0, 
+        abs(MICROHOM_LEN) > 0 & JXN_TYPE != "T", 
         .(
             microhomologyType = getMicrohomologyType(.SD),
             base = strsplit(JXN_BASES, "")[[1]]
@@ -766,7 +767,7 @@ flexibilityProfile <- if(!env$PROFILE_FLEXIBILITY) NULL else {
     }, by = .(regionKey)]
     message(paste("", "by SV", sep = "\t"))
     do.call(rbind, mclapply(
-        which(svs$N_SPLITS > 0), # sequenced junctions with known junction positions
+        which(svs$N_SPLITS > 0 & svs$JXN_TYPE != "T"), # sequenced junctions with known/usable junction positions
         analyzeFlexibility,
         mc.cores = env$N_CPU
     ))
@@ -850,7 +851,7 @@ genomeFeatures <- if(!env$PROFILE_FEATURES) NULL else {
                 ]
             }, by = .(regionKey)]
             do.call(rbind, mclapply(
-                which(svs$N_SPLITS > 0), # sequenced junctions with known junction positions
+                which(svs$N_SPLITS > 0 & svs$JXN_TYPE != "T"), # sequenced junctions with known/usable junction positions
                 analyzeFeatures,
                 features,
                 mc.cores = env$N_CPU

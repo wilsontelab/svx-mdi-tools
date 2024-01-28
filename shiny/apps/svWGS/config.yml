@@ -63,6 +63,7 @@ appSteps:
         module: genomex-mdi-tools//trackBrowser
         options:
             tracks:
+                - svWGS # svWGS tracks are shared in global/classes/browserTracks
                 - genomex-mdi-tools//read_pileup
                 - bruseq-mdi-tools//BruSeq_generic
             # presets:

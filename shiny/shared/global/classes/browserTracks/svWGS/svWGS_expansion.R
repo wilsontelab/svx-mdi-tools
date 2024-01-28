@@ -44,11 +44,18 @@ svWGS_expansionTable <- function(molecules, jxn){
 # show a detailed plot and table of the molecule support for a junction cluster
 svWGS_expandJunction_ <- function(jxn, track = NULL, targetId = NULL,  # called by any appStep that can expand junctions
                                   objectTableFn = NULL, expansionTableFn = NULL, expansionUIFn = NULL,
-                                  Pixels_Per_Base = 2, Bases_Per_Line = 100, Alignment_Mode = "Reference Molecule"){
+                                  Pixels_Per_Base = 2, Bases_Per_Line = 100, Alignment_Mode = "Reference Molecule",
+                                  session = NULL, expandedObjectFn = NULL){
 
     # collect molecules that provided evidence for the junction call
     if(is.null(targetId)) targetId <- jxn$targetId
     molecules <- svWGS_loadMolecules(targetId, jxn$SV_ID)
+
+    # store the expanding junction for possible saveJunction actions
+    if(!is.null(expandedObjectFn)) expandedObjectFn(list(
+        targetId = targetId,
+        jxn = jxn
+    ))
 
     # write the one-line object table with additional junction metadata
     if(!is.null(objectTableFn)){
@@ -68,6 +75,7 @@ svWGS_expandJunction_ <- function(jxn, track = NULL, targetId = NULL,  # called 
     # if the junction was sequenced, create the expansion2 elements
     # a map and an alignment at base-level detail
     if(!is.null(expansionUIFn)){
+        if(is.null(session)) session <- sessionSession
         junctionMap <- tryCatch({
             getJunctionMap(list(sv = jxn, mols = molecules[sample.int(.N)]))
         }, error = function(e) {
@@ -79,6 +87,23 @@ svWGS_expandJunction_ <- function(jxn, track = NULL, targetId = NULL,  # called 
         } else {
             startSpinner(session, message = "analyzing junction")
             expansionUIFn(tagList(
+                if(svx_hasSavedJunctions()) fluidRow( 
+                    style = "margin-bottom: 10px;",
+                    column(
+                        offset =4,
+                        width = 4,
+                        bsButton(
+                            session$ns("saveJunction"), # handled by appServer >> observeEvent(input$saveJunction)
+                            "Save Junction",
+                            style = "primary",
+                            block = TRUE
+                        )
+                    ),
+                    column(
+                        width = 4,
+                        uiOutput(session$ns("saveJunctionFeedback"))
+                    )
+                ) else NULL,
                 tryCatch({       
                     junctionMapTrackExpansionUI(junctionMap, Pixels_Per_Base) 
                 }, error = function(e) ""),
@@ -99,7 +124,8 @@ svWGS_expandJunction <- function(jxn, track, layout){ # called from a browser tr
         expansionUIFn    = app$browser$expansionUI,
         Pixels_Per_Base  = getTrackSetting(track, "Junctions", "Pixels_Per_Base", 2),
         Bases_Per_Line   = getTrackSetting(track, "Junctions", "Bases_Per_Line", 100),
-        Alignment_Mode   = getTrackSetting(track, "Junctions", "Alignment_Mode", "Reference Molecule")        
+        Alignment_Mode   = getTrackSetting(track, "Junctions", "Alignment_Mode", "Reference Molecule"),
+        expandedObjectFn = app$browser$expandedObjectData
     )
     stopSpinner(session)
 

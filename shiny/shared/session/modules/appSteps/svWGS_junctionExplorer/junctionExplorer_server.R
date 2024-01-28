@@ -148,7 +148,8 @@ observeEvent(matchingJunctionsSelected(), {
         objectTableFn    = NULL, 
         expansionTableFn = expansionTableData, 
         expansionUIFn    = expansionUIContents,
-        Alignment_Mode = "Evidence Consensus" # All Molecules  Reference Molecule
+        Alignment_Mode = "Evidence Consensus", # All Molecules  Reference Molecule
+        session = session
     )
     stopSpinner(session)
 })
