@@ -45,7 +45,8 @@ myEnvVars <- list(
         'INSERTION_SEARCH_SPACE',
         'BASE_USAGE_SPAN',
         'FLEXIBILITY_SPAN',
-        'FEATURES_SPAN'
+        'FEATURES_SPAN',
+        'MIN_INVERSION_SIZE'
     ),
     double = c(
         'MAX_SHARED_PROPER'
@@ -326,10 +327,13 @@ samples <- merge(
     samples,
     samples[, {
         jxnTypes <- svs[PROJECT == project & grepl(paste0(",", sample, ","), SAMPLES), JXN_TYPE]
+        svSizes  <- svs[PROJECT == project & grepl(paste0(",", sample, ","), SAMPLES), SV_SIZE]
         .(
             deletion      = sum(jxnTypes == "L"),
             duplication   = sum(jxnTypes == "D"),
-            inversion     = sum(jxnTypes == "I"),
+                # inversions apply a distinct size filter due to unique error mechanism
+                # NB: only applies to count in samples table; the svs table does NOT apply env$MIN_INVERSION_SIZE (yet)
+            inversion     = sum(jxnTypes == "I" & svSizes >= env$MIN_INVERSION_SIZE), 
             translocation = sum(jxnTypes == "T")
         )
     }, by = .(i, sampleKey)],

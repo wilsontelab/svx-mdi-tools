@@ -9,7 +9,10 @@ settings:
             value: true 
         Enforce_Min_Family_Size:
             type: checkboxInput
-            value: true 
+            value: true
+        Enforce_Min_Inversion_Size:
+            type: checkboxInput
+            value: true          
 
 # plot types supported by the application and included on the page
 plotTypes:
@@ -19,11 +22,14 @@ plotTypes:
     microhomology:
         label: Microhomology/Insert Distributions
         collapsed: true
-    insertionTemplates:
-        label: Insertion Templates
-        collapsed: true
     svSizes:
         label: SV Size Distributions
+        collapsed: true
+    correlation:
+        label: SV Size vs. Microhomology
+        collapsed: true
+    insertionTemplates:
+        label: Insertion Templates
         collapsed: true
     endpoints:
         label: SV Endpoint Distributions
@@ -40,6 +46,16 @@ plotTypes:
     genomeFeatures:
         label: Junction Genome Features
         collapsed: true
+    junctionPropertiesPlot:
+        label: Aggregated Junction Properties
+        collapsed: true
+
+# tabular output types supported by the application and included on the page (named differently than plotTypes)
+tableTypes:
+    junctionPropertiesTable:
+        label: Aggregated Junction Properties Table # title of the box
+        collapsed: true # whether the box is collapsed by default
+        settings: true
 
 # columns added to the samples table by the pipeline that should be
 #   offered to users as data filters

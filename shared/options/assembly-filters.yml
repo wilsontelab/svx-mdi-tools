@@ -77,3 +77,10 @@ options:
         required: false
         default: false
         description: "include outer clipped reads in SV counts" 
+    min-inversion-size: 
+        order: 12
+        short: null
+        type: integer
+        required: false
+        default: 50000
+        description: "only include inversions this size or larger in SV counts" 

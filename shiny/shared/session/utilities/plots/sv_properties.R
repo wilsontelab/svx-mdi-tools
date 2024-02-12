@@ -47,14 +47,15 @@ svPropertiesPlotServer <- function(settings, svPointColors, filteredSvs){
             plot$initializeFrame(
                 xlim = xlim,
                 ylim = yType$ylim,
-                xlab = "Microhomology Length (bp)",
-                ylab = yType$ylab                
+                xlab = "Insertion Size (bp)",
+                ylab = yType$ylab,
+                cex.main = 0.95           
             )
             abline(h = seq(0, 10, 1), col = "grey60")
             abline(v = seq(-100, 100, 10), col = "grey60")
             abline(v = 0)
             plot$addPoints(
-                jitter(svs[plotted == TRUE, MICROHOM_LEN], amount = 0.5), # spread points from (i-0.5):(i+0.5)
+                jitter(svs[plotted == TRUE, -MICROHOM_LEN], amount = 0.5), # spread points from (i-0.5):(i+0.5)
                 yType$yval, 
                 pch = 20, 
                 cex = stepSettings$Point_Size$value,
@@ -62,8 +63,8 @@ svPropertiesPlotServer <- function(settings, svPointColors, filteredSvs){
             )
 
             # add text to denote microhomology vs. insertions
-            mtext("insertion", side = 1, line = 2, at = xlim[1], adj = 0, cex = 0.95)
-            mtext(expression(paste(mu, "homology")), side = 1, line = 2, at = xlim[2], adj = 1, cex = 0.95)
+            mtext(expression(paste(mu, "homology")), side = 1, line = 2, at = xlim[1], adj = 0, cex = 0.95)
+            mtext("insertion", side = 1, line = 2, at = xlim[2], adj = 1, cex = 0.95)
 
             # add a legend
             pointColorLegend(stepSettings, plot$settings, svPointColors)

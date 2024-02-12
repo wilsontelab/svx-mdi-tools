@@ -87,7 +87,7 @@ pointColorLegend <- function(stepSettings, plotSettings, svPointColors, exclude 
     is <- which(!(svPointColors$label %in% exclude))
     legend(
         plotSettings$get('Plot_Frame', 'Legend_Placement'),
-        svPointColors$label[is],
+        gsub("_", " ", svPointColors$label[is]),
         pch = 20, 
         pt.cex = stepSettings$Point_Size$value * 1.25,
         col = svPointColors$color[is]

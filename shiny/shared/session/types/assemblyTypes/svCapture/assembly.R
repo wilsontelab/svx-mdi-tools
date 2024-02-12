@@ -15,7 +15,7 @@ svCapture_loadAssembly <- function(assemblyOptions, settings, rdsFile, ...){
         create = assemblyOptions$cacheCreateLevel,
         keyObject = list(
             settings = settings$all(),
-            rdsFile = rdsFile,
+            rdsFile = rdsFile, # carries sourceId
             internalUseSampleColumns = assemblyOptions$internalUseSampleColumns
         ), 
         createFn = function(...) {
@@ -23,6 +23,9 @@ svCapture_loadAssembly <- function(assemblyOptions, settings, rdsFile, ...){
             assembly <- readRDS(rdsFile)
             startSpinner(session, message = "loadAssembly..")
             assembly$svs[, edgeType := svx_jxnType_altCodeToX(JXN_TYPE, "code")]
+            if(settings$get("SV_Capture","Enforce_Min_Inversion_Size")){
+                assembly$svs <- assembly$svs[JXN_TYPE != "I" | SV_SIZE >= assembly$env$MIN_INVERSION_SIZE]
+            }
             assembly <- standardizeAssemblyColumns(assemblyOptions, assembly)
             startSpinner(session, message = "loadAssembly...")
             denominatorColumn <- svCapture_getDenominatorColumn(settings)
@@ -155,11 +158,7 @@ svCapture_invertArcsByGene <- function(svs, assembly, assemblyOptions, targets){
         'invertArcs', 
         permanent = TRUE,
         from = "ram",
-
-        #######################
-        # create = "once",  #assemblyOptions$cacheCreateLevel,
         create = assemblyOptions$cacheCreateLevel,
-
         keyObject = list(
             svs$key,
             targets
@@ -249,6 +248,56 @@ svCapture_regroupedSvs <- function(
     ] %>% regroupToUserConditions(
         groupingCols, conditions, groupLabels
     )
+}
+splitSvsByJxnType <- function(svs, plot, family, groupingCols, assembly){
+    if(!isTruthy(plot$settings$get(family,"Split_by_SV_Type"))) return(svs)
+    groupingCols <- groupingCols()
+    minInvSize <- assembly()$env$MIN_INVERSION_SIZE
+    invLabels <- paste0(c(" <"," >"), floor(minInvSize / 1e3), "kb")
+    svTypes <- svs$dt[, paste(
+        "SV_type =", 
+        paste(
+            tolower(svx_jxnType_altCodeToX(JXN_TYPE, "longName")),
+            ifelse(JXN_TYPE == "I", ifelse(SV_SIZE < minInvSize, invLabels[1], invLabels[2]), ""),
+            sep = ""
+        )
+    )]
+    svs$dt[, groupLabel := if(length(unique(groupLabel)) <= 1) svTypes else paste(groupLabel, svTypes, sep = " | ")]
+    svs$groupLabels <- unique(svs$dt$groupLabel)
+    svs$groupCounts <- svs$dt[, .N, by = .(groupLabel)]
+    svs
+}
+svx_svTypes_addTopLegend <- function(plot, jxnTypes, type = "line"){
+    altCodes <- svx_jxnTypes$altCode[svx_jxnTypes$altCode %in% jxnTypes]
+    if(type == "line"){
+        lwd = 1.5
+        lty = 1
+        pt.cex = NULL
+        pch = NULL
+    } else {
+        lwd = NULL
+        lty = NULL
+        pt.cex = 1
+        pch = 19
+    }
+    plot$addLegend(
+        legend = svx_jxnType_altCodeToX(altCodes, "longName"),
+        col =    svx_jxnType_altCodeToX(altCodes, "color"),
+        x = "top",
+        horiz = TRUE,
+        x.intersp = 0,
+        lwd = lwd,
+        lty = lty,
+        pt.cex = pt.cex,
+        pch = pch
+    )
+}
+svCapture_simplifyGroupNames <- function(x){
+    gsub_ <- function(x, pattern, replace) gsub(pattern, replace, x)
+    gsub_(x, "cell cycle", "phase") %>%
+    gsub_("CRISPR", "KO") %>%
+    gsub_("\\.\\.\\d+uM ", "") %>%
+    gsub_("ART558", "ART")
 }
 
 #----------------------------------------------------------------------
@@ -344,7 +393,15 @@ svCapture_microhomologyServer <- function(
     isProcessingData, assemblyOptions,
     sourceId, assembly, groupedProjectSamples, groupingCols, groups
 ){
-    plot <- assemblyDensityPlotServer(
+    microhomologySettings <- list(
+        Microhomology = list(         
+            Split_by_SV_Type = list(
+                type = "checkboxInput",
+                value = FALSE
+            )
+        )
+    )
+    microhomologyPlot <- assemblyDensityPlotServer(
         id, session, input, output, 
         isProcessingData, assemblyOptions,
         sourceId, assembly, groupedProjectSamples, groupingCols, groups,
@@ -354,11 +411,14 @@ svCapture_microhomologyServer <- function(
                 Max_X_Value =  20
             )
         ),
+        extraSettings = microhomologySettings,
         xlab = "Insert Size (bp)",
-        eventPlural = "SVs",        
+        ylab = function(Y_Axis_Value) if(Y_Axis_Value == "Weighted") "SV Frequency" else Y_Axis_Value,
+        eventPlural = "SVs", 
         defaultBinSize = 1,
         v = c(seq(-50, 50, 5), -1, -2),
         x0Line = TRUE,
+        adjustGroupsFn = svCapture_simplifyGroupNames,
         dataFn = function(conditions, groupLabels) {
             svs <- svCapture_matchingAssemblySvs(
                 input,
@@ -369,24 +429,26 @@ svCapture_microhomologyServer <- function(
                 N_SPLITS > 0 # omit gap-only junctions
             ] %>% regroupToUserConditions(
                 groupingCols, conditions, groupLabels
-            )
+            ) %>% splitSvsByJxnType(microhomologyPlot$plot, "Microhomology", groupingCols, assembly)
             svs$dt[, x := -MICROHOM_LEN]
+            sampleCoverages <- assembly()$samples[, .(sampleKey, coverage)]
+            setkey(sampleCoverages, sampleKey)
+            groupCoverage <- svs$groupCounts[, {
+                groupLabel_ <- groupLabel
+                sampleKeys <- svs$dt[groupLabel == groupLabel_, unique(paste(project, sample, sep = "::"))]
+                .(
+                    coverage = sum(sampleCoverages[sampleKeys, coverage])
+                )
+            }, by = .(groupLabel)]
+            svs$groupWeights <- as.list(groupCoverage$coverage)
+            names(svs$groupWeights) <- groupCoverage$groupLabel
             svs
         }
     )
 }
 #----------------------------------------------------------------------
 # SV size profiles
-# ----------------------------------------------------------------------
-splitSvsByJxnType <- function(svs, plot, family, groupingCols){
-    if(!isTruthy(plot$settings$get(family,"Split_by_SV_Type"))) return(svs)
-    groupingCols <- groupingCols()
-    svTypes <- svs$dt[, paste("SV_type =", tolower(svx_jxnType_altCodeToX(JXN_TYPE, "longName")))]
-    svs$dt[, groupLabel := if(length(groupingCols) == 0) svTypes else paste(groupLabel, svTypes, sep = " | ")]
-    svs$groupLabels <- unique(svs$dt$groupLabel)
-    svs$groupCounts <- svs$dt[, .N, by = .(groupLabel)]
-    svs
-}
+# ---------------------------------------------------------------------
 svCapture_svSizesServer <- function(
     id, session, input, output, 
     isProcessingData, assemblyOptions,
@@ -415,6 +477,7 @@ svCapture_svSizesServer <- function(
             data$dt[groupLabel == groupLabel_, median(x, na.rm = TRUE)]
         }, simplify = FALSE, USE.NAMES = TRUE),
         x0Line = FALSE,
+        adjustGroupsFn = svCapture_simplifyGroupNames,
         dataFn = function(conditions, groupLabels) {
             svs <- svCapture_matchingAssemblySvs(
                 input,
@@ -424,10 +487,80 @@ svCapture_svSizesServer <- function(
                 groupLabel %in% groupLabels
             ] %>% regroupToUserConditions(
                 groupingCols, conditions, groupLabels
-            ) %>% splitSvsByJxnType(sizesPlot$plot, "SV_Sizes", groupingCols)
+            ) %>% splitSvsByJxnType(sizesPlot$plot, "SV_Sizes", groupingCols, assembly)
             svs$dt[, x := log10(SV_SIZE)]
             svs
         }
+    )
+}
+#----------------------------------------------------------------------
+# SV size vs. microhomology correlation
+# ----------------------------------------------------------------------
+svCapture_correlationServer <- function(
+    id, session, input, output, 
+    isProcessingData, assemblyOptions,
+    sourceId, assembly, groupedProjectSamples, groupingCols, groups
+){
+    correlationSettings <- list(
+        Correlation = list(
+            Max_Jxn_Size = list(
+                type = "numericInput",
+                value = 20
+            )
+        )
+    )
+    getCorrelation <- function(plot, conditions, groupLabels){ # dataFn
+        svs <- svCapture_matchingAssemblySvs(
+            input,
+            assemblyOptions, 
+            assembly, groupedProjectSamples, groupingCols
+        )$value[
+            N_SPLITS > 0 & 
+            abs(MICROHOM_LEN) <= plot$settings$get("Correlation","Max_Jxn_Size"), 
+            .(
+                JXN_TYPE,
+                SV_SIZE = log10(SV_SIZE),
+                MICROHOM_LEN
+            )
+        ]
+        invN <- svs[, .N, by = .(JXN_TYPE)][JXN_TYPE == "I", N] # point of this plot is to explore inversions
+        svs[, .SD[sample(.N, min(.N, invN))], by = .(JXN_TYPE)][sample(.N)]
+    }
+    plotCorrelation <- function(plot, d){ # plotFn
+        d <- d$data
+        maxDist <- plot$settings$get("Correlation","Max_Jxn_Size")
+        ymin <- min(d$SV_SIZE)
+        ymax <- max(d$SV_SIZE)
+        plot$initializeFrame(
+            xlim = c(-maxDist, maxDist),
+            ylim = c(ymin, ymin + (ymax - ymin) * 1.2),
+            xlab = "Insert Size (bp)",
+            ylab = "SV Size (log10 bp)"
+        )
+        abline(v = seq(-50, 50, 5), col = "grey50")
+        abline(h = 4:7, col = "grey50")
+        plot$addPoints(
+            x = jitter(-d$MICROHOM_LEN, amount = 0.5),
+            y = d$SV_SIZE,
+            col = svx_jxnType_altCodeToX(d$JXN_TYPE, "color"),
+            cex = 0.5
+        )
+        svx_svTypes_addTopLegend(plot, d$JXN_TYPE, type = "point")
+    }
+    correlationPlot <- assemblyXYPlotServer(
+        id, session, input, output, 
+        isProcessingData, assemblyOptions,
+        sourceId, assembly, groupedProjectSamples, groupingCols, groups,
+        extraSettings = correlationSettings,
+        dims = list(width = 1.5, height = 1.5),
+        mar = c(
+            CONSTANTS$assemblyPlots$stdAxisMar, 
+            CONSTANTS$assemblyPlots$stdAxisMar, 
+            CONSTANTS$assemblyPlots$titleMar, 
+            CONSTANTS$assemblyPlots$nullMar
+        ),
+        dataFn = getCorrelation, 
+        plotFn = plotCorrelation
     )
 }
 #----------------------------------------------------------------------
@@ -641,18 +774,6 @@ svx_getArcsPlotMetadata <- function(svs, settings){
         interTargetColors = interTargetColors
     )
 }
-svx_arcs_addTopLegend <- function(plot, jxnTypes){
-    altCodes <- svx_jxnTypes$altCode[svx_jxnTypes$altCode %in% jxnTypes]
-    plot$addLegend(
-        legend = svx_jxnType_altCodeToX(altCodes, "longName"),
-        col =    svx_jxnType_altCodeToX(altCodes, "color"),
-        x = "top",
-        horiz = TRUE,
-        x.intersp = 0,
-        lwd = 1.5,
-        lty = 1
-    )
-}
 svx_getArcsTitle <- function(assembly, settings, family = "Plot"){
     title <- settings$get(family, "Title", NA)
     if(!isTruthy(title) && !is.null(assembly)) title <- assembly$env$DATA_NAME
@@ -711,7 +832,7 @@ svx_plotArcs_intraTarget <- function(plot, svs, input, assembly = NULL){
         )
     }
     abline(h = 0)
-    svx_arcs_addTopLegend(plot, unique(arcs$jxnType))
+    svx_svTypes_addTopLegend(plot, unique(arcs$jxnType))
 }
 svx_plotArcs_interTarget <- function(plot, svs, input, assembly = NULL){
     md <- svx_getArcsPlotMetadata(svs, plot$settings)
@@ -1923,7 +2044,203 @@ svCapture_insertionTemplatesServer <- function(
         )
     )
 }
-
+#----------------------------------------------------------------------
+# insertion template locations and properties
+# ---------------------------------------------------------------------
+svCapture_junctionPropertiesTable_settings <- list(
+    Insertions = list(
+        Min_Insertion_Size = list(
+            type = "numericInput",
+            value = 2
+        ),
+        Max_Insertion_Size = list(
+            type = "numericInput",
+            value = 15
+        )
+    )
+)
+svCapture_junctionPropertiesTable <- function(
+    input,
+    assemblyOptions, 
+    assembly, groupedProjectSamples, groupingCols,
+    conditions, groupLabels, settings,
+    mode = "table"
+){
+    svs <- svCapture_matchingAssemblySvs(
+        input,
+        assemblyOptions, 
+        assembly, groupedProjectSamples, groupingCols
+    )$value[
+        groupLabel %in% groupLabels
+    ]
+    groupBy <- if(mode == "plot"){
+        svs[, initialGroupLabel := groupLabel] %>% setAssemblyGroupLabels(conditions)
+        c("initialGroupLabel", "groupLabel")
+    } else {
+        conditions
+    }
+    sampleCoverages <- assembly()$samples[, .(sampleKey, coverage)]
+    setkey(sampleCoverages, sampleKey)
+    netCoverages <- sapply(svs[, unique(groupLabel)], function(groupLabel_) {
+        sampleKeys <- svs[groupLabel == groupLabel_, unique(paste(project, sample, sep = "::"))]
+        sum(sampleCoverages[sampleKeys, coverage])
+    }, simplify = FALSE, USE.NAMES = TRUE)
+    svs[,
+        {
+            nSVs <- .N
+            wasSequenced <- N_SPLITS > 0
+            nSequenced <- sum(wasSequenced)
+            hasInsertion <- wasSequenced &
+                            !is.na(templateType) &
+                            MICROHOM_LEN <= -settings$get("Insertions","Min_Insertion_Size") & 
+                            MICROHOM_LEN >= -settings$get("Insertions","Max_Insertion_Size")
+            nInsertions <- sum(hasInsertion)
+            wasFound <- hasInsertion & templateType != "notFound"
+            nFound <- sum(wasFound)
+            netCoverage <- netCoverages[[groupLabel[1]]]
+            SV_Freqs <- .SD[, {
+                sampleKey <- paste(project, sample, sep = "::")
+                .(SV_Freq = .N / sampleCoverages[sampleKey, coverage])
+            }, by = .(project, sample)]$SV_Freq
+            Insertion_Freqs <- .SD[, {
+                sampleKey <- paste(project, sample, sep = "::")
+                wasSequenced <- N_SPLITS > 0
+                nSequenced <- sum(wasSequenced)
+                hasInsertion <- wasSequenced &
+                                !is.na(templateType) &
+                                MICROHOM_LEN <= -settings$get("Insertions","Min_Insertion_Size") & 
+                                MICROHOM_LEN >= -settings$get("Insertions","Max_Insertion_Size")
+                .(Insertion_Freq = sum(hasInsertion) / sampleCoverages[sampleKey, coverage])
+            }, by = .(project, sample)]$Insertion_Freq
+            .(
+                nSamples = length(SV_Freqs),
+                coverage = netCoverage,
+                nSVs = nSVs,
+                nSequenced = nSequenced,
+                SV_Frequency = round(nSVs / netCoverage, 4),
+                SV_Freq_mean = round(mean(SV_Freqs), 4),
+                SV_Freq_sd   = round(sd(SV_Freqs), 5),
+                avgMicrohomology = round(mean(MICROHOM_LEN[wasSequenced & MICROHOM_LEN >= 0]), 2),
+                nInsertions = nInsertions,
+                Insertion_Frequency = round(nInsertions / netCoverage, 4),
+                Insertion_Freq_mean = round(mean(Insertion_Freqs), 4),
+                Insertion_Freq_sd   = round(sd(Insertion_Freqs), 5),
+                percentInsertions = round(nInsertions / nSequenced * 100, 2),
+                nFound = nFound,
+                percentFound = round(nFound / nInsertions * 100, 2),
+                TINS_Frequency = round(nFound / netCoverage, 4)
+            )
+        },
+        by = groupBy
+    ]
+}
+svCapture_junctionPropertiesPlotServer <- function(
+    id, session, input, output, 
+    isProcessingData, assemblyOptions,
+    sourceId, assembly, groupedProjectSamples, groupingCols, groups
+){
+    plotSettings <- svCapture_junctionPropertiesTable_settings
+    plotSettings$Insertions$Y_Value <- list(
+        type = "selectInput",
+        choices = c(
+            "avgMicrohomology",
+            "percentFound"
+        ),
+        value = "avgMicrohomology"
+    )
+    mar <- c(
+        CONSTANTS$assemblyPlots$stdAxisMar,
+        CONSTANTS$assemblyPlots$stdAxisMar, 
+        CONSTANTS$assemblyPlots$titleLegendMar, 
+        CONSTANTS$assemblyPlots$nullMar
+    )
+    tableFn = function(plot, conditions, groupLabels){
+        svCapture_junctionPropertiesTable(
+            input,
+            assemblyOptions, 
+            assembly, groupedProjectSamples, groupingCols,
+            conditions, groupLabels, plot$settings, "plot"
+        )
+    }
+    plotFn = function(plot, d){
+        d <- d$data
+        ycol <- plot$settings$get("Insertions","Y_Value")
+        xlim <- range(d$percentInsertions, na.rm = TRUE)
+        ylim <- range(d[[ycol]], na.rm = TRUE)
+        plot$initializeFrame(
+            xlim = xlim,
+            ylim = ylim,
+            xlab = "Percent Insertions",
+            ylab = if(ycol == "avgMicrohomology") "Avg. Microhomology (bp)" else "Percent Found Templates"
+        )
+        colorGroups <- unique(d$groupLabel)
+        colors <- CONSTANTS$plotlyColors[1:length(colorGroups)]
+        names(colors) <- colorGroups
+        mdiXYPlot(
+            plot,
+            d[, ":="(x = percentInsertions, y = d[[ycol]])],     # a data.table with at least columns x, y, and any groupingCols
+            xlim,
+            ylim,
+            groupingCols = "groupLabel",
+            groupColors = colors,
+            plotAs = "points",
+            legend_ = function(groupLabels) getAssemblyPlotGroupsLegend( 
+                groupLabels,
+                showConditionNames = plot$settings$get("Plot","Show_Condition_Names")
+            ) %>% svCapture_simplifyGroupNames(),
+            legendTitle = reactive({
+                getAssemblyPlotTitle(
+                    plot, 
+                    sourceId, 
+                    showConditionNames = plot$settings$get("Plot","Show_Condition_Names")
+                )
+            }),
+            legendSide = 3
+            # groupH = NULL, # a list named with group names of Y-axis values at which to place group-specific line rules
+            # groupV = NULL, # a list named with group names of X-axis values at which to place group-specific line rules
+        )
+    }
+    assemblyPlot <- assemblyXYPlotServer(
+        id, session, input, output, 
+        isProcessingData, assemblyOptions,
+        sourceId, assembly, groupedProjectSamples, groupingCols, groups,
+        extraSettings = c(mdiXYPlotSettings, plotSettings),
+        dims = list(
+            width = 1.5, 
+            height = 1.5
+        ),
+        mar = function(d){
+            mar_ <- mar
+            nGroups <- length(unique(d$data$groupLabel))
+            mar[3] <- mar[3] + nGroups
+            mar
+        },
+        points = TRUE,
+        dataFn = tableFn, 
+        plotFn = plotFn
+    )
+}
+svCapture_junctionPropertiesTableServer <- function(
+    id, session, input, output, 
+    isProcessingData, assemblyOptions,
+    sourceId, assembly, groupedProjectSamples, groupingCols, groups
+){
+    tableFn = function(conditions, groupLabels, settings){
+        svCapture_junctionPropertiesTable(
+            input,
+            assemblyOptions, 
+            assembly, groupedProjectSamples, groupingCols,
+            conditions, groupLabels, settings, "table"
+        )
+    }
+    assemblyTable <- assemblyBufferedTableServer(
+        id, session, input, output, 
+        isProcessingData, assemblyOptions,
+        sourceId, assembly, groupedProjectSamples, groupingCols, groups,
+        dataFn = tableFn,
+        settings = svCapture_junctionPropertiesTable_settings
+    )
+}
 
 #   [1] "ACTION_DIR"               "GENOMEX_MODULES_DIR"     
 # mdi-web-server-app-server-1              |  [3] "INPUT_DIR"                "SAMPLES_TABLE"           
