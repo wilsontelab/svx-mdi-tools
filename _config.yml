@@ -10,8 +10,9 @@ aux_links:
 # OPTIONAL: uncomment to list any external tool suite dependencies
 suite_dependencies:
   - wilsontelab/genomex-mdi-tools
+  - wilsontelab/ont-mdi-tools
 optional_suite_dependencies: # optional suites are not installed by default, they must be listed in suites.yml
-  - wilsontelab/bruseq-mdi-tools # only needed for browser track, fails silenty if missing 
+  - LjungmanLab/bruseq-mdi-tools # only needed for browser track, fails silenty if missing 
 
 # OPTIONAL: declare support for suite-level singularity containers
 container:

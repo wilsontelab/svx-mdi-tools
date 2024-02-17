@@ -8,29 +8,32 @@ suiteVersions:
 actions:
     download:
         order: 1
-        module: genomex-mdi-tools//nanopore/download      
+        module: ont-mdi-tools//download
         override:
-            ont-model: all             
+            ont-model: all
     convert:
         order: 2
-        module: genomex-mdi-tools//nanopore/convert
-    basecall:
+        module: ont-mdi-tools//convert
+    repack:
         order: 3
-        module: genomex-mdi-tools//nanopore/basecall
-        env-vars:
-            duplex: true 
-            emit-moves: false
-            align-reads: false
-    align:
+        module: ont-mdi-tools//repack
+    basecall:
         order: 4
+        module: ont-mdi-tools//basecall
+        env-vars:
+            duplex: true # duplex identification is essential for proper SV parsing and validation
+            emit-moves: false
+            align-reads: false # since Dorado's minimap2 doesn't guarantee output ordering
+    align:
+        order: 5
         module: genomex-mdi-tools//align/dna-long-read
         env-vars:
             default-alignment-mode: map-ont
     extract:
-        order: 5
+        order: 6
         module: svPore/extract 
     find:
-        order: 6
+        order: 7
         module: svPore/find
 package:
     find: # the pipeline action after which a data package should assembled
