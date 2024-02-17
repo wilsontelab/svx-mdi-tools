@@ -5,16 +5,17 @@ pipeline:
     version: v0.0.0
 suiteVersions:
     genomex-mdi-tools: main 
+    ont-mdi-tools: main 
 actions:
     # the following actions are ~the same as svPore
     download:
         order: 1
-        module: genomex-mdi-tools//nanopore/download      
+        module: ont-mdi-tools//download
         override:
-            ont-model: all      
+            ont-model: all
     basecall: # skip `convert` in svDJ, not enough data to make pod5 worthwhile over fast5, and it has problems with barcode file paths
         order: 2
-        module: genomex-mdi-tools//nanopore/basecall
+        module: ont-mdi-tools//basecall
         env-vars:     
             dorado-output-format: usam # retain tags
             batch-size: 100 # handle more files at once since they are small
@@ -32,7 +33,7 @@ actions:
     # the following actions diverge from svPore 
     parse:
         order: 5
-        module: svDJ/parse                     
+        module: svDJ/parse
 package:
     parse: # the pipeline action after which a data package should assembled
         uploadType: svDJ # a signal to the Stage 2 framework regarding the package contents
