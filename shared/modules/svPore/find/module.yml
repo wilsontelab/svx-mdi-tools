@@ -8,7 +8,7 @@ action: # required
         - svPore-find
     optionFamilies:
         - genomex-mdi-tools//genome
-        - genomex-mdi-tools//nanopore-type
+        - ont-mdi-tools//nanopore-type
         - genomex-mdi-tools//target-region
         - genomex-mdi-tools//read-filtering
         - svPore-size-limits
