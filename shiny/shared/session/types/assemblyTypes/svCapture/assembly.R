@@ -14,6 +14,7 @@ svCapture_loadAssembly <- function(assemblyOptions, settings, rdsFile, ...){
         from = "ram",
         create = assemblyOptions$cacheCreateLevel,
         keyObject = list(
+            assemblyVersion = assemblyOptions$assemblyVersion,
             settings = settings$all(),
             rdsFile = rdsFile, # carries sourceId
             internalUseSampleColumns = assemblyOptions$internalUseSampleColumns
@@ -41,6 +42,7 @@ svCapture_getGroups <- function(assemblyOptions, groupedProjectSamples, grouping
         from = "ram",
         create = assemblyOptions$cacheCreateLevel,
         keyObject = list(
+            assemblyVersion = assemblyOptions$assemblyVersion,
             groupedProjectSamples,
             groupingCols,
             input$Data_Types
@@ -64,7 +66,9 @@ svCapture_getGroups <- function(assemblyOptions, groupedProjectSamples, grouping
             a <- aggegrateGroupSampleValues(gps, groupingCols, valueColumn, input)
             b <- gps[, .(
                 coverage = sum(coverage),
-                nSvs = sum(nSvs)
+                nSvs = sum(nSvs),
+                coverages = list(coverage), # for glm.nb
+                nSvss = list(nSvs)
             ), by = bBy]
             groups <- if(isSingleGroup) cbind(a, b) else merge(a, b)
             if(!isSingleGroup) setorderv(groups, groupingCols, order = -1L)
@@ -383,7 +387,100 @@ svCapture_vShadeByTarget <- function(assembly){
 # SV frequencies
 # ----------------------------------------------------------------------
 svCapture_svFrequenciesServer <- function(...){
-    assemblyBarplotServer(..., ylab = "SV Frequency", nSD = 2)
+    svSettings <- list(
+        SV_Frequency = list(
+            Comparison_Test = list(
+                type = "selectInput",
+                choices = c(
+                    "t-test",
+                    "neg-binom" # as defined by the calling plot type
+                ),
+                value = "neg-binom"
+            )
+        )
+    )
+    comparisonTests <- list(
+        "t-test" = function(fromGrp, toGrp){
+            t.test(unlist(fromGrp$sampleValues), unlist(toGrp$sampleValues))
+        }, 
+        "neg-binom" = function(fromGrp, toGrp){
+            d <- data.table(
+                nSvs = c(
+                    unlist(fromGrp$nSvss), 
+                    unlist(toGrp$nSvss)
+                ),
+                group = c(
+                    rep("from", fromGrp$nSamples),
+                    rep("to",   toGrp$nSamples)
+                ),
+                project = c(
+                    unlist(fromGrp$projects),
+                    unlist(toGrp$projects)
+                ),
+                logCoverage = log(c(
+                    unlist(fromGrp$coverages),
+                    unlist(toGrp$coverages)
+                ))
+            )
+            hasMultipleProjects <- length(unique(d$project)) > 1
+            fit <- tryCatch( 
+                if(hasMultipleProjects) MASS::glm.nb(
+                    # isolate inter-group effect while accounting for batch, i.e., project, effects and sample read depth
+                    nSvs ~ group + project + offset(logCoverage), # or model logCoverage?
+                    data = d
+                ) else MASS::glm.nb(
+                    nSvs ~ group + offset(logCoverage), # single-project comparisons
+                    data = d
+                ), error = function(e){
+                    print("MASS::glm.nb failed, trying quasipoisson")
+                    if(hasMultipleProjects) glm(
+                        nSvs ~ group + project + offset(logCoverage),
+                        data = d,
+                        family = "quasipoisson"
+                    ) else glm(
+                        nSvs ~ group + offset(logCoverage),
+                        data = d,
+                        family = "quasipoisson"
+                    )
+                }
+            )
+            # print(paste("theta =", fit$theta))
+            pValue <- coef(summary(fit))[2, 4] # p.value for the group parameter
+            if(!is.na(pValue)) return(list(
+                p.value = pValue,
+                color = "black"
+            ))
+            print("quasipoisson failed, using poisson without overdispersion")
+            fit <- if(hasMultipleProjects) glm(
+                nSvs ~ group + project + offset(logCoverage),
+                data = d,
+                family = "poisson"
+            ) else glm(
+                nSvs ~ group + offset(logCoverage),
+                data = d,
+                family = "poisson"
+            )
+            list(
+                p.value = coef(summary(fit))[2, 4],
+                color = "black",
+                lty = 3
+            )
+#               Estimate Std. Error    z value      Pr(>|z|)
+# (Intercept)   -1.2682413 0.04860736 -26.091548 4.547006e-150
+# groupto       -0.7244105 0.05071084 -14.285120  2.709422e-46
+# projectxxxx   -0.1350839 0.05069803  -2.664481  7.710712e-03 
+        }
+    )
+    assemblyBarplotServer(
+        ..., 
+        ylab = "SV Frequency", 
+        nSD = 2, 
+        extraSettings = svSettings,
+        addComparisons = function(plot, groups, comparisons){
+            comparisonTest  <- plot$settings$get("SV_Frequency","Comparison_Test")
+            assemblyPlot_addComparisons(plot, groups, comparisons, comparisonTests[[comparisonTest]])
+        }
+    )
 }
 #----------------------------------------------------------------------
 # junction microhomology profiles
@@ -2044,8 +2141,9 @@ svCapture_insertionTemplatesServer <- function(
         )
     )
 }
+
 #----------------------------------------------------------------------
-# insertion template locations and properties
+# aggregate table of group properties, including junction properties
 # ---------------------------------------------------------------------
 svCapture_junctionPropertiesTable_settings <- list(
     Insertions = list(
@@ -2113,6 +2211,7 @@ svCapture_junctionPropertiesTable <- function(
                 .(Insertion_Freq = sum(hasInsertion) / sampleCoverages[sampleKey, coverage])
             }, by = .(project, sample)]$Insertion_Freq
             .(
+                nProjects = length(unique(project)),
                 nSamples = length(SV_Freqs),
                 coverage = netCoverage,
                 nSVs = nSVs,
@@ -2241,6 +2340,205 @@ svCapture_junctionPropertiesTableServer <- function(
         settings = svCapture_junctionPropertiesTable_settings
     )
 }
+
+#----------------------------------------------------------------------
+# examining the range and linearity of sample coverages
+# ---------------------------------------------------------------------
+svCapture_plotCoverage_data <- function(
+    input,
+    assemblyOptions, 
+    assembly, groupedProjectSamples, groupingCols,
+    conditions, groupLabels
+){
+    svs <- svCapture_matchingAssemblySvs(
+        input,
+        assemblyOptions, 
+        assembly, groupedProjectSamples, groupingCols
+    )$value[
+        groupLabel %in% groupLabels
+    ]
+    sampleCoverages <- assembly()$samples[, .(sampleKey, coverage, N50)]
+    setkey(sampleCoverages, sampleKey)
+    svs[, 
+        sampleKey := paste(project, sample, sep = "::")
+    ][, {
+        sampleKey_ <- sampleKey
+        .(
+            coverage = sampleCoverages[sampleKey_, coverage],
+            N50 = sampleCoverages[sampleKey_, N50],
+            nSvs = .N
+        )
+    }, by = .(groupLabel, sampleKey)]
+}
+# ---------------------------------------------------------------------
+svx_plotCoverage_distribution <- function(plot, samples){
+    plot(
+        density(samples$coverage),
+        main = paste(nrow(samples), "samples"),
+        xlab = "Target Coverage Depth"
+    )
+}
+svx_plotCoverage_linearity <- function(plot, samples){
+    d <- samples[, 
+        .(
+            normalizedCoverage = coverage / median(coverage),
+            normalizedNSvs = nSvs / median(nSvs),
+            nSamplesInGroup = .N
+        ), by = .(groupLabel)
+    ][
+        nSamplesInGroup > 1
+    ]
+    xmax <- d[, max(normalizedCoverage, 1 / normalizedCoverage)]
+    ymax <- d[, max(normalizedNSvs, 1 / normalizedNSvs)]
+    plot$initializeFrame(
+        xlim = log2(c(1 / xmax, xmax)),
+        ylim = log2(c(1 / ymax, ymax)),
+        xlab = "log2 Group-Normalized Coverage",
+        ylab = "log2 Group-Normalized # SVs",
+        title = paste(nrow(samples), "samples")
+    )     
+    plot$addPoints(
+        x = log2(d$normalizedCoverage),
+        y = log2(d$normalizedNSvs),
+        pch = 19,
+        cex = 0.25
+    )
+    abline(0, 1)
+}
+svx_plotCoverage_N50 <- function(plot, samples){
+    plot(
+        density(samples$N50),
+        main = paste(nrow(samples), "samples"),
+        xlab = "Insert Size N50"
+    )
+}
+svx_plotCoverage_N50_correlation <- function(plot, samples){
+
+    plot$initializeFrame(
+        xlim = range(samples$N50),
+        ylim = range(samples$coverage),
+        xlab = "Insert Size N50",
+        ylab = "Target Coverage Depth",
+        title = paste(nrow(samples), "samples")
+    )     
+    plot$addPoints(
+        x = samples$N50,
+        y = samples$coverage,
+        pch = 19,
+        cex = 0.25
+    )
+}
+# ---------------------------------------------------------------------
+svCapture_sampleCoveragesPlotServer <- function(
+    id, session, input, output, 
+    isProcessingData, assemblyOptions,
+    sourceId, assembly, groupedProjectSamples, groupingCols, groups
+){
+    settings <- c(assemblyPlotFrameSettings, list(
+        Coverage = list(
+            Plot_Coverage_As = list(
+                type = "selectInput",
+                choices = c(
+                    "distribution",
+                    "linearity",
+                    "N50",
+                    "N50_correlation"
+                ),
+                value = "distribution"
+            )
+        )
+    ))
+    mars <- list(
+        distribution = c(
+            CONSTANTS$assemblyPlots$stdAxisMar, 
+            CONSTANTS$assemblyPlots$stdAxisMar, 
+            CONSTANTS$assemblyPlots$titleMar, 
+            CONSTANTS$assemblyPlots$nullMar
+        ),
+        linearity = c(
+            CONSTANTS$assemblyPlots$stdAxisMar, 
+            CONSTANTS$assemblyPlots$stdAxisMar, 
+            CONSTANTS$assemblyPlots$titleMar, 
+            CONSTANTS$assemblyPlots$nullMar
+        ),
+        N50 = c(
+            CONSTANTS$assemblyPlots$stdAxisMar, 
+            CONSTANTS$assemblyPlots$stdAxisMar, 
+            CONSTANTS$assemblyPlots$titleMar, 
+            CONSTANTS$assemblyPlots$nullMar
+        ),
+        N50_correlation = c(
+            CONSTANTS$assemblyPlots$stdAxisMar, 
+            CONSTANTS$assemblyPlots$stdAxisMar, 
+            CONSTANTS$assemblyPlots$titleMar, 
+            CONSTANTS$assemblyPlots$titleMar
+        )
+    )
+    dims <- list(
+        distribution = list(
+            width  = 1.5, 
+            height = 1.25
+        ),
+        linearity = list(
+            width  = 1.5, 
+            height = 1.25
+        ),
+        N50 = list(
+            width  = 1.5, 
+            height = 1.25
+        ),
+        N50_correlation = list(
+            width  = 1.25, 
+            height = 1.25
+        )
+    )
+    getDim <- function(plotAs, key, option){
+        dim <- trimws(assemblyPlot$plot$settings$get("Plot",option))
+        if(!isTruthy(dim) || dim == "" || dim == "auto") dims[[plotAs]][[key]]
+        else dim
+    }
+    assemblyPlot <- assemblyPlotBoxServer( 
+        id, session, input, output, 
+        isProcessingData,
+        groupingCols, groups,
+        dataFn = function(conditions, groupLabels) {
+            svCapture_plotCoverage_data(
+                input,
+                assemblyOptions, 
+                assembly, groupedProjectSamples, groupingCols,
+                conditions, groupLabels
+            )
+        },
+        plotFrameFn = function(data) {
+            plotAs <- assemblyPlot$plot$settings$get("Coverage","Plot_Coverage_As")
+            list(
+                frame = getAssemblyPlotFrame(
+                    plot = assemblyPlot$plot, 
+                    insideWidth  = getDim(plotAs, "width",  "Width_Inches"), 
+                    insideHeight = getDim(plotAs, "height", "Height_Inches"), 
+                    mar = mars[[plotAs]]
+                ),
+                mar = mars[[plotAs]]
+            )
+        },
+        plotFn = function(plotId, dataReactive, plotFrameReactive) staticPlotBoxServer(
+            plotId,
+            settings = settings, 
+            size = "m",
+            Plot_Frame = reactive({ plotFrameReactive()$frame }),
+            create = function() {
+                d <- dataReactive()
+                plotAs <- assemblyPlot$plot$settings$get("Coverage","Plot_Coverage_As")
+                req(d, d$data, plotAs)
+                startSpinner(session, message = paste("rendering", id))
+                par(mar = plotFrameReactive()$mar)
+                get(paste("svx_plotCoverage", plotAs, sep = "_"))(assemblyPlot$plot, d$data)
+                stopSpinner(session)
+            }
+        )
+    )
+}
+
 
 #   [1] "ACTION_DIR"               "GENOMEX_MODULES_DIR"     
 # mdi-web-server-app-server-1              |  [3] "INPUT_DIR"                "SAMPLES_TABLE"           

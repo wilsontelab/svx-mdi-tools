@@ -1,3 +1,6 @@
+# assembly version, increment whenever loadAssembly or getGroups changes its return value
+assemblyVersion: 1
+
 # caching: use "once" when debugging data loads, otherwise use "asNeeded"
 cacheCreateLevel: asNeeded
 
@@ -12,7 +15,7 @@ settings:
             value: true
         Enforce_Min_Inversion_Size:
             type: checkboxInput
-            value: true          
+            value: true
 
 # plot types supported by the application and included on the page
 plotTypes:
@@ -45,6 +48,9 @@ plotTypes:
         collapsed: true
     genomeFeatures:
         label: Junction Genome Features
+        collapsed: true
+    sampleCoveragesPlot:
+        label: Sample Coverages
         collapsed: true
     junctionPropertiesPlot:
         label: Aggregated Junction Properties
