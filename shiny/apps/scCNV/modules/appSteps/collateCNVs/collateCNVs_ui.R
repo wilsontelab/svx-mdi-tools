@@ -60,7 +60,8 @@ collateCNVsUI <- function(id, options) {
                 style = "min-width: 995px;",
                 class = "cellPlotsWrapper",
                 uiOutput(ns("chromPlots")),
-                tags$div(class = "cellStackVertical")
+                tags$div(class = "cellStackVertical"),
+                tags$div(class = "cellStackHorizontal")
             )            
         ),
         tags$div(actionLink(ns("clearChromAssignments"),  "clear all assignments on this chromosome"),   style = "display: inline-block; margin-top: 10px;"),

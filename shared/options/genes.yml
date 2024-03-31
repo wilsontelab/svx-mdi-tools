@@ -1,0 +1,16 @@
+---
+options:
+    genes-table: 
+        order: 1
+        short: U
+        type: string
+        required: false
+        default: NA
+        description: "path to a genes table (full table .txt.gz, not BED) downloaded from UCSC" 
+    gene-padding: 
+        order: 2
+        short: P
+        type: integer
+        required: false
+        default: 10000
+        description: "number of bases to add to each end of an annotated gene as padding" 

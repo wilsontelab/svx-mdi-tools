@@ -31,9 +31,24 @@ actions:
         job-manager:
             recommended:
                 time-limit: 24:00:00
-        description: "Align reads to the genome starting from cell input fastq files"             
-    extract:
+        description: "Align reads to the genome starting from cell input fastq files"
+    split_ATAC:
         order: 2
+        thread: do
+        optionFamilies:
+            - split_ATAC
+        resources:
+            required:
+                total-ram: 32G
+            recommended: 
+                n-cpu: 8
+                ram-per-cpu: 8G
+        job-manager:
+            recommended:
+                time-limit: 24:00:00
+        description: "Split 10X possorted_bam.bam to individual cell bams in preparation for extract"
+    extract:
+        order: 3
         thread: do
         optionFamilies:
             - bam
@@ -50,7 +65,7 @@ actions:
                 time-limit: 4:00:00
         description: "Count reads in 20kb bins and find junctions in name-sorted bam/cram files"       
     normalize:
-        order: 3
+        order: 4
         thread: do
         optionFamilies:
             - input
@@ -83,6 +98,17 @@ optionFamilies:
                 required: false
                 default: false
                 description: "set --force-alignment to realign reads even if the bam file already exists"  
+    split_ATAC:
+        options:
+            cell-ranger-dir: 
+                order: 1
+                short: i
+                type: string
+                required: true
+                default: null
+                directory:
+                    must-exist: true
+                description: "path to 10x analysis directory containing possorted_bam.bam and singlecell.csv"
     fastq:
         options:
             fastq-dir:

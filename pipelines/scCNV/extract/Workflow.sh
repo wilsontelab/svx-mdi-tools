@@ -7,7 +7,10 @@ source $GENOMEX_MODULES_DIR/genome/set_genome_vars.sh
 
 # set alignment variables
 if [[ "$BAM_DIR" = "NA" || "$BAM_DIR" = "null" || "$BAM_DIR" = "" || "$BAM_DIR" = "0" ]]; then
-    export ALIGNMENT_DIR=$TASK_DIR/cram # the default, assumes user ran "scCNV align"
+    export ALIGNMENT_DIR=$TASK_DIR/cram # the default, assumes user ran "scCNV align" or "scCNV split_ATAC"
+    if [ ! -d "$ALIGNMENT_DIR" ]; then
+        export ALIGNMENT_DIR=$TASK_DIR/bam
+    fi
 else 
     export ALIGNMENT_DIR=$BAM_DIR # alternatively, use can supply an input folder populated with cell-level bam/cram files
 fi
