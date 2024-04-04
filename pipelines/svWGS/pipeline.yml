@@ -8,7 +8,10 @@ suiteVersions:
 actions:
     align:
         order: 1
-        module: genomex-mdi-tools//align/dna-paired-end  
+        module: genomex-mdi-tools//align/dna-paired-end
+    # realign: # support realignment of SV reads using a second aligner, e.g., align1 = bwa-mem, align2 = minimap2
+    #     order: 1
+    #     module: realign
     extract:
         order: 2
         module: extract

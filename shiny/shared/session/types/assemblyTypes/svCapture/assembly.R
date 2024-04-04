@@ -1603,6 +1603,7 @@ svx_plotInsertions_yield <- function(plot, svs, assembly = NULL){
     )][, 
         pValue := 1 - pbinom(nFound - 1, nSvs, trialSuccessProb)
     ]
+    print(yield[, .(nSvs = sum(nSvs), nFound = sum(nFound))])
     plot$initializeFrame(
         xlim = range(-yield$MICROHOM_LEN),
         ylim = c(0, min(100, max(yield$successRate, yield$trialSuccessProb) * 110)),
@@ -2154,6 +2155,14 @@ svCapture_junctionPropertiesTable_settings <- list(
         Max_Insertion_Size = list(
             type = "numericInput",
             value = 15
+        ),
+        Table_Type = list(
+            type = "selectInput",
+            choices = c(
+                "groups",
+                "svs"
+            ),
+            value = "groups"
         )
     )
 )
@@ -2162,8 +2171,14 @@ svCapture_junctionPropertiesTable <- function(
     assemblyOptions, 
     assembly, groupedProjectSamples, groupingCols,
     conditions, groupLabels, settings,
-    mode = "table"
+    mode = "table",
+    tableType = "groups"
 ){
+    samples <- copy(groupedProjectSamples())
+    setAssemblyGroupLabels(samples, groupingCols())
+    samples <- samples[groupLabel %in% groupLabels]
+    samples[, sampleKey := paste(project, sample, sep = "::")]
+    
     svs <- svCapture_matchingAssemblySvs(
         input,
         assemblyOptions, 
@@ -2171,59 +2186,94 @@ svCapture_junctionPropertiesTable <- function(
     )$value[
         groupLabel %in% groupLabels
     ]
+
     groupBy <- if(mode == "plot"){
-        svs[, initialGroupLabel := groupLabel] %>% setAssemblyGroupLabels(conditions)
+        samples[, initialGroupLabel := groupLabel] %>% setAssemblyGroupLabels(conditions)
+        svs[,     initialGroupLabel := groupLabel] %>% setAssemblyGroupLabels(conditions)
         c("initialGroupLabel", "groupLabel")
     } else {
         conditions
     }
-    sampleCoverages <- assembly()$samples[, .(sampleKey, coverage)]
-    setkey(sampleCoverages, sampleKey)
-    netCoverages <- sapply(svs[, unique(groupLabel)], function(groupLabel_) {
-        sampleKeys <- svs[groupLabel == groupLabel_, unique(paste(project, sample, sep = "::"))]
-        sum(sampleCoverages[sampleKeys, coverage])
-    }, simplify = FALSE, USE.NAMES = TRUE)
-    svs[,
+
+    minInsertion <- settings$get("Insertions","Min_Insertion_Size")
+    maxInsertion <- settings$get("Insertions","Max_Insertion_Size")
+
+    d <- merge(
+        samples[, .SD, .SDcols = c(groupBy, "project", "sample", "sampleKey", "coverage")],
+        svs,
+        all.x = TRUE, # just in case any samples had zero SVs (very rare)
+        by = c(groupBy, "project", "sample")
+    )
+    if(mode == "table" && tableType == "svs") {
+        d[, ":="(
+            edge_type = edgeType,
+            sequenced = N_SPLITS > 0,
+            tmpl_side = templateBreakpointN,
+            tmpl_start = templateStartPos,
+            tmpl_end = templateEndPos,
+            tmpl_rc = templateIsRc,
+            tmpl_type = templateType,
+            tmpl_distance = templateDistance,
+            n_templates = templateInstances
+        )]
+        d <- d[, .SD, .SDcols = c(
+            groupBy,
+            "project", "sample",
+            "SV_ID", 
+            "TARGET_REGION", "TARGET_CLASS", 
+            "edge_type",
+            "SV_SIZE", 
+            "CHROM_1", "SIDE_1", "POS_1",
+            "CHROM_2", "SIDE_2", "POS_2", 
+            "sequenced",
+            "MICROHOM_LEN", "JXN_BASES",
+            "n_templates",
+            "tmpl_side",
+            "tmpl_start", "tmpl_end", "tmpl_rc",
+            "tmpl_type", "tmpl_distance"
+        )]
+        names(d) <- tolower(names(d))
+        d
+    } else d[,
         {
-            nSVs <- .N
+            nSVs <- sum(!is.na(SV_ID))
             wasSequenced <- N_SPLITS > 0
             nSequenced <- sum(wasSequenced)
             hasInsertion <- wasSequenced &
                             !is.na(templateType) &
-                            MICROHOM_LEN <= -settings$get("Insertions","Min_Insertion_Size") & 
-                            MICROHOM_LEN >= -settings$get("Insertions","Max_Insertion_Size")
+                            MICROHOM_LEN <= -minInsertion & 
+                            MICROHOM_LEN >= -maxInsertion
             nInsertions <- sum(hasInsertion)
             wasFound <- hasInsertion & templateType != "notFound"
             nFound <- sum(wasFound)
-            netCoverage <- netCoverages[[groupLabel[1]]]
-            SV_Freqs <- .SD[, {
-                sampleKey <- paste(project, sample, sep = "::")
-                .(SV_Freq = .N / sampleCoverages[sampleKey, coverage])
-            }, by = .(project, sample)]$SV_Freq
-            Insertion_Freqs <- .SD[, {
-                sampleKey <- paste(project, sample, sep = "::")
+            bySample <- .SD[, {
                 wasSequenced <- N_SPLITS > 0
                 nSequenced <- sum(wasSequenced)
                 hasInsertion <- wasSequenced &
                                 !is.na(templateType) &
-                                MICROHOM_LEN <= -settings$get("Insertions","Min_Insertion_Size") & 
-                                MICROHOM_LEN >= -settings$get("Insertions","Max_Insertion_Size")
-                .(Insertion_Freq = sum(hasInsertion) / sampleCoverages[sampleKey, coverage])
-            }, by = .(project, sample)]$Insertion_Freq
+                                MICROHOM_LEN <= -minInsertion & 
+                                MICROHOM_LEN >= -maxInsertion
+                .(
+                    coverage = coverage[1],
+                    SV_Freq = sum(!is.na(SV_ID)) / coverage[1],
+                    Insertion_Freq = sum(hasInsertion) / coverage[1]
+                )
+            }, by = .(project, sample)]
+            netCoverage <- sum(bySample$coverage)
             .(
                 nProjects = length(unique(project)),
-                nSamples = length(SV_Freqs),
+                nSamples = length(unique(sampleKey)),
                 coverage = netCoverage,
                 nSVs = nSVs,
                 nSequenced = nSequenced,
                 SV_Frequency = round(nSVs / netCoverage, 4),
-                SV_Freq_mean = round(mean(SV_Freqs), 4),
-                SV_Freq_sd   = round(sd(SV_Freqs), 5),
+                SV_Freq_mean = round(mean(bySample$SV_Freq), 4),
+                SV_Freq_sd   = round(sd(bySample$SV_Freq), 5),
                 avgMicrohomology = round(mean(MICROHOM_LEN[wasSequenced & MICROHOM_LEN >= 0]), 2),
                 nInsertions = nInsertions,
                 Insertion_Frequency = round(nInsertions / netCoverage, 4),
-                Insertion_Freq_mean = round(mean(Insertion_Freqs), 4),
-                Insertion_Freq_sd   = round(sd(Insertion_Freqs), 5),
+                Insertion_Freq_mean = round(mean(bySample$Insertion_Freq), 4),
+                Insertion_Freq_sd   = round(sd(bySample$Insertion_Freq), 5),
                 percentInsertions = round(nInsertions / nSequenced * 100, 2),
                 nFound = nFound,
                 percentFound = round(nFound / nInsertions * 100, 2),
@@ -2263,7 +2313,25 @@ svCapture_junctionPropertiesPlotServer <- function(
     }
     plotFn = function(plot, d){
         d <- d$data
+
+        print(names(d))
+
+        dstr(d)
+#          [1] "initialGroupLabel"   "groupLabel"          "nProjects"
+#  [4] "nSamples"            "coverage"            "nSVs"
+#  [7] "nSequenced"          "SV_Frequency"        "SV_Freq_mean"       
+# [10] "SV_Freq_sd"          "avgMicrohomology"    "nInsertions"
+# [13] "Insertion_Frequency" "Insertion_Freq_mean" "Insertion_Freq_sd"
+# [16] "percentInsertions"   "nFound"              "percentFound"
+# [19] "TINS_Frequency"
+# Warning in min(x, na.rm = na.rm) :
+#   no non-missing arguments to min; returning Inf
+# Warning in max(x, na.rm = na.rm) :
+#   no non-missing arguments to max; returning -Inf
+# <simpleError in plot.new(): figure margins too large>
+dmsg(1111)
         ycol <- plot$settings$get("Insertions","Y_Value")
+        if(ycol == "averageMicrohomology") ycol <- "avgMicrohomology"
         xlim <- range(d$percentInsertions, na.rm = TRUE)
         ylim <- range(d[[ycol]], na.rm = TRUE)
         plot$initializeFrame(
@@ -2329,7 +2397,8 @@ svCapture_junctionPropertiesTableServer <- function(
             input,
             assemblyOptions, 
             assembly, groupedProjectSamples, groupingCols,
-            conditions, groupLabels, settings, "table"
+            conditions, groupLabels, settings, "table",
+            settings$get("Insertions","Table_Type")
         )
     }
     assemblyTable <- assemblyBufferedTableServer(

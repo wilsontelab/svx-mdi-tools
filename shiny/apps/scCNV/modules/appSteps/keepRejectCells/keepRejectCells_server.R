@@ -151,10 +151,11 @@ observeEvent(input$nextPage, {
 #----------------------------------------------------------------------
 ALL <- "__ALL__"
 projectCellIds <- reactiveVal(ALL)
-updateCellFilter <- function(){
+updateCellFilter <- function(...){
     project <- project()
     req(project)
-    i <- project$manifest[, input$sampleNameFilter == ALL | Sample_Name == input$sampleNameFilter]
+    sampleName <- if(sourceIsInitializing) ALL else input$sampleNameFilter
+    i <- project$manifest[, sampleName == ALL | Sample_Name == sampleName]
     choices <- project$manifest[i, Sample_ID]
     names(choices) <- project$manifest[i, Description]
     projectCellIds(choices)

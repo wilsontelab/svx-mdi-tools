@@ -98,13 +98,15 @@ keepRejectCellsUI <- function(id, options) {
                 class = "cellPlotsWrapper",
                 # uiOutput(ns("genomeLabelRow")),
                 uiOutput(ns("genomePlots")),
-                tags$div(class = "cellStackVertical")
+                tags$div(class = "cellStackVertical"),
+                tags$div(class = "cellStackHorizontal")
             ),
             tags$div(
                 id = ns("chromPlotsWrapper"),
                 class = "cellPlotsWrapper",
                 uiOutput(ns("chromPlots")),
-                tags$div(class = "cellStackVertical")
+                tags$div(class = "cellStackVertical"),
+                tags$div(class = "cellStackHorizontal")
             )            
         )
     )
