@@ -8,7 +8,7 @@ svCapture_getDenominatorColumn <- function(settings){
     x
 }
 svCapture_loadAssembly <- function(assemblyOptions, settings, rdsFile, ...){
-    assemblyCache$get(
+    x <- assemblyCache$get(
         'assembly', 
         permanent = TRUE,
         from = "ram",
@@ -34,6 +34,8 @@ svCapture_loadAssembly <- function(assemblyOptions, settings, rdsFile, ...){
             assembly
         }
     )$value
+    x$samples[siRNA == "ctrl", siRNA := "-"]
+    x
 }
 svCapture_getGroups <- function(assemblyOptions, groupedProjectSamples, groupingCols, input, ...){
     assemblyCache$get(
@@ -1836,7 +1838,7 @@ svx_plotInsertions_histogram <- function(plot, svs, assembly = NULL){
         bty = "n",
         title = svx_getInsertionsTitle(assembly, plot$settings, sum(nrow(svs)))
     )
-    # abline(v = seq(vSpacing, maxDist - 1, vSpacing), col = CONSTANTS$plotlyColors$grey)
+    abline(v = seq(-1000, 1000, md$vSpacing), col = "grey80")
     abline(v = 0, col = CONSTANTS$plotlyColors$black)
     lwd <- 1.5 # plot$settings$Points_and_Lines()$Line_Width$value
     for(bpn in 1:2) for(type in templateTypes){
