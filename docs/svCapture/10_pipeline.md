@@ -13,6 +13,7 @@ svCapture data analysis first entails execution of a pipeline with primary actio
 - **collate** = assemble read groups, make consensuses, and re-align to genome
 - **extract** = scan name-sorted reads for anomalous molecules with alignment discontinuities
 - **find** = scan anomalous molecules from one or more samples to make SV junction calls
+- **assemble** = filter and tabulate SVs across a series of previously executed find actions
 
 This stepwise implementation:
 - allows users to perform alignment inside or outside of the svCapture pipeline
@@ -30,7 +31,7 @@ you need the following:
 
 ### Unaligned or pre-aligned reads
 
-Most users will provide two FASTQ format read files obtained
+Most users will provide two FASTQ format read files per sample, obtained
 from a paired-end, short-read sequencing platform. The path to these
 read files are specified using options `--input-dir` and `--input-name`.
 
@@ -65,6 +66,11 @@ contains extracted data files, a single-sample find is executed.
 If the directory contains a set of sub-folders, each with extracted read files,
 a merged-sample find is executed.
 
+Finally, the `assemble` action is used for highest order data integration
+across many samples from many `find` actions. Typically, `find` is 
+applied to samples that were sequenced together in a batch, whereas `assemble`
+allow different experimental batches to be plotted together.
+
 ## Pipeline outputs
 
 The svCapture pipeline performs extensive grouping and consensus
@@ -77,7 +83,7 @@ The most important pipeline outputs are the lists of characterized SV junction c
 - a VCF format file, *.find.structural_variants.vcf.bgz, for use with other SV analysis tools
 
 Additional important output files are:
-- the app data package for interactive visualization, *.mdi.package.zip
+- the app data packages for interactive visualization, *.mdi.package.zip
 
 ## Additional pipeline options
 

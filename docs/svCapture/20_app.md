@@ -13,7 +13,9 @@ and used in other downstream applications via the VCF formatted output
 and other files.
 
 You can also load the data package ending with `mdi.package.zip`
-into the svCapture R Shiny app. The best way to run the app server
+into the svCapture (for the `find` action) 
+or svCaptureAssembly (for the `assemble` action) 
+R Shiny apps. The best way to run the app server
 is by [installing the MDI Desktop](https://midataint.github.io/mdi-desktop-app/docs/installation),
 which gives you several options for running the server on your local computer,
 on your HPC server, or on a public web server.
