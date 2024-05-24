@@ -21,15 +21,14 @@ for code encapsulation that is especially useful on shared computing resources
 For servers and pipelines that support publicly shared Singularity containers you do not
 need to do anything except agree to downloading the required container when prompted. 
 
-The following pipelines support singularity containers:
+The following pipelines currently support singularity containers:
 - genomex-mdi-tools/download
-- svx-mdi-tools/svCapture
 
 ### Conda environments
 
 Alternatively, all pipeline environments can be set up using [conda](https://docs.conda.io/en/latest/),
 which must be installed and available on your system. You then call
-the following MDI command(s) to create/build the required environement(s).
+the following MDI command(s) to create/build the required environment(s).
 
 ```sh
 mdi download conda --create   # for downloading genome(s), if required
