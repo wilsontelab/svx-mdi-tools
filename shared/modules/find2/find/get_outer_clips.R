@@ -19,7 +19,7 @@ getOuterClipEvidence <- function(){
         pipe <- paste("zcat", clipsFile, "|", "perl", clipFilterScript, sample, refNodesFile)
         clipMols <- fread(
             cmd = pipe,
-            sep = "\t",        
+            sep = "\t",
             header = FALSE,
             stringsAsFactors = FALSE,
             col.names = names(find$working2),
@@ -63,6 +63,7 @@ flipInversionClips <- function(svIdx, clipMols){
 #-------------------------------------------------------------------------------------
 # assess whether an unaligned sequences, e.g., a clip, matches expectations of aligned reads
 getFractionMatchingBases <- function(seq1, seq2, fixedLength = NULL, side = NULL){
+    if(seq1 == "" || seq2 == "") return(0) # abort and reject missing clip sequences
     if(is.null(fixedLength)){
         seq1Len <- nchar(seq1)
         seq2Len <- nchar(seq2)
