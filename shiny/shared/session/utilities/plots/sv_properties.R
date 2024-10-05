@@ -5,7 +5,8 @@ svPropertiesPlotUI <- function(ns, width){
     staticPlotBoxUI(
         ns('svProperties'),
         width = width,
-        title = "SV Properties"
+        title = "SV Properties",
+        data = TRUE
     )    
 }
 svPropertiesPlotServer <- function(settings, svPointColors, filteredSvs){
@@ -16,6 +17,7 @@ svPropertiesPlotServer <- function(settings, svPointColors, filteredSvs){
         legend = TRUE,
         immediate = TRUE,
         template = read_yaml(file.path(app$sources$suiteGlobalDir, "settings", "properties_plot.yml")),
+        data = TRUE,
         create = function(...){
             svFilters <- settings$SV_Filters()
             stepSettings <- settings$Plot_Settings()
@@ -26,7 +28,9 @@ svPropertiesPlotServer <- function(settings, svPointColors, filteredSvs){
                 color = svPointColors$colors,
                 MICROHOM_LEN, 
                 SV_SIZE,
-                edgeType
+                edgeType,
+                PROJECT,
+                SAMPLES
             )]
             svs[
                 edgeType == svx_edgeTypes$TRANSLOCATION, 
@@ -44,12 +48,13 @@ svPropertiesPlotServer <- function(settings, svPointColors, filteredSvs){
                 ylim = c(-0.05, 1.05),
                 yval = svs[plotted == TRUE, jitter(SHARED_PROPER / 2, amount = 0.05)]
             )
+            xlab <- "Breakpoint Offset (bp)"
             plot$initializeFrame(
                 xlim = xlim,
                 ylim = yType$ylim,
-                xlab = "Insertion Size (bp)",
+                xlab = xlab,
                 ylab = yType$ylab,
-                cex.main = 0.95           
+                cex.main = 0.95
             )
             abline(h = seq(0, 10, 1), col = "grey60")
             abline(v = seq(-100, 100, 10), col = "grey60")
@@ -68,6 +73,22 @@ svPropertiesPlotServer <- function(settings, svPointColors, filteredSvs){
 
             # add a legend
             pointColorLegend(stepSettings, plot$settings, svPointColors)
+
+            # write the source data table for publication
+            plot$write.table(
+                svs[plotted == TRUE, .(
+                    PROJECT,
+                    SAMPLES,
+                    -MICROHOM_LEN,
+                    yType$yval
+                )][order(PROJECT, SAMPLES)],
+                c( 
+                    "project",
+                    "sample",
+                    xlab,
+                    yType$ylab
+                )
+            )
         }
     )
 }

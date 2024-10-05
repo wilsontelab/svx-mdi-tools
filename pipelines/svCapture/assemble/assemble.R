@@ -77,7 +77,14 @@ sourceScripts(file.path(rUtilDir, 'sequence'), c('general')) # ,'IUPAC','smith_w
 #=====================================================================================
 # utility functions
 #-------------------------------------------------------------------------------------
-getProjectDir <- function(project) file.path(env$INPUT_DIR, project)
+inputDirs <- strsplit(env$INPUT_DIR, ",")[[1]]
+getProjectDir <- function(project) { # support multiple input directories to aggregate samples across higher order data sets
+    for(inputDir in inputDirs){
+        dir <- file.path(inputDir, project)
+        if(dir.exists(dir)) return(dir)
+    }
+    stop(paste("project directory not found:", project))
+}
 getSampleDir  <- function(project, sample) file.path(getProjectDir(project), sample)
 getSampleDir2 <- function(sample) getSampleDir(sample$project, sample$sample)
 getSampleExtractTask <- function(project, sample){
@@ -271,8 +278,25 @@ samples[, bin_coverages := NULL]
 
 #=====================================================================================
 message("tabulating and filtering SVs across all projects and samples")
-applySVFilters <- function(svs){
+applySVFilters <- function(project_, svs){
+
+    # reject SVs only found in original 'find' samples that were omitted from the assembly sample list
+    # strip the missing samples from the SAMPLES list when one was, one was not present
+    svSamples <- svs[, 
+        .(SAMPLE = strsplit(SAMPLES, ",")[[1]]),
+         by = SV_ID
+    ][
+        SAMPLE %in% samples[project == project_, unique(sample)]
+    ][, 
+        .(SAMPLES = paste(SAMPLE, collapse = ",")), 
+        by = SV_ID
+    ]
     svs <- svs[
+        SV_ID %in% svSamples$SV_ID
+    ][, 
+        SAMPLES := svSamples$SAMPLES
+    ][
+        # apply SV filters
         (JXN_TYPE == "T" | 
             (SV_SIZE >= env$MIN_SV_SIZE & 
              SV_SIZE <= env$MAX_SV_SIZE)
@@ -295,7 +319,7 @@ svs <- samples[, {
     projectFindFile <- getProjectFindFile(project, sample[1])
     isMultiSampleFind <- file.exists(projectFindFile)
     if(!isMultiSampleFind) stop("assembly of single-sample find inputs is not yet implemented")
-    applySVFilters(readRDS(projectFindFile))[, .(
+    applySVFilters(project, readRDS(projectFindFile))[, .(
         SV_ID,
         TARGET_REGION,
         TARGET_CLASS,
