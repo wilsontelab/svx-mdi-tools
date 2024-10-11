@@ -5,11 +5,9 @@ options:
         order: 1
         short: i
         type: string
-        directory:
-            must-exist: true
         required: true
         default: null
-        description: "data directory containing all project folders identified by --samples-table project column"
+        description: "comma-delimited data directories containing all project folders for --samples-table project column"
     samples-table: 
         order: 2
         short: s

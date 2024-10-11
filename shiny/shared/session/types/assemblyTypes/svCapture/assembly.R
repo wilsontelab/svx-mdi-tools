@@ -34,7 +34,7 @@ svCapture_loadAssembly <- function(assemblyOptions, settings, rdsFile, ...){
             assembly
         }
     )$value
-    x$samples[siRNA == "ctrl", siRNA := "-"]
+    if("siRNA" %in% names(x$samples)) x$samples[siRNA == "ctrl", siRNA := "-"]
     x
 }
 svCapture_getGroups <- function(assemblyOptions, groupedProjectSamples, groupingCols, input, ...){
@@ -481,6 +481,46 @@ svCapture_svFrequenciesServer <- function(...){
         addComparisons = function(plot, groups, comparisons){
             comparisonTest  <- plot$settings$get("SV_Frequency","Comparison_Test")
             assemblyPlot_addComparisons(plot, groups, comparisons, comparisonTests[[comparisonTest]])
+        }, 
+        dataSourceFn = function(plot, groupingCols, groups, splitDataTypes, dataTypes){ # write the source data table for publication 
+            sampleCols <- c("projects", "samples")
+            aggCols <- c(groupingCols, "nSamples", "nSvs", "coverage")
+            if(splitDataTypes) {
+                sampleStatsCols <- character()
+                groupStatsCols <- c(
+                    paste("meanSampleValue", dataTypes, sep = "__"),
+                    paste("sdSampleValue",   dataTypes, sep = "__")
+                )
+                sampleValueCols <- paste("sampleValues", dataTypes, sep = "__")
+            } else {
+                sampleStatsCols <- c("nSvss", "coverages")
+                groupStatsCols <- c("meanSampleValue", "sdSampleValue")
+                sampleValueCols <- "sampleValues"
+            } 
+            dt <- groups[, .SD, .SDcols = c(sampleCols, aggCols, sampleStatsCols, groupStatsCols, sampleValueCols)] # already ordered
+            sdCols <- c(sampleCols, groupingCols, sampleStatsCols, sampleValueCols)
+            dtSD <- dt[, .SD, .SDcols = sdCols][, lapply(.SD, unlist), by = groupingCols][, .SD, .SDcols = sdCols]
+            dtAgg <- dt[, .SD, .SDcols = c(aggCols, groupStatsCols)]
+            for(col in sampleValueCols) dtSD[[col]] <- round(dtSD[[col]], 5)
+            nameSubs <- list(
+                projects = "project",
+                samples  = "sample",
+                sampleValues__ = "",
+                SampleValue__ = "_",
+                nSvss = "nSvs",
+                coverages = "netCoverage",
+                sampleValues = "SV_frequency",
+                meanSampleValue = "mean_SV_frequency",
+                sdSampleValue = "sd_SV_frequency"
+            )
+            for(i in 1:length(nameSubs)){
+                colnames(dtSD)  <- gsub(names(nameSubs)[i], nameSubs[[i]], colnames(dtSD))
+                colnames(dtAgg) <- gsub(names(nameSubs)[i], nameSubs[[i]], colnames(dtAgg))
+            }
+            plot$write.table(dtSD)
+            message(logDividingLine)
+            message(paste("svCapture_svFrequenciesServer", "group aggregates"))
+            print(dtAgg)
         }
     )
 }
@@ -500,6 +540,7 @@ svCapture_microhomologyServer <- function(
             )
         )
     )
+    xlab <- "Breakpoint Offset (bp)"
     microhomologyPlot <- assemblyDensityPlotServer(
         id, session, input, output, 
         isProcessingData, assemblyOptions,
@@ -511,7 +552,7 @@ svCapture_microhomologyServer <- function(
             )
         ),
         extraSettings = microhomologySettings,
-        xlab = "Insert Size (bp)",
+        xlab = xlab,
         ylab = function(Y_Axis_Value) if(Y_Axis_Value == "Weighted") "SV Frequency" else Y_Axis_Value,
         eventPlural = "SVs", 
         defaultBinSize = 1,
@@ -541,8 +582,12 @@ svCapture_microhomologyServer <- function(
             }, by = .(groupLabel)]
             svs$groupWeights <- as.list(groupCoverage$coverage)
             names(svs$groupWeights) <- groupCoverage$groupLabel
+            message(logDividingLine)
+            message(paste("svCapture_microhomologyServer", "junction offsets"))
+            print(svs$dt[, .(nSVs = .N, nSamples = length(unique(sample))), by = .(groupLabel)])
             svs
-        }
+        },
+        dataSourceFn = function(...) assemblyDensityPlot_dataSourceFn(..., xlab = xlab)
     )
 }
 #----------------------------------------------------------------------
@@ -561,11 +606,12 @@ svCapture_svSizesServer <- function(
             )
         )
     )
+    xlab <- "SV Size (log10 bp)"
     sizesPlot <- assemblyDensityPlotServer(
         id, session, input, output, 
         isProcessingData, assemblyOptions,
         sourceId, assembly, groupedProjectSamples, groupingCols, groups,
-        xlab = "SV Size (log10 bp)",
+        xlab = xlab,
         eventPlural = "SVs",
         extraSettings = sizeSettings,
         defaultBinSize = 0.1,
@@ -587,9 +633,13 @@ svCapture_svSizesServer <- function(
             ] %>% regroupToUserConditions(
                 groupingCols, conditions, groupLabels
             ) %>% splitSvsByJxnType(sizesPlot$plot, "SV_Sizes", groupingCols, assembly)
+            message(logDividingLine)
+            message(paste("svCapture_svSizesServer", "group counts"))
+            print(svs$dt[, .(nSVs = .N, nSamples = length(unique(sample))), by = .(groupLabel)])
             svs$dt[, x := log10(SV_SIZE)]
             svs
-        }
+        },
+        dataSourceFn = function(...) assemblyDensityPlot_dataSourceFn(..., xlab = xlab)
     )
 }
 #----------------------------------------------------------------------
@@ -630,11 +680,13 @@ svCapture_correlationServer <- function(
         maxDist <- plot$settings$get("Correlation","Max_Jxn_Size")
         ymin <- min(d$SV_SIZE)
         ymax <- max(d$SV_SIZE)
+        xlab <- "Breakpoint Offset (bp)"
+        ylab <- "SV Size (log10 bp)"
         plot$initializeFrame(
             xlim = c(-maxDist, maxDist),
             ylim = c(ymin, ymin + (ymax - ymin) * 1.2),
-            xlab = "Insert Size (bp)",
-            ylab = "SV Size (log10 bp)"
+            xlab = xlab,
+            ylab = ylab
         )
         abline(v = seq(-50, 50, 5), col = "grey50")
         abline(h = 4:7, col = "grey50")
@@ -645,6 +697,15 @@ svCapture_correlationServer <- function(
             cex = 0.5
         )
         svx_svTypes_addTopLegend(plot, d$JXN_TYPE, type = "point")
+
+        # write the source data table for publication
+        dt <- data.table(
+            junctionType = svx_jxnType_altCodeToX(d$JXN_TYPE, "longName"),
+            -d$MICROHOM_LEN,
+            d$SV_SIZE
+        )[order(junctionType)]
+        plot$write.table(dt, c("junctionType", xlab, ylab))
+        print(dt[, .N, by = .(junctionType)])
     }
     correlationPlot <- assemblyXYPlotServer(
         id, session, input, output, 
@@ -776,11 +837,12 @@ svCapture_endpointsServer <- function(
         }
         x
     }
+    xlab <- "SV Endpoint Coordinate (Mbp)"
     endpointsPlot <- assemblyDensityPlotServer(
         id, session, input, output, 
         isProcessingData, assemblyOptions,
         sourceId, assembly, groupedProjectSamples, groupingCols, groups,
-        xlab = "SV Endpoint Coordinate (Mbp)",
+        xlab = xlab,
         eventPlural = "ends",
         insideWidth = 1.25, 
         insideHeightPerBlock = 0.625,
@@ -809,9 +871,11 @@ svCapture_endpointsServer <- function(
                 xCol = "POS", 
                 dataFn = getSvEndpoints
             ) %>% normalizeSvEndpoints(conditions, groupLabels)
-        }
+        },
+        dataSourceFn = function(...) assemblyDensityPlot_dataSourceFn(..., xlab = xlab)
     )
 }
+
 #----------------------------------------------------------------------
 # target region coverage profiles
 # ----------------------------------------------------------------------
@@ -829,11 +893,12 @@ svCapture_coverageServer <- function(
             )
         )
     )
+    xlab <- "Coordinate (Mbp)"
     coveragePlot <- assemblyDensityPlotServer(
         id, session, input, output, 
         isProcessingData, assemblyOptions,
         sourceId, assembly, groupedProjectSamples, groupingCols, groups,
-        xlab = "Coordinate (Mbp)", 
+        xlab = xlab, 
         eventPlural = "samples",
         insideWidth = 1.25, 
         insideHeightPerBlock = 0.625,
@@ -853,7 +918,8 @@ svCapture_coverageServer <- function(
         trackLabelPosition = "center",
         dataFn = function(...) svCapture_getTargetCoverages(
             assembly, groupedProjectSamples, groupingCols, NULL, coveragePlot$plot, ...
-        )
+        ),
+        dataSourceFn = function(...) assemblyDensityPlot_dataSourceFn(..., xlab = xlab)
     )
 }
 #----------------------------------------------------------------------
@@ -1055,6 +1121,7 @@ svCapture_arcsServer <- function(
             settings = settings, 
             size = "m",
             Plot_Frame = reactive({ plotFrameReactive()$frame }),
+            data = TRUE,
             create = function() {
                 d <- dataReactive()
                 plotAs <- assemblyPlot$plot$settings$get("Arcs","Arc_Plot_Type")
@@ -1064,6 +1131,9 @@ svCapture_arcsServer <- function(
                 par(mar = plotFrameReactive()$mar)
                 svs <- d$data
                 get(paste("svx_plotArcs", plotAs, sep = "_"))(assemblyPlot$plot, svs, input, assembly)
+                x <- svs$intraTarget[, .(svx_jxnType_altCodeToX(JXN_TYPE, "longName"), OFFSET_1, OFFSET_2, TARGET_REGION, SV_ID)]
+                setnames(x, c("jxnType","leftDistance","rightDistance","targetRegion","svId"))
+                assemblyPlot$plot$write.table(x[order(jxnType, leftDistance, rightDistance)])# NOT downsampled
                 stopSpinner(session)
             }
         )
@@ -1512,7 +1582,7 @@ svx_getInsertionPlotMetadata <- function(assembly, settings){
         foldback     = "foldback", 
         palindrome   = "palindrome",
         crossJxn     = "cross-junction",
-        slippage     = "slippage",
+        slippage     = "expansion",
         strandSwitch = "strand-switch", 
         other        = "other"
     )
@@ -1576,11 +1646,13 @@ svx_plotInsertions_nTemplateInstances <- function(plot, svs, assembly = NULL){
     density <- svs[, .(
         nSvs = .N
     ), keyby = .(templateInstances)]
+    xlab <- "# of Templates Identified"
+    ylab <- "# of SVs"
     plot$initializeFrame(
         xlim = c(min(density$templateInstances) - 0.5, max(density$templateInstances) + 0.5),
         ylim = c(0, max(density$nSvs) * 1.05),
-        xlab = "# of Found Templates",
-        ylab = "# of SVs",
+        xlab = xlab,
+        ylab = ylab,
         title = svx_getInsertionsTitle(assembly, plot$settings, sum(density$nSvs))
     )     
     plot$addPoints(
@@ -1590,6 +1662,14 @@ svx_plotInsertions_nTemplateInstances <- function(plot, svs, assembly = NULL){
         typ = "h",
         lwd = 6
     )
+    # report data source for manuscript
+    message(logDividingLine)
+    message(paste("svx_plotInsertions_nTemplateInstances", "total SVs"))
+    print(density[, .(nSvs = sum(nSvs))])
+    plot$write.table(data.table(
+        x = density$templateInstances,
+        y = density$nSvs
+    )[order(x)], c(xlab, ylab))
 }
 svx_plotInsertions_yield <- function(plot, svs, assembly = NULL){
     md <- svx_getInsertionPlotMetadata(assembly, plot$settings)
@@ -1605,12 +1685,13 @@ svx_plotInsertions_yield <- function(plot, svs, assembly = NULL){
     )][, 
         pValue := 1 - pbinom(nFound - 1, nSvs, trialSuccessProb)
     ]
-    print(yield[, .(nSvs = sum(nSvs), nFound = sum(nFound))])
+    xlab <- "Insertion Size (bp)"
+    ylab <- "% Templates Identified"
     plot$initializeFrame(
         xlim = range(-yield$MICROHOM_LEN),
         ylim = c(0, min(100, max(yield$successRate, yield$trialSuccessProb) * 110)),
-        xlab = "Insert Size (bp)",
-        ylab = "% Found Templates",
+        xlab = xlab,
+        ylab = ylab,
         title = svx_getInsertionsTitle(assembly, plot$settings, sum(yield$nSvs))
     )  
     plot$addLines(
@@ -1618,19 +1699,19 @@ svx_plotInsertions_yield <- function(plot, svs, assembly = NULL){
         y = yield$trialSuccessProb * 100,
         col = CONSTANTS$plotlyColors$blue
     )
-    plot$addPoints(
-        x = -yield$MICROHOM_LEN,
-        y = yield$trialSuccessProb * 100,
-        pch = 19,
-        col = "white"
-    )
-    plot$addPoints(
-        x = -yield$MICROHOM_LEN,
-        y = yield$trialSuccessProb * 100,
-        pch = rev(as.character(md$flankUHom)),
-        col = CONSTANTS$plotlyColors$black,
-        cex = 0.85
-    )
+    # plot$addPoints(
+    #     x = -yield$MICROHOM_LEN,
+    #     y = yield$trialSuccessProb * 100,
+    #     pch = 19,
+    #     col = "white"
+    # )
+    # plot$addPoints(
+    #     x = -yield$MICROHOM_LEN,
+    #     y = yield$trialSuccessProb * 100,
+    #     pch = rev(as.character(md$flankUHom)),
+    #     col = CONSTANTS$plotlyColors$black,
+    #     cex = 0.85
+    # )
     plot$addPoints(
         x = -yield$MICROHOM_LEN,
         y = yield$successRate * 100,
@@ -1655,6 +1736,15 @@ svx_plotInsertions_yield <- function(plot, svs, assembly = NULL){
         lty = c(NA, NA, 1),
         lwd = c(NA, NA, 1)
     )
+    # report data source for manuscript
+    message(logDividingLine)
+    message(paste("svx_plotInsertions_yield", "yield summary"))
+    print(yield[, .(nSvs = sum(nSvs), nFound = sum(nFound))])
+    plot$write.table(data.table(
+        x = -yield$MICROHOM_LEN,
+        y = round(yield$successRate * 100, 4),
+        p = signif(yield$pValue, 3)
+    )[order(x)], c(xlab, ylab, "p-value"))
 }
 svx_plotInsertions_map <- function(plot, svs, assembly = NULL){
     md <- svx_getInsertionPlotMetadata(assembly, plot$settings)
@@ -1805,6 +1895,17 @@ svx_plotInsertions_pileup <- function(plot, svs, assembly = NULL){
         }
     }, keyby = .(plotOrder, series)]
     svx_insertions_addTopLegend(plot, md)
+    # report data source for manuscript
+    message(logDividingLine)
+    message(paste("svx_plotInsertions_pileup", "plotted SVs"))
+    print(svs[, .N])
+    plot$write.table(svs[, .(
+        templateBreakpointN,
+        templateIsBottomStrand = templateIsRc,
+        templateType,
+        startPos,
+        endPos
+    )][order(templateBreakpointN, templateIsBottomStrand, templateType, startPos, endPos)])
 }
 svx_plotInsertions_histogram <- function(plot, svs, assembly = NULL){
     md <- svx_getInsertionPlotMetadata(assembly, plot$settings)
@@ -1829,11 +1930,13 @@ svx_plotInsertions_histogram <- function(plot, svs, assembly = NULL){
     )
     d[is.na(d)] <- 0
     templateTypes <- intersect(names(md$typeColors), names(d))
+    xlab <- "Distance from Junction (bp)"
+    ylab <- "# Templates"
     plot$initializeFrame(
         xlim = c(-md$maxDist, md$maxDist),
         ylim = c(0, d[, max(.SD, na.rm = TRUE) * 1.5, .SDcols = templateTypes]),
-        xlab = "Distance from Junction (bp)",
-        ylab = "# Templates",
+        xlab = xlab,
+        ylab = ylab,
         # yaxt = "n",
         bty = "n",
         title = svx_getInsertionsTitle(assembly, plot$settings, sum(nrow(svs)))
@@ -1846,16 +1949,21 @@ svx_plotInsertions_histogram <- function(plot, svs, assembly = NULL){
         lines(dd$pos, dd[[type]], col = md$typeColors[[type]], lwd = lwd, lty = bpn)
     }
     svx_insertions_addTopLegend(plot, md)
+    # report data source for manuscript
+    plot$write.table(d)
 }
 svx_plotInsertions_microhomologyLengths <- function(plot, svs, assembly = NULL){
     md <- svx_getInsertionPlotMetadata(assembly, plot$settings)
     svs <- svs[templateType != "notFound"]
     xylim <- c(0.4, 8.6)
+    xlab <- "Priming Microhomology (bp)"
+    ylab <- "Resolving Microhomology (bp)"
+    zlab <- "# of SVs"
     plot$initializeFrame(
         xlim = xylim,
         ylim = xylim,
-        xlab = "Priming Microhomology (bp)",
-        ylab = "Resolving Microhomology (bp)",
+        xlab = xlab,
+        ylab = ylab,
         title = svx_getInsertionsTitle(assembly, plot$settings, nrow(svs)),
         xaxs = "i",
         yaxs = "i"
@@ -1894,7 +2002,7 @@ svx_plotInsertions_microhomologyLengths <- function(plot, svs, assembly = NULL){
         ),
         templateType
     ), by = .(templateType, templateBreakpointN)]
-    mdiLevelPlot(
+    dt <- mdiLevelPlot(
         d,
         xlim = xylim,
         xinc = 1,
@@ -1903,21 +2011,26 @@ svx_plotInsertions_microhomologyLengths <- function(plot, svs, assembly = NULL){
         z.fn = function(d) sum(!is.na(d)),   # function applied to z.columnumn, per grid spot, to generate the output color
         z.column = "x", # the column in dt passed to z.fn, per grid spot
         settings = levelPlotSettings, # a settings object from the enclosing staticPlotBox, or any list compatible with mdiLevelPlotSettings
-        legendTitle = "# of SVs",
+        legendTitle = zlab,
         h = c(mode(d$y), quantile(d$y, c(0.5, 0.95), na.rm = TRUE)),
         v = c(mode(d$x), quantile(d$x, c(0.5, 0.95), na.rm = TRUE))
     )
+    # report data source for manuscript
+    plot$write.table(dt[order(x, y)], c(xlab, ylab, zlab))
 }
 svx_plotInsertions_templateSizes <- function(plot, svs, assembly = NULL){
     md <- svx_getInsertionPlotMetadata(assembly, plot$settings)
     svs <- svs[templateType != "notFound"]
     xlim <- c(1 - 0.6, md$maxInsertionSize + 4.6) #m d$minInsertionSize - 
     ylim <- c(1 - 0.6, md$maxInsertionSize + 4.6)  # md$minTemplateSize - 
+    xlab <- "Insertion Size (bp)"
+    ylab <- "Total Template Size (bp)"
+    zlab <- "# of SVs"
     plot$initializeFrame(
         xlim = xlim,
         ylim = ylim,
-        xlab = "Insertion Size (bp)",
-        ylab = "Total Template Size (bp)",
+        xlab = xlab,
+        ylab = ylab,
         title = svx_getInsertionsTitle(assembly, plot$settings, nrow(svs)),
         xaxs = "i",
         yaxs = "i"
@@ -1940,7 +2053,7 @@ svx_plotInsertions_templateSizes <- function(plot, svs, assembly = NULL){
         y = -MICROHOM_LEN + templateStartFm + templateEndFm,
         templateType
     )]
-    mdiLevelPlot(
+    dt <- mdiLevelPlot(
         d,
         xlim = xlim,
         xinc = 1,
@@ -1949,10 +2062,12 @@ svx_plotInsertions_templateSizes <- function(plot, svs, assembly = NULL){
         z.fn = function(d) sum(!is.na(d)),   # function applied to z.columnumn, per grid spot, to generate the output color
         z.column = "x", # the column in dt passed to z.fn, per grid spot
         settings = levelPlotSettings, # a settings object from the enclosing staticPlotBox, or any list compatible with mdiLevelPlotSettings
-        legendTitle = "# of SVs",
+        legendTitle = zlab,
         h = c(mode(d$y), quantile(d$y, c(0.5, 0.95), na.rm = TRUE)),
         v = c(mode(d$x), quantile(d$x, c(0.5, 0.95), na.rm = TRUE))
     )
+    # report data source for manuscript
+    plot$write.table(dt[order(x, y)], c(xlab, ylab, zlab))
 }
 svCapture_insertionTemplatesServer <- function(
     id, session, input, output, 
@@ -2119,6 +2234,7 @@ svCapture_insertionTemplatesServer <- function(
             settings = settings, 
             size = "m",
             Plot_Frame = reactive({ plotFrameReactive()$frame }),
+            data = TRUE,
             create = function() {
                 d <- dataReactive()
                 plotAs <- assemblyPlot$plot$settings$get("Insertions","Plot_Insertions_As")
@@ -2190,8 +2306,11 @@ svCapture_junctionPropertiesTable <- function(
     ]
 
     groupBy <- if(mode == "plot"){
-        samples[, initialGroupLabel := groupLabel] %>% setAssemblyGroupLabels(conditions)
-        svs[,     initialGroupLabel := groupLabel] %>% setAssemblyGroupLabels(conditions)
+        # samples[, initialGroupLabel := groupLabel] %>% setAssemblyGroupLabels(conditions)
+        # svs[,     initialGroupLabel := groupLabel] %>% setAssemblyGroupLabels(conditions)
+        # thus, now, every sample will plot at its own data point, colored by the group to which it belongs
+        samples[, initialGroupLabel := paste(project, sample, groupLabel, sep = "~~~")] %>% setAssemblyGroupLabels(conditions)
+        svs[,     initialGroupLabel := paste(project, sample, groupLabel, sep = "~~~")] %>% setAssemblyGroupLabels(conditions)
         c("initialGroupLabel", "groupLabel")
     } else {
         conditions
@@ -2285,6 +2404,18 @@ svCapture_junctionPropertiesTable <- function(
         by = groupBy
     ]
 }
+#          [1] "initialGroupLabel"   "groupLabel"          "nProjects"
+#  [4] "nSamples"            "coverage"            "nSVs"
+#  [7] "nSequenced"          "SV_Frequency"        "SV_Freq_mean"       
+# [10] "SV_Freq_sd"          "avgMicrohomology"    "nInsertions"
+# [13] "Insertion_Frequency" "Insertion_Freq_mean" "Insertion_Freq_sd"
+# [16] "percentInsertions"   "nFound"              "percentFound"
+# [19] "TINS_Frequency"
+# Warning in min(x, na.rm = na.rm) :
+#   no non-missing arguments to min; returning Inf
+# Warning in max(x, na.rm = na.rm) :
+#   no non-missing arguments to max; returning -Inf
+# <simpleError in plot.new(): figure margins too large>
 svCapture_junctionPropertiesPlotServer <- function(
     id, session, input, output, 
     isProcessingData, assemblyOptions,
@@ -2315,23 +2446,6 @@ svCapture_junctionPropertiesPlotServer <- function(
     }
     plotFn = function(plot, d){
         d <- d$data
-
-        print(names(d))
-
-        dstr(d)
-#          [1] "initialGroupLabel"   "groupLabel"          "nProjects"
-#  [4] "nSamples"            "coverage"            "nSVs"
-#  [7] "nSequenced"          "SV_Frequency"        "SV_Freq_mean"       
-# [10] "SV_Freq_sd"          "avgMicrohomology"    "nInsertions"
-# [13] "Insertion_Frequency" "Insertion_Freq_mean" "Insertion_Freq_sd"
-# [16] "percentInsertions"   "nFound"              "percentFound"
-# [19] "TINS_Frequency"
-# Warning in min(x, na.rm = na.rm) :
-#   no non-missing arguments to min; returning Inf
-# Warning in max(x, na.rm = na.rm) :
-#   no non-missing arguments to max; returning -Inf
-# <simpleError in plot.new(): figure margins too large>
-dmsg(1111)
         ycol <- plot$settings$get("Insertions","Y_Value")
         if(ycol == "averageMicrohomology") ycol <- "avgMicrohomology"
         xlim <- range(d$percentInsertions, na.rm = TRUE)
@@ -2340,9 +2454,9 @@ dmsg(1111)
             xlim = xlim,
             ylim = ylim,
             xlab = "Percent Insertions",
-            ylab = if(ycol == "avgMicrohomology") "Avg. Microhomology (bp)" else "Percent Found Templates"
+            ylab = if(ycol == "avgMicrohomology") "Avg. Microhomology (bp)" else "Percent Templates Identified"
         )
-        colorGroups <- unique(d$groupLabel)
+        colorGroups <- sort(unique(d$groupLabel))
         colors <- CONSTANTS$plotlyColors[1:length(colorGroups)]
         names(colors) <- colorGroups
         mdiXYPlot(
@@ -2369,6 +2483,26 @@ dmsg(1111)
             # groupV = NULL, # a list named with group names of X-axis values at which to place group-specific line rules
         )
     }
+    dataSourceFn <- function(plot, d){
+        d <- d$data
+        ycol <- plot$settings$get("Insertions","Y_Value")
+        if(ycol == "averageMicrohomology") ycol <- "avgMicrohomology"
+        d$project <- sapply(d$initialGroupLabel, function(x) strsplit(x, "~~~")[[1]][1])
+        d$sample  <- sapply(d$initialGroupLabel, function(x) strsplit(x, "~~~")[[1]][2])
+        dt <- d[, .SD, .SDcols = c(
+            "groupLabel",
+            "project",
+            "sample",
+            "coverage",
+            "nSVs",
+            "percentInsertions",
+            ycol
+        )][order(groupLabel)]
+        plot$write.table(dt)
+        message(logDividingLine)
+        message("svCapture_junctionPropertiesPlotServer sample counts")
+        print(dt[, .N, by = .(groupLabel)])
+    }
     assemblyPlot <- assemblyXYPlotServer(
         id, session, input, output, 
         isProcessingData, assemblyOptions,
@@ -2386,7 +2520,8 @@ dmsg(1111)
         },
         points = TRUE,
         dataFn = tableFn, 
-        plotFn = plotFn
+        plotFn = plotFn,
+        dataSourceFn = dataSourceFn
     )
 }
 svCapture_junctionPropertiesTableServer <- function(
@@ -2484,7 +2619,6 @@ svx_plotCoverage_N50 <- function(plot, samples){
     )
 }
 svx_plotCoverage_N50_correlation <- function(plot, samples){
-
     plot$initializeFrame(
         xlim = range(samples$N50),
         ylim = range(samples$coverage),
@@ -2498,6 +2632,12 @@ svx_plotCoverage_N50_correlation <- function(plot, samples){
         pch = 19,
         cex = 0.25
     )
+    # write the source data table for publication
+    x <- cbind(
+        t(as.data.table(strsplit(samples$sampleKey, "::"))),
+        samples[, .(N50, coverage)]
+    )
+    plot$write.table(x, c("project","sample","N50","coverage"))
 }
 # ---------------------------------------------------------------------
 svCapture_sampleCoveragesPlotServer <- function(
@@ -2597,6 +2737,7 @@ svCapture_sampleCoveragesPlotServer <- function(
             settings = settings, 
             size = "m",
             Plot_Frame = reactive({ plotFrameReactive()$frame }),
+            data = TRUE,
             create = function() {
                 d <- dataReactive()
                 plotAs <- assemblyPlot$plot$settings$get("Coverage","Plot_Coverage_As")

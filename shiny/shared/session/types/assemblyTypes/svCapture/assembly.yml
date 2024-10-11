@@ -2,7 +2,7 @@
 assemblyVersion: 1
 
 # caching: use "once" when debugging data loads, otherwise use "asNeeded"
-cacheCreateLevel: asNeeded
+cacheCreateLevel: once
 
 # application-specific settings
 settings:
