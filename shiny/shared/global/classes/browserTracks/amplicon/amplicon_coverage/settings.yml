@@ -1,0 +1,8 @@
+trackType:
+    - binned_XY
+    - svx_coverage
+override:
+    Data:
+        Plot_As: points
+    X_Axis:
+        Max_Bins: 500

@@ -3,19 +3,20 @@
 #----------------------------------------------------------------------
 
 # constructor for the S3 class
-new_svx_coverageTrack <- function(trackId) {
+new_svx_coverageTrack <- function(trackId, click = FALSE, expand = NULL) {
     list( 
-        click = FALSE,
+        click = click,
         hover = FALSE,
         brush = FALSE,
         items = TRUE,
-        expand = NULL,
+        expand = expand,
         NULL
     )
 }
 
 # build method for the S3 class; REQUIRED
-build.svx_coverageTrack <- function(track, reference, coord, layout, loadFn){
+build.svx_coverageTrack <- function(track, reference, coord, layout, loadFn, 
+                                    highlightsFn = NULL, highlightsStyle = "backgroundShading"){
     req(coord, coord$chromosome)
 
     # get operating parameters
@@ -40,22 +41,22 @@ build.svx_coverageTrack <- function(track, reference, coord, layout, loadFn){
         aggregateTabixBins(track, coord, plotBinSize) %>%
         svx_maskLowQualityBins()
     }
-    cnvHighlightsFn <- function(track, reference, coord, sampleName, sample){
-        I <- sapply(names(selectedSources), function(x) sampleName %in% selectedSources[[x]]$Sample_ID)
-        x <- svx_getHmmCnvs(names(selectedSources)[I])
-        if(!isTruthy(x)) return(NULL)
-        x$value[[sampleName]][
-            chrom == coord$chromosome &
-            start <= coord$end & 
-            coord$start <= end &
-            !is.na(edgeType),
-            .(
-                x1 = start,
-                x2 = end,
-                color = ifelse(edgeType == svx_edgeTypes$DUPLICATION, rgb(1,0.2,0.2,0.075), rgb(0.2,0.2,1,0.075))
-            )
-        ]
-    }
+    # cnvHighlightsFn <- function(track, reference, coord, sampleName, sample){
+    #     I <- sapply(names(selectedSources), function(x) sampleName %in% selectedSources[[x]]$Sample_ID)
+    #     x <- svx_getHmmCnvs(names(selectedSources)[I])
+    #     if(!isTruthy(x)) return(NULL)
+    #     x$value[[sampleName]][
+    #         chrom == coord$chromosome &
+    #         start <= coord$end & 
+    #         coord$start <= end &
+    #         !is.na(edgeType),
+    #         .(
+    #             x1 = start,
+    #             x2 = end,
+    #             color = ifelse(edgeType == svx_edgeTypes$DUPLICATION, rgb(1,0.2,0.2,0.075), rgb(0.2,0.2,1,0.075))
+    #         )
+    #     ]
+    # }
 
     # build the binned_XY_track
     isDifference <- nSamples > 1 && getTrackSetting(track, "Data", "Aggregate", "none") == "difference"
@@ -65,7 +66,8 @@ build.svx_coverageTrack <- function(track, reference, coord, layout, loadFn){
         stranded = FALSE, 
         allowNeg = isDifference, 
         ylab = if(isDifference) paste(Plot_Type, "Change") else Plot_Type,
-        center = TRUE, binSize = plotBinSize
+        center = TRUE, binSize = plotBinSize,
+        highlightsFn = highlightsFn, highlightsStyle = highlightsStyle
         # ,
         # highlightsFn = cnvHighlightsFn
     )
