@@ -78,6 +78,9 @@ elif [ "$ON_TARGET" = "1" ]; then
 else 
     TARGET_CLASS_FILTER=""
 fi
+if [ "$MIN_FOLDBACK_SIZE" = "" ]; then
+    MIN_FOLDBACK_SIZE=0
+fi
 
 #-----------------------------------------------------------------
 # break junctions into continuity groups and parse to called SVs
@@ -89,6 +92,7 @@ awk 'BEGIN{OFS="\t"}'$TARGET_CLASS_FILTER'{
     split($'$NODE_2', n2, ":");
     print n2[1]":"n2[2]":"n1[1]":"n1[2], n1[3], n2[3], $0;
 }' |
+awk 'function abs(x){ (x < 0) ? -x : x }$15 != "I" || abs($3 - $2) >= '$MIN_FOLDBACK_SIZE | # suppress library foldback artifacts
 $SORT -k1,1 -k2,2n | 
 perl $ACTION_DIR/find/group_junctions.pl | 
 Rscript $ACTION_DIR/find/call_svs.R

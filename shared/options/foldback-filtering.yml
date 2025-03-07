@@ -1,0 +1,10 @@
+---
+# additional options used during SV finding algorithms
+options:
+    min-foldback-size: 
+        order: 1
+        short: null
+        type: integer
+        required: false
+        default: 1000
+        description: "suppress inversions less than this size as likely library foldback artifacts"  
