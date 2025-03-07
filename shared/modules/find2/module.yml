@@ -9,6 +9,7 @@ action: # required
         - genomex-mdi-tools//genome
         - genomex-mdi-tools//read-merging
         - sv-filtering
+        - foldback-filtering
         - genomex-mdi-tools//target-region
         - genomex-mdi-tools//fixed-width-bins 
     resources:
