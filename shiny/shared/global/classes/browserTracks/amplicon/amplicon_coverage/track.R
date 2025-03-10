@@ -74,7 +74,7 @@ click.amplicon_coverageTrack <- function(track, click, regionI){
     #       share the same CN state
     #       are interrupted by a region of (higher?) CN
 
-    do.call(c, lapply(names(selectedSources), function(sourceId_)){
+    do.call(c, lapply(names(selectedSources), function(sourceId_){
         sapply(selectedSources[[sourceId_]]$Sample_ID, function(sampleName_){
             coverage <- svWGS_loadSampleCoverage(sourceId, sampleName_)[[paste0("x", power)]]
             # x0 <- coverage[, .(
@@ -122,7 +122,7 @@ click.amplicon_coverageTrack <- function(track, click, regionI){
                 CN_states = NULL
             )
         }, simplify = FALSE, USE.NAMES = TRUE)
-    }) %>% amplicon_highCopyRegions()
+    })) %>% amplicon_highCopyRegions()
 }
 
 # expand method for the S3 class
