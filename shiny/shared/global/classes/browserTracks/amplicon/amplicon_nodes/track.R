@@ -5,12 +5,12 @@
 #----------------------------------------------------------------------
 amplicon_nodesTrackBuffer <- reactiveValues()
 amplicon_nodesExpand <- reactiveVal(NULL)
-amplicon_loadJunctions(targetId){
-    jxns <- svWGS_loadJunctions(targetId)
-    # likely use data.table intersect function here
-    # denote junctions as within or between (also, 1-end in?)
-    jxns
-}
+# amplicon_loadJunctions(targetId){
+#     jxns <- svWGS_loadJunctions(targetId)
+#     # likely use data.table intersect function here
+#     # denote junctions as within or between (also, 1-end in?)
+#     jxns
+# }
 
 # constructor for the S3 class
 new_amplicon_nodesTrack <- function(...) {
