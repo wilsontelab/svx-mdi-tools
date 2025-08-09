@@ -18,12 +18,25 @@ my $usage = "perl alias.pl ALIAS_NAME\nadds an alias to './run', called ALIAS NA
 #========================================================================
 # main execution block
 #------------------------------------------------------------------------
+my $MDI_CENTRIC   = "mdi-centric";
+my $SUITE_CENTRIC = "suite-centric";
+my $SUITE_MODE    = $MDI_CENTRIC;
+my $MDI_DIR       = "../../..";
+if( !-f "$MDI_DIR/mdi" or !-d "$MDI_DIR/frameworks" or !-d "$MDI_DIR/suites" ) {
+    $SUITE_MODE = $SUITE_CENTRIC; # i.e., this is the top-level of a single-suite installation
+}
+if( $SUITE_MODE eq $MDI_CENTRIC ) {
+    print STDERR "\nNothing to do.\n\n";
+    print STDERR "This copy of the tool suite is part of an MDI installation in directory:\n    $MDI_DIR\n\n";
+    print STDERR "This alias.pl script is only useful in the top directory of a single-suite installation.\n\n";
+    exit 1;
+}
 
 # parse the options and apply defaults
 my ($alias) = @ARGV;
 $alias or throwError("missing alias name");
-my $bashrc = "~/.bashrc";
-my $suiteDir = dirname(__FILE__);
+my $bashrc = "$ENV{HOME}/.bashrc";
+my $suiteDir = $ENV{PWD};
 my $aliasCommand = "alias $alias=\"$suiteDir/run\"";
 my $outLine = "$aliasCommand # written by MDI alias\n";
 

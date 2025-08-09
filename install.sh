@@ -28,7 +28,7 @@ export SUITE_MODE=$MDI_CENTRIC
 export MDI_DIR=$SUITE_DIR/../../..
 export MDI_TARGET=$MDI_DIR/mdi
 if [[ ! -d  "$MDI_DIR/frameworks" || ! -d  "$MDI_DIR/suites" || ! -f  "$MDI_TARGET" ]]; then
-    export SUITE_MODE="$SUITE_CENTRIC"
+    export SUITE_MODE="$SUITE_CENTRIC" # i.e., this is the top-level of a single-suite installation
     export MDI_DIR="$SUITE_DIR/mdi"
     export MDI_TARGET="$MDI_DIR/mdi"
 fi
@@ -41,7 +41,8 @@ if [ "$IS_READLINK" != "" ]; then export MDI_DIR=`readlink -f $MDI_DIR` ; fi
 if [ "$SUITE_MODE" = "$MDI_CENTRIC" ]; then
     echo -e "\nNothing to do.\n"
     echo -e "This copy of '$SUITE_NAME' is part of an MDI installation in directory:\n    $MDI_DIR\n"
-    echo -e "Use it by calling the 'mdi' command line utility in that directory.\n"
+    echo -e "Use it by calling the 'mdi' command line utility in that directory (multi-suite installation)"
+    echo -e "or the 'run' script in the parent of that directory (single suite installation).\n"
     exit 1
 fi
 
@@ -126,16 +127,8 @@ $MDI_DIR/install.sh 1
 #----------------------------------------------------------------------
 echo "cleaning up this suite directory"
 cd $SUITE_DIR
-rm -fr .git pipelines shared shiny
+rm -fr docs .git pipelines shared shiny templates
 rm -f  aws-mdi.md .gitignore index.html .lintr overview.md
-
-#----------------------------------------------------------------------
-# remove the install and run scripts from all nested suite directories
-#----------------------------------------------------------------------
-echo "cleaning up all nested suite directories"
-NESTED_SUITES_DIR=$MDI_DIR/suites/definitive
-rm -f $NESTED_SUITES_DIR/*/install* 
-rm -f $NESTED_SUITES_DIR/*/run* 
 
 # -----------------------------------------------------------------------
 # function to check for valid singularity
@@ -161,6 +154,7 @@ function set_singularity_version {
 # discover whether any of the tool suites offer Stage 2 apps
 # if so, and not supported by suite-level container, offer to install the apps server 
 #----------------------------------------------------------------------
+NESTED_SUITES_DIR=$MDI_DIR/suites/definitive
 IS_APPS=`perl -e '
 foreach my $dir(glob("'$NESTED_SUITES_DIR'/*/shiny/apps/*")){
     use File::Basename;
