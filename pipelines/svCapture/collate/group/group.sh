@@ -14,8 +14,8 @@ echo "grouping read pairs to unique, consensus source molecules"
 source $GENOMEX_MODULES_DIR/source/check_name_bam_file.sh
 echo "input bam: $NAME_BAM_FILE"
 
-# do the work
-slurp -s 250M $NAME_BAM_FILE |
+# do the work, supporting one or more bam files in NAME_BAM_FILE
+samtools cat $NAME_BAM_FILE |
 samtools view -F 4 - | # strip SAM header; suppress unmapped reads (orphan reads persist)
 perl $ACTION_DIR/group/parse_bam.pl | # extract signatures of all unique input source molecules
 sort --parallel=$N_CPU -T $TMP_DIR_WRK -S $MAX_SORT_RAM_INT"b" --compress-program=pigz -k1,1 -k2,2n | # sort by mol_key/pos1

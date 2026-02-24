@@ -249,7 +249,7 @@ getJxnSeq <- function(jxnKey_){
     flankSize1 <- abs(jxn$refPos1 - primers[1, refPos]) + 1 - microhomologyAdjustment
     flankSize2 <- abs(jxn$refPos2 - primers[2, refPos]) + 1 
     flankSeq1 <- primers[1, substr(if(jxn$strand1 == "+") sequence else rcSequence, 1, flankSize1)]
-    flankSeq2 <- primers[2, substr(if(jxn$strand1 == "+") sequence else rcSequence, seqLength - flankSize2 + 1, seqLength)]
+    flankSeq2 <- primers[2, substr(if(jxn$strand2 == "+") sequence else rcSequence, seqLength - flankSize2 + 1, seqLength)]
     paste0(flankSeq1, if(jxn$insertSize > 0) jxn$jxnSeq else "", flankSeq2)
 }
 junctions[, fakeSeq := unlist(mclapply(jxnKey, getJxnSeq, mc.cores = env$N_CPU))]

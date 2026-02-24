@@ -34,12 +34,13 @@ mixed amplicons, i.e., primer sets, but this is not presently supported.
 
 As its name implies, svDJ was developed to analyze V(D)J recombination
 junctions. However, it could be applied equally well to any amplicon
-configuration that matches the expectations described above.
+configuration that matches the expectations described above and below.
 
 ### Sequence read configurations
-The following diagram illustrates the typical expected molecule structure:
 
 **Single-junction reads**
+
+The following diagram illustrates the expected amplicon structure:
 
 <pre style="width: 1000px;">
 outerNode1  junctionNode1  junctionNode2  outerNode2 
@@ -47,7 +48,14 @@ outerNode1  junctionNode1  junctionNode2  outerNode2
 *=========>-------------*//*-------------<=========* 
 primer1               junction               primer2 
 </pre>
-However, aberrant and more complex molecules are also invariably present, such as:
+
+Importantly, svDJ will only yield proper outcomes when there is one
+junction in between two flanking alignments. V(D)J amplicons
+satisfy this expectation when D segments are too small to be aligned
+to the referene on their own. The D segments are found within the 
+insertion bases at a junction called from the V to J segments.
+
+Aberrant and more complex molecules are also invariably present, such as:
 
 **Multi-junction reads**, such as might arise by novel biological insertions of other genomic segments, or by PCR artifact.
 
@@ -79,13 +87,13 @@ outerNode1  junctionNode1  junctionNode2   outerNode2
 </pre>
 
 svDJ seeks to:
-- keep and characterize single-junction and multi-junction reads 
-- split chimeric amplicon fusions into their respective parts, which are each kept and analyzed as indepent molecules
+- initially keep and characterize single-junction and multi-junction reads 
+- split chimeric amplicon fusions into their respective parts, which are each kept and analyzed as independent molecules
 - keep just one half of duplex reads, to prevent double-counting of non-independent source molecules
 - discard truncated and off-target reads as untrustworthy
 
 ### Read processing
-To facilitate analysis and characterization of all molecules types, svDJ uses
+To facilitate analysis and characterization of all molecule types, svDJ uses
 a node-edge graph structure. Each aligned segment
 of a read has two node positions, one at each end (see above). These nodes define two kinds
 of edges between them:
@@ -298,15 +306,20 @@ the default behavior is to skip this process as it is slow and often has little 
 on the final result.
 
 Importantly, only the bases at the junction are used when comparing junctions to each other.
-Base differences in the amplicon "stems" on each side of the junction are assumed to be sequencing errors and are disregarded by assembling a "fake" representative sequence for each read segment,
-where the flanks are replaced with the corresponding amount of reference genome sequence (i.e., from outer primer node to the junction node).
+Base differences in the amplicon "stems" on each side of the junction are assumed to be 
+sequencing errors and are disregarded by assembling a "fake" representative sequence for each read segment,
+where the flanks are replaced with the corresponding amount of reference genome sequence 
+(i.e., from outer primer node to the junction node).
 
 Also important is the fact that a given read might correspond to either strand
 of a source DNA amplicon molecule, which must be accounted for during junction matching.
 svDJ achieves this by defining a **canonical orientation** for every junction, i.e.,
 for every possible combination of node pairs. A read segment is on the canonical strand
 if it begins at the primer1 node, as defined by the primers table. Noncanonical segments
-are reverse complemented prior to junction comparison.
+are reverse complemented prior to junction comparison. Notably, the caononical
+orientation of a read is not necessarily in V(D)J order, i.e., primer 1 might be on
+the J side of the amplicon depending on the orientation of the V and J segments
+in the genome.
 
 The resulting final level of aggregation is thus the table of junction <code>networks</code>, as follows.
 All tables (primers, edges, junctions, and networks) are returned as RDS files for further

@@ -117,6 +117,13 @@ getProjectFindFile <- function(project_, sample_){
 #=====================================================================================
 message("loading samples table")
 samples <- fread(env$SAMPLES_TABLE, header = TRUE)
+if("skip_assembly" %in% names(samples)) {
+    skipped <- samples[, skip_assembly != "-"] 
+    message("removing skipped samples from assembly")
+    message(paste0("  ", paste(samples[skipped, sample], collapse = ", ")))
+    samples <- samples[!skipped]
+    samples$skip_assembly <- NULL
+}
 samples[, i := 1:.N]
 
 message("collecting samples metadata")
