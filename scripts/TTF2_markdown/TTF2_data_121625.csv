@@ -1,0 +1,20 @@
+﻿project,sample_type,sample_label,cell_line,APH,degraded,complemented,RO3306,release,cell_cycle,dox,ATRi,coverage,deletion
+HCT_Pellman_NovaSeq_062725,HCT_C160_dox_0.4APH_G2,G2 +APH,C160,+,-,-,+,-,G2,+,-,755,13
+HCT_Pellman_092625,HCT_C160_dox_0.4APH_G2,G2 +APH,C160,+,-,-,+,-,G2,+,-,540,11
+HCT_Pellman_NovaSeq_062725,HCT_C160_dox_M,M no APH,C160,-,-,-,+,+,M,+,-,839,7
+HCT_Pellman_092625,HCT_C160_dox_M,M no APH,C160,-,-,-,+,+,M,+,-,599,10
+HCT_Pellman_NovaSeq_062725,HCT_C160_dox_0.4APH_M,M +APH,C160,+,-,-,+,+,M,+,-,784,169
+HCT_Pellman_092625,HCT_C160_dox_0.4APH_M,M +APH,C160,+,-,-,+,+,M,+,-,547,109
+HCT_Pellman_121125,HCT_C160_dox_0.4APH_M,M +APH,C160,+,-,-,+,+,M,+,-,1664,642
+HCT_Pellman_NovaSeq_062725,HCT_C160_deg_dox_0.4APH_M,M +APH degraded,C160,+,+,-,+,+,M,+,-,777,135
+HCT_Pellman_092625,HCT_C160_deg_dox_0.4APH_M,M +APH degraded,C160,+,+,-,+,+,M,+,-,603,111
+HCT_Pellman_121125,HCT_C160_deg_dox_0.4APH_M,M +APH degraded,C160,+,+,-,+,+,M,+,-,1812,528
+HCT_Pellman_NovaSeq_062725,HCT_C163_deg_dox_0.4APH_M,M +APH degraded +WT,C163,+,+,WT,+,+,M,+,-,801,143
+HCT_Pellman_092625,HCT_C163_deg_dox_0.4APH_M,M +APH degraded +WT,C163,+,+,WT,+,+,M,+,-,493,102
+HCT_Pellman_121125,HCT_C163_deg_dox_0.4APH_M,M +APH degraded +WT,C163,+,+,WT,+,+,M,+,-,1803,615
+HCT_Pellman_NovaSeq_062725,HCT_C195_deg_dox_0.4APH_M,M +APH degraded +K16A,C195,+,+,K16A,+,+,M,+,-,785,120
+HCT_Pellman_092625,HCT_C195_deg_dox_0.4APH_M,M +APH degraded +K16A,C195,+,+,K16A,+,+,M,+,-,504,88
+HCT_Pellman_121125,HCT_C195_deg_dox_0.4APH_M,M +APH degraded +K16A,C195,+,+,K16A,+,+,M,+,-,1663,502
+HCT_Pellman_121125,HCT_C160_dox_ATRi_0.4APH_M,M +APH +ATRi,C160,+,-,-,+,+,M,+,+,1774,242
+HCT_Pellman_121125,HCT_C160_deg_dox_ATRi_0.4APH_M,M +APH degraded +ATRi,C160,+,+,-,+,+,M,+,+,1814,211
+HCT_Pellman_121125,HCT_C163_deg_dox_ATRi_0.4APH_M,M +APH degraded +ATRi +WT,C163,+,+,WT,+,+,M,+,+,1730,255

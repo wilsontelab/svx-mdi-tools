@@ -1,0 +1,377 @@
+---
+title: "TTF2 svCapture Summary"
+author: "Thomas E. Wilson & Geylani Can"
+date: "2026-01-26"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Summary of three svCapture replicates applied to TTF2 WT, degraded, and 
+complemented HCT116. Two ways of plotting and two ways of assessing significance 
+are shown due to known library batch effects, especially the third vs. the first 
+and second replicates.
+
+### Initialize
+
+```{r}
+library(data.table)
+library(ggplot2)
+library(MASS) # for glm.nb
+```
+
+### Load Data
+
+svCapture data were processed by the published pipeline that is part of the 
+[svx-mdi-tools](https://wilsontelab.github.io/svx-mdi-tools/docs/svCapture/00_svCapture.html)
+GitHub repository. The assembly app was used to download the following CSV 
+file, which is provided with this RMarkdown file, where:
+
+* **project**	= name given to one of three batches of samples each processed together
+* **coverage** = average read coverage in the _FHIT_ and _WWOX_ capture target regions,
+                 used to normalize SV deletion counts
+* **deletion** = number of _de novo_ singleton deletion SVs observed for a sample in the capture target regions
+* other columns describe sample experimental attributes
+
+
+```{r}
+data <- fread("TTF2_data_121625.csv")
+data[, project := factor(project)]
+str(data)
+data[1:5]
+```
+
+### Calculate SV Frequency Per Sample
+
+The burden of deletion SVs in each sample, named 'SV Frequency', is calculated as
+`deletion / coverage`, which intuitively correlates with the number of alleles 
+in the sequenced DNA that had a detected _de novo_ singleton deletion SV. Deletion 
+frequencies can be quite high with APH stress.
+
+```{r}
+data[, sample_group := factor(sample_label, levels = unique(sample_label))]
+data[, sv_freq := deletion / coverage]
+data[1:5, .(sample_group, deletion, coverage, sv_freq)]
+```
+
+### Calculate Mean SV Frequency Per Sample Type
+
+Aggregate by sample attributes and calculate `mean(sv_freq)`.
+
+```{r}
+grouped_data <- data[, .(mean_sv_freq = mean(sv_freq)), keyby = .(sample_group)]
+grouped_data[1:5]
+```
+
+### Plot Unnormalized SV Frequency
+
+We typically plot data as SV Frequency without any additional normalization. 
+The strong batch effect of 'HCT_Pellman_121125' vs. the others is apparent.
+
+```{r}
+ggplot() +
+  geom_col(
+    data = grouped_data,
+    aes(x = sample_group, y = mean_sv_freq),
+    fill = "grey80", color = "black", width = 0.7
+  ) +
+  geom_jitter(
+    data = data,
+    aes(x = sample_group, y = sv_freq, color = project),
+    width = 0.15, height = 0, size = 2, alpha = 0.7
+  ) +
+  labs(x = "Sample Type", y = "SV Frequency") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+### Calculate Normalized SV Frequency Per Sample
+
+To adjust the plot for the known batch effect, we next normalize every project 
+to the value for sample_type 'HCT_C160_dox_0.4APH_M', sample_label 'M +APH', i.e.,
+the sample expressing wild-type TTF2 with SV induction (if you want to change this,
+edit `sample_type == "XXX"` below and re-knit this file).
+
+```{r}
+ref_freqs <- data[sample_type == "HCT_C160_dox_0.4APH_M", .(project, ref_sv_freq = sv_freq)]
+ref_freqs
+data <- merge(data, ref_freqs, by = c("project"), all.x = TRUE)
+data[, norm_sv_freq := sv_freq / ref_sv_freq]
+data[1:5, .(project, sample_group, sv_freq, ref_sv_freq, norm_sv_freq)]
+```
+
+### Calculate Mean Normalized SV Frequency Per Sample Type
+
+```{r}
+grouped_data <- data[, .(
+  mean_sv_freq = mean(sv_freq),
+  mean_norm_sv_freq = mean(norm_sv_freq)
+), keyby = .(sample_group)]
+grouped_data[1:5]
+```
+
+### Plot Normalized SV Frequency
+
+```{r}
+ggplot() +
+  geom_col(
+    data = grouped_data,
+    aes(x = sample_group, y = mean_norm_sv_freq),
+    fill = "grey80", color = "black", width = 0.7
+  ) +
+  geom_jitter(
+    data = data,
+    aes(x = sample_group, y = norm_sv_freq, color = project),
+    width = 0.15, height = 0, size = 2, alpha = 0.7
+  ) +
+  labs(x = "Sample Type", y = "Normalized SV Frequency") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+### Calculate Intersample Difference Statistics - One-Sample t-Test, Normalized
+
+As a first pass at assessing significance of the possible small effect, 
+calculate the p-value of the three normalized SV frequency values for each 
+sample type vs. the expected mean value of 1.0 (according to the null hypothesis)
+using a one-sample t-test. 
+
+```{r}
+p_t1 <- data[, .(p_t1 = tryCatch(
+  t.test(norm_sv_freq, mu = 1.0)$p.value, 
+  error = function(e) NA_real_)
+), by = .(sample_group)]
+p_t1[, signif := ifelse(p_t1 < 0.05, "*", "")]
+p_t1
+```
+
+### Calculate Intersample Difference Statistics - GLM with Project=Batch Parameter
+
+This is how we calculated inter-sample significance in our 
+[Nat Comm paper](https://pubmed.ncbi.nlm.nih.gov/39505880/).
+The method uses a generalized linear model based on the negative binomial 
+distribution (appropriate for overdispersed counting statistics) including
+parameter `project` to account for batch effects and offset(log_coverage)
+to weight by the relative coverage depth of each sample.
+
+The relevant methods section from the paper:
+
+>To appropriately compare SV Frequency between experimental groups, e.g., wild type
+vs. mutant, we performed  pairwise intergroup comparisons using a generalized linear
+model based on the NBD in which the number of detected SVs, nSVs, varied as a function
+of the experimental group and batch as independent covariates. Target region coverage
+per sample was included as an offset parameter of slope 1 to effectively model 
+SV Frequency. The relevant R language expression is 
+‘fit = MASS::glm.nb(nSvs ~ group + batch + offset(log(coverage))‘, where 
+‘group‘ and ‘batch‘ are categorical variables and the p-value of the intergroup 
+comparison was obtained from the ‘group‘ variable as ‘coef(summary(fit))[2,4]‘. 
+When glm.nb failed to return a result, the p-value was calculated using the glm 
+function poisson model without overdispersion; such cases are denoted with a 
+dashed significance line in plots. Throughout, we used p <= 0.01 as a significance 
+threshold...
+
+In practice for these TTF2 data, glm.nb routinely exceeded maximum iterations
+and failed to converge, as happens if theta is very large, i.e., data are not 
+that overdisperse. In that case, reverting to glm using quasipoisson gives more 
+reliable results while still allowing for a theta factor and not a strict poisson.
+
+```{r}
+data[, log_coverage := log(coverage)]
+sample_groups <- grouped_data$sample_group
+p_glm <- do.call(rbind, lapply(sample_groups, function(group_1){
+  do.call(rbind, lapply(sample_groups, function(group_2){
+    if (group_1 == group_2) return(NULL) # require samples per non-identical group
+    if (data[sample_group == group_1, .N] < 2) return(NULL)
+    if (data[sample_group == group_2, .N] < 2) return(NULL)
+    # fit <- glm.nb(
+    #    deletion ~ sample_group + project + offset(log_coverage),
+    #    data = data[sample_group %in% c(group_1, group_2)],
+    #    control = glm.control(maxit = 100)
+    # )
+    fit <- glm(
+        deletion ~ sample_group + project + offset(log_coverage),
+        data = data[sample_group %in% c(group_1, group_2)],
+        family = "quasipoisson"
+    )
+    data.table(group_1, group_2, p_glm = signif(coef(summary(fit))[2, 4], 3))
+  }))
+}))
+p_glm[, signif := ifelse(p_glm < 0.05, "*", "")]
+p_glm
+```
+
+Cast long to wide.
+
+```{r}
+dcast(p_glm, group_1 ~ group_2, value.var = "p_glm")
+dcast(p_glm, group_1 ~ group_2, value.var = "signif")
+```
+
+
+### Calculate Intersample Difference Statistics – GLMM with Project as a Random Effect
+
+The GLM analysis above accounts for batch effects by including project as a fixed effect. Because each svCapture sequencing run contains all experimental conditions, we additionally modeled batch as a random effect using a generalized linear mixed model (GLMM), while retaining an appropriate count-based model and normalization for sequencing depth via an offset of log(coverage).
+
+GLMMs were fit using **glmmTMB**. A negative binomial distribution (nbinom2) was used by default to accommodate overdispersion. If the negative binomial model failed to converge or exhibited a non–positive-definite Hessian, an alternative negative binomial parameterization (nbinom1) was attempted; if this also failed, a Poisson GLMM was used as a last resort. Comparisons for which all models were unstable were reported as NA rather than assigning unreliable p-values.
+
+For each pairwise comparison, factor levels were explicitly ordered so that estimated rate ratios represent the SV rate in the second group relative to the first group.
+
+```{r}
+library(glmmTMB)
+
+# Ensure log coverage is available
+if (!("log_coverage" %in% names(data))) data[, log_coverage := log(coverage)]
+
+# Helper: only trust fits that converged AND have a positive-definite Hessian
+is_ok <- function(fit) {
+  if (is.null(fit)) return(FALSE)
+  isTRUE(fit$fit$convergence == 0) && isTRUE(fit$sdr$pdHess)
+}
+
+
+# Control: give optimizer more room (helps small datasets / boundary fits)
+ctrl <- glmmTMBControl(optCtrl = list(iter.max = 1e4, eval.max = 1e4))
+
+sample_groups <- grouped_data$sample_group
+
+p_glmm <- do.call(rbind, lapply(sample_groups, function(group_1){
+  do.call(rbind, lapply(sample_groups, function(group_2){
+
+    if (group_1 == group_2) return(NULL)
+    if (data[sample_group == group_1, .N] < 2) return(NULL)
+    if (data[sample_group == group_2, .N] < 2) return(NULL)
+
+    dsub <- copy(data[sample_group %in% c(group_1, group_2)])
+    dsub[, sample_group := factor(sample_group, levels = c(group_1, group_2))]
+
+    # Try NB2 → NB1 → (last resort) Poisson
+    fit_nb2 <- tryCatch(
+      suppressWarnings(glmmTMB(
+        deletion ~ sample_group + offset(log_coverage) + (1 | project),
+        data = dsub,
+        family = nbinom2(),
+        control = ctrl
+      )),
+      error = function(e) NULL
+    )
+
+    nb2_ok <- is_ok(fit_nb2)
+    fit <- fit_nb2
+    used_family <- "nbinom2"
+    note <- ""
+
+    if (!nb2_ok) {
+      fit_nb1 <- tryCatch(
+        suppressWarnings(glmmTMB(
+          deletion ~ sample_group + offset(log_coverage) + (1 | project),
+          data = dsub,
+          family = nbinom1(),
+          control = ctrl
+        )),
+        error = function(e) NULL
+      )
+
+      nb1_ok <- is_ok(fit_nb1)
+      fit <- fit_nb1
+      used_family <- "nbinom1"
+      note <- if (nb1_ok) "NB2_badfit_used_NB1" else "NB2_badfit_NB1_badfit"
+    }
+
+    if (!is_ok(fit)) {
+      fit_pois <- tryCatch(
+        suppressWarnings(glmmTMB(
+          deletion ~ sample_group + offset(log_coverage) + (1 | project),
+          data = dsub,
+          family = poisson(),
+          control = ctrl
+        )),
+        error = function(e) NULL
+      )
+
+      pois_ok <- is_ok(fit_pois)
+      fit <- fit_pois
+      used_family <- "poisson"
+      note <- if (pois_ok) paste(note, "used_Poisson") else paste(note, "Poisson_badfit")
+    }
+
+    if (!is_ok(fit)) {
+      return(data.table(
+        group_1, group_2,
+        p_glmm_wald = NA_real_,
+        p_glmm_lrt  = NA_real_,
+        rr = NA_real_,
+        family = paste0(used_family, "_badfit"),
+        nb_ok = nb2_ok,
+        note = note
+      ))
+    }
+
+    coefs <- summary(fit)$coefficients$cond
+    term <- grep("^sample_group", rownames(coefs), value = TRUE)[1]
+
+    p_wald <- coefs[term, "Pr(>|z|)"]
+    beta   <- coefs[term, "Estimate"]
+    rr_    <- exp(beta)
+
+    # Likelihood-ratio test (often more stable than Wald in tiny N)
+    p_lrt <- NA_real_
+    fit0 <- tryCatch(update(fit, . ~ . - sample_group), error = function(e) NULL)
+    if (!is.null(fit0) && is_ok(fit0)) {
+      a <- tryCatch(anova(fit0, fit), error = function(e) NULL)
+      if (!is.null(a) && nrow(a) >= 2 && "Pr(>Chisq)" %in% colnames(a)) {
+        p_lrt <- a$`Pr(>Chisq)`[2]
+      }
+    }
+
+    data.table(
+      group_1, group_2,
+      p_glmm_wald = signif(p_wald, 3),
+      p_glmm_lrt  = signif(p_lrt,  3),
+      rr = signif(rr_, 3),
+      family = used_family,
+      nb_ok = nb2_ok,
+      note = note
+    )
+  }))
+}))
+
+p_glmm[, signif_wald := ifelse(!is.na(p_glmm_wald) & p_glmm_wald < 0.05, "*", "")]
+p_glmm[, signif_lrt  := ifelse(!is.na(p_glmm_lrt)  & p_glmm_lrt  < 0.05, "*", "")]
+
+```
+
+
+Cast long to wide.
+
+```{r}
+dcast(p_glmm, group_1 ~ group_2, value.var = "p_glmm_wald")
+dcast(p_glmm, group_1 ~ group_2, value.var = "signif_wald")
+
+# Optional: LRT versions
+dcast(p_glmm, group_1 ~ group_2, value.var = "p_glmm_lrt")
+dcast(p_glmm, group_1 ~ group_2, value.var = "signif_lrt")
+```
+
+
+## "Conclusions"
+
+Across multiple analytical frameworks, including GLMs and generalized linear mixed models (GLMMs) that account for sequencing depth via an offset and for batch effects via a random effect, the overall conclusions are broadly consistent. Effect sizes are modest, and statistical power is limited by sample size and technical variability.
+
+Importantly, modeling batch as a random effect using a GLMM strengthens the evidence that SV frequency is reduced relative to M +APH in the degraded and degraded +K16A conditions. These differences reach statistical significance under the GLMM likelihood-ratio test, indicating that the observed reductions are robust to batch effects and coverage normalization.
+
+In contrast, WT addback does not show a consistent or robust difference relative to M +APH, with significance depending on model choice and not supported across all analytical approaches. This suggests that WT addback largely restores SV frequency toward the M +APH baseline.
+
+### Saving Output Tables
+
+Writing output CSV files.
+
+```{r}
+write.csv(data,         "TTF2_Summary_012626.output.data.csv")
+write.csv(grouped_data, "TTF2_Summary_012626.output.grouped_data.csv")
+write.csv(p_t1,         "TTF2_Summary_012626.output.p_t1.csv")
+write.csv(p_glm,        "TTF2_Summary_012626.output.p_glm.csv")
+write.csv(p_glmm,       "TTF2_Summary_012626.output.p_glmm.csv")
+```
+
